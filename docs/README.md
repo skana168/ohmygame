@@ -5,6 +5,11 @@ The [中文快速指引](contributing.zh-CN.md) summarizes the same workflow in 
 [maintaining.md](maintaining.md) covers triage, review, the `dev`/`main` transition,
 and release preparation.
 
+[Workbench vocabulary](../GLOSSARY.md) and the
+[template extraction decision](adr/0001-extract-a-reusable-workbench.md) record
+the agreed boundaries for the planned reusable application template. They
+describe the target design rather than current implementation support.
+
 ## Where to change things
 
 The React renderer talks to a local Fastify daemon over HTTP and SSE. The daemon

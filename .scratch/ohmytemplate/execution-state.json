@@ -1,0 +1,12 @@
+{
+  "integration_branch": "refactor/ohmytemplate-integration",
+  "base_commit": "4be52d00c14858b96fc0d4846461a26f910d5292",
+  "spec": ".scratch/ohmytemplate/spec.md",
+  "phase": "implementing",
+  "tasks": {},
+  "notes": [
+    "No PR requested; local Markdown tracker.",
+    "Upstream dev is newer than the originally assessed main; inspect current implementations before editing.",
+    "Planning stash retained as backup; .codegraph stays untracked."
+  ]
+}
