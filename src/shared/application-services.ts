@@ -1,8 +1,5 @@
-/** Source-owned application composition. Independent applications set this to false.
- * This does not control workspace modules or user-configured providers.
- */
-export const accountServicesEnabled = true;
+import { applicationComposition } from "./application-composition.js";
 
-/** Optional game application services, independent of account model access. */
-export const publishingEnabled = true;
-export const communityEnabled = true;
+export const accountServicesEnabled = applicationComposition.accountServices;
+export const publishingEnabled = applicationComposition.publishing;
+export const communityEnabled = applicationComposition.community;

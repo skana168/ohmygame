@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { cp, symlink, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -285,4 +286,29 @@ describe("examples", () => {
     expect(isPreparedExampleCatalog({ ...valid, examples: [{ ...withoutPlay, type: "interactive-story" }] })).toBe(true);
     expect(isPreparedExampleCatalog({ ...valid, examples: [{ ...valid.examples[0], type: "interactive-story" }] })).toBe(false);
   });
+});
+
+it("skips game preparation with its implementations and resources unavailable", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "non-game-preparation-"));
+  const root = path.resolve(import.meta.dirname, "..");
+  const inputs = [
+    "scripts/prepare-examples.ts", "scripts/build-story-web.mjs",
+    "src/shared/application-composition.ts", "src/shared/application-selection.ts",
+    "src/shared/workspace-manifest.ts", "src/modules/example/manifest.ts",
+  ];
+  for (const input of inputs) {
+    await mkdir(path.dirname(path.join(directory, input)), { recursive: true });
+    await cp(path.join(root, input), path.join(directory, input));
+  }
+  await writeFile(path.join(directory, "package.json"), '{"type":"module"}');
+  await writeFile(path.join(directory, "src/shared/application-selection.ts"), 'export const applicationCompositionId = "non-game";');
+  await symlink(path.join(root, "node_modules"), path.join(directory, "node_modules"), process.platform === "win32" ? "junction" : "dir");
+  // Deliberately no story/compiler/example preparation implementations, assets,
+  // lock files, runtime cache or game sources in the fixture.
+  for (const script of inputs.slice(0, 2)) {
+    const output = execFileSync("node", ["--import", "tsx", script], { cwd: directory, encoding: "utf8", timeout: 10_000 });
+    expect(output).toContain("Skipped");
+  }
+  expect(await readdir(directory)).not.toContain(".runtime");
+  expect(await readdir(directory)).not.toContain("dist");
 });

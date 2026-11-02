@@ -1,3 +1,4 @@
+import { build } from "esbuild";
 import {
   chmod,
   mkdir,
@@ -12,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { isPreviewSourceChange, PreviewManager } from "../src/daemon/preview.js";
 import type { ProjectState } from "../src/shared/contracts.js";
 import { RuntimeEventBus } from "../src/shared/events.js";
-import * as projects from "../src/daemon/projects.js";
+import * as projects from "../src/daemon/preview-workspace.js";
 
 const managers: PreviewManager[] = [];
 
@@ -23,6 +24,19 @@ afterEach(async () => {
 });
 
 describe("PreviewManager", () => {
+  it("builds reusable previews with the story implementation unavailable", async () => {
+    const result = await build({
+      entryPoints: [path.resolve("src/daemon/preview.ts")], bundle: true,
+      platform: "node", format: "esm", packages: "external", write: false,
+      plugins: [{ name: "unavailable-story-implementation", setup(builder) {
+        builder.onResolve({ filter: /(?:story-web|playable-codebase)/ }, (args) => ({
+          errors: [{ text: `Story implementation unavailable: ${args.path} from ${args.importer}` }],
+        }));
+      } }],
+    });
+    expect(result.outputFiles[0]?.text).toContain("PreviewManager");
+  });
+
   it("rejects story runtime startup when its workspace module is absent", async () => {
     const workspacePath = await createWorkspace(false);
     await writeFile(path.join(workspacePath, "index.html"), "<p>saved story</p>");
