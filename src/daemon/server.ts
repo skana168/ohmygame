@@ -1,4 +1,5 @@
 import path from "node:path";
+import identity from "../../application-identity.cjs";
 import { fileURLToPath } from "node:url";
 import { takeAccessToken } from "./access-token.js";
 import { createApp } from "./app.js";
@@ -18,7 +19,8 @@ loadEnvironmentFiles(repositoryRoot, mode);
 // Processes the daemon starts inherit its environment, and none of them may call the daemon as the app.
 const accessToken = await takeAccessToken(process.env, process.stdin);
 const host = process.env.DAEMON_HOST ?? "127.0.0.1";
-const dataDirectory = process.env.OHMYGAME_DATA_DIR ?? path.join(repositoryRoot, ".data");
+const application = identity.loadIdentity(repositoryRoot);
+const dataDirectory = identity.dataDirectory(application, repositoryRoot);
 const piAgentDirectory = process.env.PI_CODING_AGENT_DIR ?? path.join(dataDirectory, "pi-agent");
 process.env.PI_CODING_AGENT_DIR = piAgentDirectory;
 let app: ReturnType<typeof createApp> | undefined;

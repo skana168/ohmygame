@@ -1,4 +1,5 @@
-const STORAGE_KEY = "ohmygame-pending-publish";
+import { applicationStorageKey } from "./application-identity.js";
+const STORAGE_KEY = applicationStorageKey("ohmygame-pending-publish");
 const MAX_AGE_MS = 15 * 60 * 1_000;
 
 interface PendingPublish {

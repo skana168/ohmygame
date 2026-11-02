@@ -1,9 +1,10 @@
+import { applicationStorageKey } from "./application-identity.js";
 import { useEffect, useRef, useState } from "react";
 import type { AgentNotificationPermission, AgentNotificationTarget } from "../shared/agent-notifications.js";
 import { readGeneralPreferences } from "./general-preferences.js";
 import { t } from "./i18n.js";
 
-const NOTIFICATIONS_STORAGE_KEY = "ohmygame:notifications";
+const NOTIFICATIONS_STORAGE_KEY = applicationStorageKey("ohmygame:notifications");
 
 export interface NotificationSettings {
   enabled: boolean;

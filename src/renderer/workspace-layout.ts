@@ -1,3 +1,4 @@
+import { applicationStorageKey } from "./application-identity.js";
 import { movePanel, type AreaId, type AreaState, type Layout } from "./panel-layout.js";
 import type { ProjectState, ProjectType } from "../shared/contracts.js";
 import { supportsWebPreview } from "../shared/project-runtime.js";
@@ -8,7 +9,7 @@ import { supportsWebPreview } from "../shared/project-runtime.js";
 // arrangement is kept once and fitted to each project's panels, so moving the
 // chat to the right holds everywhere.
 
-const STORAGE_KEY = "ohmygame-workspace-layout";
+const STORAGE_KEY = applicationStorageKey("ohmygame-workspace-layout");
 const VERSION = 3;
 const AREAS = ["left", "center", "right", "bottom"] as const;
 
@@ -108,7 +109,7 @@ export function openingLayout(offered: readonly PanelId[], homes?: PanelHomes): 
 
 function legacyChatRight(): boolean {
   try {
-    return localStorage.getItem("ohmygame:chat-layout") === "right";
+    return localStorage.getItem(applicationStorageKey("ohmygame:chat-layout")) === "right";
   } catch {
     return false;
   }

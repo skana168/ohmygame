@@ -1,3 +1,4 @@
+import identity from "../application-identity.cjs";
 import { mp3Fixture } from "./audio-fixtures.js";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,6 +22,39 @@ async function saveProjectAsset(app: Awaited<ReturnType<typeof createApp>>, proj
 }
 
 describe("daemon", () => {
+  it("keeps independently configured applications' projects, conversations and provider credentials separate across restart", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "application-isolation-"));
+    const base = identity.loadIdentity();
+    const firstDirectory = identity.dataDirectory({ ...base, name: "Notes", packageName: "notes", desktopId: "org.example.notes", dataDirectory: "notes" }, directory, {});
+    const secondDirectory = identity.dataDirectory({ ...base, name: "Boards", packageName: "boards", desktopId: "org.example.boards", dataDirectory: "boards" }, directory, {});
+    const first = createApp({ dataDirectory: firstDirectory });
+    const second = createApp({ dataDirectory: secondDirectory });
+    let reopened: ReturnType<typeof createApp> | undefined;
+    try {
+      const created = await first.inject({ method: "POST", url: "/projects", payload: { name: "Private notes", type: "general" } });
+      expect(created.statusCode).toBe(201);
+      const project = created.json();
+      const conversation = await first.inject({ method: "POST", url: `/projects/${project.id}/conversations` });
+      expect(conversation.statusCode).toBe(201);
+      expect((await first.inject({ method: "PATCH", url: `/projects/${project.id}/conversations/${conversation.json().id}`, payload: { title: "Private session" } })).statusCode).toBe(200);
+      expect((await first.inject({ method: "PUT", url: "/settings/models/providers/meshy", payload: { apiKey: "notes-only-key" } })).statusCode).toBe(200);
+      expect((await second.inject({ method: "GET", url: "/projects" })).json()).toEqual([]);
+      expect((await second.inject({ method: "GET", url: `/projects/${project.id}/conversations` })).statusCode).toBe(404);
+      expect((await second.inject({ method: "GET", url: "/settings/models/providers/meshy" })).json()).toEqual({ configured: false });
+      expect((await first.inject({ method: "GET", url: `/projects/${project.id}/conversations` })).json()).toEqual([expect.objectContaining({ id: conversation.json().id })]);
+      await first.close();
+      reopened = createApp({ dataDirectory: firstDirectory });
+      expect((await reopened.inject({ method: "GET", url: "/projects" })).json()).toEqual([expect.objectContaining({ id: project.id, name: "Private notes" })]);
+
+      expect((await reopened.inject({ method: "GET", url: "/settings/models/providers/meshy" })).json()).toEqual({ configured: true });
+    } finally {
+      await first.close();
+      await second.close();
+      await reopened?.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("exposes project activity without requiring a conversation event subscription", async () => {
     let finish!: () => void;
     const completion = new Promise<void>((resolve) => { finish = resolve; });
