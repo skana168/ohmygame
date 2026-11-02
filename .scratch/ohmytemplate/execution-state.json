@@ -150,7 +150,13 @@
       "remaining_validation": "Full public checks and browser smoke inherited from implementation report; hosted/private-cloud, OAuth/deployment/listing/staging, Electron UI, other platforms and live providers remain unverified."
     },
     "07": {
-      "status": "launching"
+      "status": "retry_pending",
+      "previous_failure": "provider quota exhausted; user requested continuation",
+      "previous_branch": "t3/isolate-interactive-stories",
+      "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-447ad2a3",
+      "previous_head": "8fabb50e",
+      "recovery_patch": "/tmp/ohmytemplate-recovery-07/working.patch",
+      "previous_taskId": "node:delegated-task:command%3Amcp%3A06c8b30f-d5fa-4f76-bc38-03dc446b8abc%3Adelegate-task%3Abda49eb8-d65e-4765-8e69-73c1c0c562b9"
     }
   },
   "notes": [
