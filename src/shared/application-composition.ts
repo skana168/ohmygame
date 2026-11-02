@@ -1,4 +1,4 @@
-import selection from "../../config/application-composition.json" with { type: "json" };
+import { applicationCompositionId } from "./application-selection.js";
 import { EXAMPLE_WORKSPACE_MODULE } from "../modules/example/manifest.js";
 import {
   OHMYGAME_WORKSPACE_MODULES,
@@ -22,11 +22,20 @@ export interface ApplicationComposition {
   community: boolean;
 }
 
-export const applicationCompositions: Record<ApplicationCompositionId, ApplicationComposition> = {
+export const applicationCompositions: Record<
+  ApplicationCompositionId,
+  ApplicationComposition
+> = {
   ohmygame: {
     id: "ohmygame",
     modules: OHMYGAME_WORKSPACE_MODULES,
-    projectTypes: ["web-game", "interactive-story", "asset-canvas", "godot-game", "general"],
+    projectTypes: [
+      "web-game",
+      "interactive-story",
+      "asset-canvas",
+      "godot-game",
+      "general",
+    ],
     defaultProjectType: "web-game",
     game: true,
     story: true,
@@ -50,7 +59,5 @@ export const applicationCompositions: Record<ApplicationCompositionId, Applicati
 
 // Source-owned selection shared by the renderer, daemon, desktop and build scripts.
 // Applications select their composition here before building.
-if (selection !== "ohmygame" && selection !== "non-game") {
-  throw new Error('config/application-composition.json must select "ohmygame" or "non-game"');
-}
-export const applicationComposition = applicationCompositions[selection];
+export const applicationComposition =
+  applicationCompositions[applicationCompositionId];

@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { applicationComposition } from "./src/shared/application-composition.js";
 import identity from "./application-identity.cjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -45,8 +46,10 @@ export default defineConfig({
     rolldownOptions: {
       input: {
         main: path.resolve(import.meta.dirname, "index.html"),
-        webGameHost: path.resolve(import.meta.dirname, "web-game-host.html"),
-        gameRecorder: path.resolve(import.meta.dirname, "game-recorder.html"),
+        ...(applicationComposition.game ? {
+          webGameHost: path.resolve(import.meta.dirname, "web-game-host.html"),
+          gameRecorder: path.resolve(import.meta.dirname, "game-recorder.html"),
+        } : {}),
       },
     },
   },
