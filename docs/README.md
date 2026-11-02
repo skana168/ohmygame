@@ -10,6 +10,9 @@ and release preparation.
 the agreed boundaries for the planned reusable application template. They
 describe the target design rather than current implementation support.
 
+[Workspace manifests](workspace-manifests.md) describes versioned module declarations,
+validation, agent instructions, and existing-project compatibility.
+
 ## Where to change things
 
 The React renderer talks to a local Fastify daemon over HTTP and SSE. The daemon

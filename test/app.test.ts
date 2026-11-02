@@ -191,6 +191,136 @@ describe("daemon", () => {
     }
   });
 
+  it("initializes new workspace instructions and manifests while preserving adopted legacy instructions", async () => {
+    const dataDirectory = await mkdtemp(path.join(tmpdir(), "ohmygame-workspace-defaults-"));
+    const app = createApp({ dataDirectory });
+    apps.push(app);
+    const fresh = (await app.inject({ method: "POST", url: "/projects", payload: { type: "asset-canvas" } })).json();
+    expect(fresh.workspaceManifest).toEqual({ version: 1, modules: [] });
+    expect(await readFile(path.join(fresh.workspacePath, "AGENTS.md"), "utf8")).toContain("workspace.json");
+    const workspacePath = await mkdtemp(path.join(tmpdir(), "ohmygame-legacy-workspace-"));
+    await writeFile(path.join(workspacePath, "AGENTS.md"), "User-authored rules");
+    const adopted = (await app.inject({ method: "POST", url: "/projects", payload: { type: "interactive-story", workspacePath } })).json();
+    expect(adopted.workspaceManifestLegacy).toBe(true);
+    expect(adopted.workspaceManifest).toEqual({ version: 1, modules: [{ id: "game", config: {} }, { id: "interactive-story", config: {} }] });
+    expect(await readFile(path.join(workspacePath, "AGENTS.md"), "utf8")).toBe("User-authored rules");
+    await expect(readFile(path.join(workspacePath, "workspace.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    await app.close();
+    const reopened = createApp({ dataDirectory });
+    apps.push(reopened);
+    expect((await reopened.inject({ method: "GET", url: "/projects" })).json()).toContainEqual(expect.objectContaining({ id: adopted.id, type: "interactive-story", workspaceManifestLegacy: true, workspaceManifest: adopted.workspaceManifest }));
+  });
+
+  it("keeps invalid or unavailable persisted modules visible without changing workspace data", async () => {
+    const dataDirectory = await mkdtemp(path.join(tmpdir(), "ohmygame-missing-modules-"));
+    const app = createApp({ dataDirectory });
+    apps.push(app);
+    const project = (await app.inject({ method: "POST", url: "/projects", payload: {} })).json();
+    const files = {
+      "workspace.json": JSON.stringify({ version: 1, modules: [{ id: "missing", config: { keep: true } }] }),
+      "AGENTS.md": "My instructions", "canvas/index.json": "my canvas", "assets/keep.txt": "my asset",
+    };
+    await mkdir(path.join(project.workspacePath, "canvas"));
+    await mkdir(path.join(project.workspacePath, "assets"));
+    for (const [file, text] of Object.entries(files)) await writeFile(path.join(project.workspacePath, file), text);
+    await app.close();
+    for (const manifest of [files["workspace.json"], '{"version":99,"modules":[]}', "broken JSON"]) {
+      await writeFile(path.join(project.workspacePath, "workspace.json"), manifest);
+      const reopened = createApp({ dataDirectory });
+      apps.push(reopened);
+      const listed = (await reopened.inject({ method: "GET", url: "/projects" })).json();
+      expect(listed).toHaveLength(1);
+      expect(listed[0].workspaceDiagnostics[0]).toContain("workspace.json");
+      for (const [file, text] of Object.entries(files)) expect(await readFile(path.join(project.workspacePath, file), "utf8")).toBe(file === "workspace.json" ? manifest : text);
+      await reopened.close();
+    }
+  });
+
+  it.each([
+    [{ version: 2, modules: [] }, "version"],
+    [{ version: 1, modules: "game" }, "modules"],
+    [{ version: 1, modules: [{ id: "game", config: { unknown: true } }] }, "game"],
+    [{ version: 1, modules: [{ id: "./arbitrary.js", config: {} }] }, "unavailable"],
+    [{ version: 1, modules: [{ id: "interactive-story", config: {} }] }, "requires game"],
+    [{ version: 1, modules: [{ id: "game", config: {} }, { id: "game", config: {} }] }, "Duplicate"],
+  ])("rejects invalid workspace declarations before writing user files: %j", async (workspaceManifest, diagnostic) => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), "ohmygame-invalid-manifest-"));
+    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-manifest-")) });
+    apps.push(app);
+    await writeFile(path.join(workspacePath, "notes.txt"), "keep me");
+    const response = await app.inject({ method: "POST", url: "/projects", payload: { workspacePath, workspaceManifest } });
+    expect(response.statusCode, response.body).toBe(400);
+    expect(response.json().error).toContain(diagnostic);
+    expect(await readdir(workspacePath)).toEqual(["notes.txt"]);
+    expect((await app.inject({ method: "GET", url: "/projects" })).json()).toEqual([]);
+  });
+
+  it("validates source-registered module configuration and rejects conflicting modules", async () => {
+    const dataDirectory = await mkdtemp(path.join(tmpdir(), "workspace-config-"));
+    const workspaceModules = [
+      { id: "notes", configSchema: { type: "object", required: ["language"], additionalProperties: false, properties: { language: { type: "string", enum: ["en", "zh"] } } }, agentInstructions: "Use the configured notes language." },
+      { id: "other", configSchema: { type: "object" }, conflicts: ["notes"] },
+    ];
+    const app = createApp({ dataDirectory, workspaceModules });
+    apps.push(app);
+    const declaration = { version: 1, modules: [{ id: "notes", config: { language: "en" } }] };
+    const invalid = await app.inject({ method: "POST", url: "/projects", payload: { workspaceManifest: { ...declaration, modules: [{ id: "notes", config: { language: "invalid" } }] } } });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json().error).toContain("language");
+    const conflict = await app.inject({ method: "POST", url: "/projects", payload: { workspaceManifest: { ...declaration, modules: [...declaration.modules, { id: "other", config: {} }] } } });
+    expect(conflict.statusCode).toBe(400);
+    expect(conflict.json().error).toContain("conflicts with notes");
+    const created = await app.inject({ method: "POST", url: "/projects", payload: { workspaceManifest: declaration } });
+    expect(created.statusCode, created.body).toBe(201);
+    expect(await readFile(path.join(created.json().workspacePath, "AGENTS.md"), "utf8")).toContain("Use the configured notes language.");
+    await app.close();
+    const reopened = createApp({ dataDirectory, workspaceModules });
+    apps.push(reopened);
+    expect((await reopened.inject({ method: "GET", url: "/projects" })).json()[0].workspaceManifest).toEqual(declaration);
+  });
+
+  it("does not initialize a plugin project in a folder with an invalid persisted manifest", async () => {
+    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "workspace-plugin-invalid-")) });
+    apps.push(app);
+    const workspacePath = await mkdtemp(path.join(tmpdir(), "workspace-plugin-folder-"));
+    await writeFile(path.join(workspacePath, "project.godot"), "config_version=5\n");
+    await writeFile(path.join(workspacePath, "workspace.json"), '{"version":99,"modules":[]}');
+    const response = await app.inject({ method: "POST", url: "/projects", payload: { type: "godot-game", workspacePath } });
+    expect(response.statusCode, response.body).toBe(400);
+    expect((await readdir(workspacePath)).sort()).toEqual(["project.godot", "workspace.json"]);
+  });
+
+  it("rejects invalid declarations even when reopening an already registered folder", async () => {
+    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "workspace-reopen-")) });
+    apps.push(app);
+    const created = (await app.inject({ method: "POST", url: "/projects", payload: { workspacePath: await mkdtemp(path.join(tmpdir(), "workspace-existing-")) } })).json();
+    const response = await app.inject({ method: "POST", url: "/projects", payload: { workspacePath: created.workspacePath, workspaceManifest: { version: 99, modules: [] } } });
+    expect(response.statusCode, response.body).toBe(400);
+    expect(response.json().error).toContain("version");
+    const replacement = await app.inject({ method: "POST", url: "/projects", payload: { workspacePath: created.workspacePath, workspaceManifest: { version: 1, modules: [] } } });
+    expect(replacement.statusCode, replacement.body).toBe(400);
+    expect(replacement.json().error).toContain("cannot replace");
+  });
+
+  it("persists explicit workspace modules through creation, rename and daemon restart", async () => {
+    const dataDirectory = await mkdtemp(path.join(tmpdir(), "ohmygame-manifest-"));
+    const app = createApp({ dataDirectory });
+    apps.push(app);
+    const workspaceManifest = { version: 1, modules: [{ id: "game", config: {} }] };
+    const created = await app.inject({ method: "POST", url: "/projects", payload: { name: "Manifest", workspaceManifest } });
+    expect(created.statusCode, created.body).toBe(201);
+    const project = created.json();
+    expect(project.workspaceManifest).toEqual(workspaceManifest);
+    expect(JSON.parse(await readFile(path.join(project.workspacePath, "workspace.json"), "utf8"))).toEqual(workspaceManifest);
+    expect((await app.inject({ method: "PATCH", url: `/projects/${project.id}`, payload: { name: "Renamed" } })).statusCode).toBe(200);
+    await app.close();
+    const reopened = createApp({ dataDirectory });
+    apps.push(reopened);
+    expect((await reopened.inject({ method: "GET", url: "/projects" })).json()).toEqual([
+      expect.objectContaining({ id: project.id, workspaceManifest }),
+    ]);
+  });
+
   it("creates an empty isolated Web Game project", async () => {
     const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-test-")) });
     apps.push(app);
@@ -199,7 +329,7 @@ describe("daemon", () => {
     const project = response.json();
     expect(project.name).toBe("First");
     expect(project.type).toBe("web-game");
-    expect(await readdir(project.workspacePath)).toEqual([]);
+    expect((await readdir(project.workspacePath)).sort()).toEqual(["AGENTS.md", "workspace.json"]);
     expect(project.preview).toEqual({ status: "waiting" });
   });
 
@@ -501,7 +631,7 @@ describe("daemon", () => {
     expect(await readdir(godot.json().workspacePath)).toContain("project.godot");
     expect(general.statusCode).toBe(201);
     expect(general.json()).toMatchObject({ type: "general", webPreviewEnabled: true, preview: { status: "waiting" } });
-    expect(await readdir(general.json().workspacePath)).toEqual([]);
+    expect((await readdir(general.json().workspacePath)).sort()).toEqual(["AGENTS.md", "workspace.json"]);
     expect(unknown.statusCode).toBe(400);
     const preview = await app.inject({ method: "POST", url: `/projects/${general.json().id}/preview?reuse=1` });
     expect(preview.statusCode).toBe(409);
@@ -534,7 +664,7 @@ describe("daemon", () => {
     expect(renamed.json()).toMatchObject({ name: "Renamed" });
     expect(duplicated.statusCode).toBe(201);
     expect(duplicated.json()).toMatchObject({ name: "Renamed copy" });
-    expect(await readdir(duplicated.json().workspacePath)).toEqual(["index.html"]);
+    expect((await readdir(duplicated.json().workspacePath)).sort()).toEqual(["AGENTS.md", "index.html", "workspace.json"]);
     expect(deleted.statusCode).toBe(204);
     expect((await app.inject({ method: "GET", url: `/projects/${project.id}` })).statusCode).toBe(404);
   });
@@ -600,7 +730,7 @@ describe("daemon", () => {
       url: `/projects/${project.id}/files/location?path=empty-folder`,
     });
 
-    expect(files.json()).toEqual([
+    expect(files.json().filter((file: { path: string }) => !["AGENTS.md", "workspace.json"].includes(file.path))).toEqual([
       { path: "cover.png", size: 3, mediaType: "image", origin: "workspace", purpose: "asset" },
       { path: "empty-folder", size: 0, directory: true },
       { path: "hello world.txt", size: 6 },

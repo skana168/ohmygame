@@ -21,6 +21,21 @@ async function dataDirectory(): Promise<string> {
 }
 
 describe("project loading", () => {
+  it("diagnoses unavailable legacy capabilities without changing the inferred project domain", async () => {
+    const directory = await dataDirectory();
+    const writer = new ProjectManager(directory);
+    const project = await writer.create("Legacy game", "web-game");
+    await rm(path.join(project.workspacePath, "workspace.json"));
+    await writeFile(path.join(project.workspacePath, "AGENTS.md"), "User rules");
+    const app = createApp({ dataDirectory: directory, workspaceModules: [] });
+    apps.push(app);
+    const loaded = (await app.inject({ method: "GET", url: "/projects" })).json()[0];
+    expect(loaded).toMatchObject({ type: "web-game", workspaceManifestLegacy: true, workspaceManifest: { version: 1, modules: [{ id: "game", config: {} }] } });
+    expect(loaded.workspaceDiagnostics[0]).toContain("game is unavailable");
+    expect(await readFile(path.join(project.workspacePath, "AGENTS.md"), "utf8")).toBe("User rules");
+    await expect(readFile(path.join(project.workspacePath, "workspace.json"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it.each([
     { kind: "malformed JSON", value: "{" },
     { kind: "null", value: "null" },

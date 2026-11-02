@@ -102,10 +102,12 @@ describe("project archive export", () => {
       "workspace/.data/asset-previews/hero.png",
       "workspace/.data/assets.json",
       "workspace/.gitignore",
+      "workspace/AGENTS.md",
       "workspace/canvas/board.json",
       "workspace/index.html",
       "workspace/levels/build/keep.txt",
       "workspace/src/main.js",
+      "workspace/workspace.json",
     ]);
     expect(archive["cover.webp"]).toEqual(webp("cover"));
     expect(JSON.parse(archive["ohmygame-project.json"]!.toString())).toEqual({

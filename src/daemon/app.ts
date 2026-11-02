@@ -1,3 +1,5 @@
+import { OHMYGAME_WORKSPACE_MODULES, type WorkspaceModuleDescriptor } from "../shared/workspace-manifest.js";
+import { readWorkspaceManifest, validateWorkspaceManifest } from "./workspace-manifest.js";
 import type { BusinessToolSelection } from "./business-tools.js";
 import { composeToolContributions, type ToolContribution } from "./tool-contributions.js";
 import { CodexImageProvider } from "./agent-runtimes/codex-image-provider.js";
@@ -165,6 +167,8 @@ import {
 } from "./playable-thumbnails.js";
 
 export interface AppOptions {
+  /** Source-registered modules available to workspace declarations. */
+  workspaceModules?: readonly WorkspaceModuleDescriptor[];
   /** Select source-registered business tools; both modules are enabled by default. */
   businessTools?: BusinessToolSelection;
   /** Source-registered tools. Also called with a schema-only placeholder for the external catalog. */
@@ -226,6 +230,7 @@ const createProjectSchema = {
     type: "object",
     additionalProperties: false,
     properties: {
+      workspaceManifest: { type: "object", additionalProperties: true },
       name: { type: "string", maxLength: PUBLISH_GAME_TITLE_MAX_LENGTH },
       type: { type: "string", enum: PROJECT_TYPE_IDS },
       exampleId: { type: "string", pattern: EXAMPLE_ID_PATTERN, maxLength: 80 },
@@ -600,7 +605,7 @@ export function createApp(options: AppOptions = {}) {
   const conversationImages = new ConversationImageStore(path.join(dataDirectory, "cache", "conversation-images"));
   const events = new RuntimeEventBus(1_000, (event) => conversationImages.event(event));
   const library = new AssetLibrary(dataDirectory);
-  const projects = new ProjectManager(dataDirectory, library);
+  const projects = new ProjectManager(dataDirectory, library, options.workspaceModules);
   const notices = new AgentNoticeLog((projectId) => projects.get(projectId)?.name ?? null);
   events.subscribeAll((event) => notices.event(event));
   const attachments = new AgentAttachmentStore();
@@ -1127,7 +1132,7 @@ export function createApp(options: AppOptions = {}) {
       app.log.warn({ err: cause, projectDirectory }, "Could not load project; skipped during startup");
     }), tools.load(), pluginConfiguration.load(), connections.load(), preinstalledPlugins.load(), webSearchSettings.load(), openAIEndpoint.load(), loadOpenAIImages(), meshySettings.load(), tripoSettings.load(), hyper3dSettings.load(), seedanceSettings.load(), minimaxSettings.load(), doubaoVoiceSettings.load(), providerModelSettings.load(), externalMcp.load(), agentRuntimes.load().catch((err) => app.log.warn({ err }, "Could not load coding agent settings"))]);
     await Promise.all(projects.list().map(async (project) => { projectWrites.initialize(project.id, await readWorkspaceVersion(project)); }));
-    await Promise.all(projects.list().map((project) => syncPluginType(project).catch((err) => app.log.warn({ err, projectId: project.id }, "Could not update the project's plugin type"))));
+    await Promise.all(projects.list().filter((project) => !project.workspaceDiagnostics?.length).map((project) => syncPluginType(project).catch((err) => app.log.warn({ err, projectId: project.id }, "Could not update the project's plugin type"))));
     for (const error of await preinstalledPlugins.seed(pluginServices)) app.log.warn(error);
     const examplesWarning = await examples.load();
     if (examplesWarning) app.log.warn(examplesWarning);
@@ -1746,12 +1751,26 @@ export function createApp(options: AppOptions = {}) {
 
   app.post<{ Body: CreateProjectRequest }>("/projects", { schema: createProjectSchema }, async (request, reply) => {
     try {
+      if (request.body?.workspaceManifest !== undefined) {
+        try { validateWorkspaceManifest(request.body.workspaceManifest, options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES); }
+        catch (cause) { throw new ProjectWorkspaceError((cause as Error).message); }
+      }
+      if (request.body?.workspacePath) {
+        try {
+          const storedManifest = await readWorkspaceManifest(request.body.workspacePath);
+          if (storedManifest !== undefined) {
+            validateWorkspaceManifest(storedManifest, options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES);
+            if (request.body.workspaceManifest && !isDeepStrictEqual(storedManifest, request.body.workspaceManifest)) throw new ProjectWorkspaceError("workspace.json already exists; creation cannot replace its module selection");
+          }
+        } catch (cause) { throw new ProjectWorkspaceError(`workspace.json: ${(cause as Error).message}`); }
+      }
       if (request.body?.exampleId) {
         if (request.body.viewport) {
           return reply.code(400).send({ error: "Examples define their own viewport" });
         }
         const project = await examples.createProject(projects, request.body.exampleId, {
           type: request.body.type,
+          workspaceManifest: request.body.workspaceManifest,
           name: request.body.name,
           workspacePath: request.body.workspacePath,
         });
@@ -1784,10 +1803,11 @@ export function createApp(options: AppOptions = {}) {
         }
         // An adopted folder keeps the version it pins, so the record comes from that version.
         const { kind, pluginType } = (adopting ? await projectKindAt(request.body.workspacePath!, pluginServices) : undefined) ?? projectKind(selected);
-        const project = await projects.create(request.body.name, kind, request.body.workspacePath, pluginType);
+        const project = await projects.create(request.body.name, kind, request.body.workspacePath, pluginType, request.body.workspaceManifest, !adopting);
         if (!adopting) {
           try {
             await createTypedProject({ folder: project.workspacePath, type: selected.id, name: project.name, services: pluginServices, plugins: { [selected.plugin.id]: selected.plugin.version } });
+            await projects.initializeWorkspace(project);
           } catch (cause) {
             // Only the registration is taken back; a folder the person chose is left as it is.
             await projects.delete(project.id, { registrationOnly: true });
@@ -1797,7 +1817,7 @@ export function createApp(options: AppOptions = {}) {
         return reply.code(201).send(project);
       }
       const type = request.body?.type ?? "web-game";
-      const project = await projects.create(request.body?.name, type, request.body?.workspacePath);
+      const project = await projects.create(request.body?.name, type, request.body?.workspacePath, undefined, request.body?.workspaceManifest);
       if (project.type === "interactive-story") {
         try {
           await createNodeCodebase(

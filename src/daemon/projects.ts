@@ -1,3 +1,6 @@
+import { isDeepStrictEqual } from "node:util";
+import { OHMYGAME_WORKSPACE_MODULES, type WorkspaceModuleDescriptor, type WorkspaceManifest } from "../shared/workspace-manifest.js";
+import { readWorkspaceManifest, writeWorkspaceManifest, validateWorkspaceManifest } from "./workspace-manifest.js";
 import { PREVIEW_SETTING_KEYS, previewSettings, validPreviewSettings, validatePreviewSettings, type ProjectPreviewSettings } from "../shared/preview-settings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -14,7 +17,7 @@ import type { AssetLibrary } from "./asset-library.js";
 import { isProjectPackageManager } from "./package-manager.js";
 import { validateNodeGraph } from "../shared/playable-graph-validation.js";
 import type { NodeGraph } from "../shared/playable-nodes.js";
-import { changeNodeCodebase } from "./playable-codebase.js";
+import { AGENT_INSTRUCTIONS, changeNodeCodebase } from "./playable-codebase.js";
 import { canvasLibraryAssetUsage, canvasReferencesAsset, removeCanvasAssetReferences, renameCanvasAssetPaths } from "./canvas-workspace.js";
 import { readCanvasAssets } from "./canvas-assets.js";
 import { readCanvasFile, writeCanvasJson } from "./canvas-files.js";
@@ -100,7 +103,7 @@ export class ProjectManager {
   readonly #removedDirectory: string;
   #location?: string;
 
-  constructor(dataDirectory: string, private readonly assetLibrary?: AssetLibrary) {
+  constructor(dataDirectory: string, private readonly assetLibrary?: AssetLibrary, private readonly workspaceModules: readonly WorkspaceModuleDescriptor[] = OHMYGAME_WORKSPACE_MODULES) {
     this.#projectsDirectory = path.join(dataDirectory, "projects");
     this.#locationFile = path.join(dataDirectory, "project-location.json");
     this.#removedDirectory = path.join(dataDirectory, "removed-projects");
@@ -196,6 +199,7 @@ export class ProjectManager {
             projectDirectory,
             workspaceAvailable,
           );
+          Object.assign(project, await this.#workspaceDeclaration(workspacePath, metadata.type));
           if (missing) await writeMetadata(projectDirectory, metadata);
           return project;
         } catch (cause) {
@@ -209,7 +213,11 @@ export class ProjectManager {
     }
   }
 
-  async create(name?: string, type: ProjectType = "web-game", selectedWorkspacePath?: string, pluginType?: ProjectState["pluginType"]): Promise<ProjectState> {
+  async create(name?: string, type: ProjectType = "web-game", selectedWorkspacePath?: string, pluginType?: ProjectState["pluginType"], workspaceManifest?: WorkspaceManifest, deferInitialization = false): Promise<ProjectState> {
+    if (workspaceManifest !== undefined) {
+      try { workspaceManifest = validateWorkspaceManifest(workspaceManifest, this.workspaceModules); }
+      catch (cause) { throw new ProjectWorkspaceError((cause as Error).message); }
+    }
     const id = randomUUID();
     const projectDirectory = path.join(this.#projectsDirectory, id);
     if (selectedWorkspacePath === undefined && this.#location) {
@@ -219,6 +227,18 @@ export class ProjectManager {
     const workspacePath = selectedWorkspacePath !== undefined
       ? await this.#validateExternalWorkspace(selectedWorkspacePath)
       : path.join(projectDirectory, "workspace");
+    const storedManifest = await readWorkspaceManifest(workspacePath).catch((cause) => { throw new ProjectWorkspaceError(`workspace.json: ${(cause as Error).message}`); });
+    if (storedManifest !== undefined) {
+      try { validateWorkspaceManifest(storedManifest, this.workspaceModules); }
+      catch (cause) { throw new ProjectWorkspaceError((cause as Error).message); }
+      if (workspaceManifest && !isDeepStrictEqual(workspaceManifest, storedManifest)) throw new ProjectWorkspaceError("workspace.json already exists; creation cannot replace its module selection");
+    }
+    const fresh = !hasExternalWorkspace || (await readdir(workspacePath)).every((entry) => entry === ".DS_Store");
+    const intendedManifest = storedManifest ?? workspaceManifest ?? (fresh ? { version: 1 as const, modules: legacyWorkspaceManifest(type).modules.filter((entry) => this.workspaceModules.some((module) => module.id === entry.id)) } : undefined);
+    if (intendedManifest) {
+      try { validateWorkspaceManifest(intendedManifest, this.workspaceModules); }
+      catch (cause) { throw new ProjectWorkspaceError((cause as Error).message); }
+    }
     const metadata: ProjectMetadata = {
       version: 1,
       id,
@@ -236,8 +256,44 @@ export class ProjectManager {
     }
     await writeMetadata(projectDirectory, metadata);
     const project = projectState(workspacePath, metadata, await isRunnableStartupWorkspace({ ...metadata, workspacePath }), projectDirectory, true);
+    if (intendedManifest && !deferInitialization) await this.initializeWorkspace(project, intendedManifest);
+    else if (intendedManifest) project.workspaceManifest = structuredClone(intendedManifest);
+    else Object.assign(project, await this.#workspaceDeclaration(workspacePath, type));
     this.#projects.set(id, project);
     return project;
+  }
+
+  /** Finalize after a plugin/example has populated its otherwise empty workspace. */
+  async initializeWorkspace(project: ProjectState, manifest = project.workspaceManifest): Promise<void> {
+    if (!manifest) return;
+    try { manifest = validateWorkspaceManifest(manifest, this.workspaceModules); }
+    catch (cause) { throw new ProjectWorkspaceError((cause as Error).message); }
+    const existing = await readWorkspaceManifest(project.workspacePath);
+    if (existing === undefined) await writeWorkspaceManifest(project.workspacePath, manifest);
+    else if (!isDeepStrictEqual(existing, manifest)) throw new ProjectWorkspaceError("workspace.json already exists; initialization cannot replace its module selection");
+    const instructions = [
+      manifest.modules.some((entry) => entry.id === "interactive-story") ? AGENT_INSTRUCTIONS : "# Workspace\n\nRead workspace.json for this workspace's module declaration. Preserve existing files and user edits. Read canvas/AGENTS.md before editing an existing canvas. Module availability is controlled by the application.",
+      ...manifest.modules.flatMap((entry) => this.workspaceModules.find((module) => module.id === entry.id)?.agentInstructions ?? []),
+    ].join("\n\n");
+    try { await writeFile(path.join(project.workspacePath, "AGENTS.md"), `${instructions}\n`, { flag: "wx" }); }
+    catch (cause) { if ((cause as NodeJS.ErrnoException).code !== "EEXIST") throw cause; }
+    project.workspaceManifest = structuredClone(manifest);
+  }
+
+  async #workspaceDeclaration(workspace: string, type: ProjectType): Promise<Pick<ProjectState, "workspaceManifest" | "workspaceDiagnostics" | "workspaceManifestLegacy">> {
+    try {
+      const manifest = await readWorkspaceManifest(workspace);
+      if (manifest !== undefined) return { workspaceManifest: validateWorkspaceManifest(manifest, this.workspaceModules) };
+      const legacy = legacyWorkspaceManifest(type);
+      try {
+        validateWorkspaceManifest(legacy, this.workspaceModules);
+        return { workspaceManifest: legacy, workspaceManifestLegacy: true };
+      } catch (cause) {
+        return { workspaceManifest: legacy, workspaceManifestLegacy: true, workspaceDiagnostics: [(cause as Error).message] };
+      }
+    } catch (cause) {
+      return { workspaceDiagnostics: [`workspace.json: ${(cause as Error).message}`] };
+    }
   }
 
   list(): ProjectState[] {
@@ -404,6 +460,7 @@ export class ProjectManager {
     }
     const workspacePath = path.join(duplicateDirectory, "workspace");
     const project = projectState(workspacePath, metadata, await isRunnableStartupWorkspace({ ...metadata, workspacePath }), duplicateDirectory, true);
+    Object.assign(project, await this.#workspaceDeclaration(project.workspacePath, project.type));
     this.#projects.set(project.id, project);
     return project;
   }
@@ -447,6 +504,7 @@ export class ProjectManager {
     }
     const workspace = path.join(this.#projectDirectory(id), "workspace");
     const project = projectState(workspace, metadata, await isRunnableStartupWorkspace({ ...metadata, workspacePath: workspace }), this.#projectDirectory(id), true);
+    Object.assign(project, await this.#workspaceDeclaration(project.workspacePath, project.type));
     this.#projects.set(project.id, project);
     return project;
   }
@@ -1437,4 +1495,8 @@ function validMediaModelDefaults(value: unknown): value is MediaModelDefaults {
 /** A project's name as a folder name on any system. */
 function folderName(name: string): string {
   return name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/^[\s.]+|[\s.]+$/g, "").slice(0, 80) || "Untitled";
+}
+
+function legacyWorkspaceManifest(type: ProjectType): WorkspaceManifest {
+  return { version: 1, modules: (type === "interactive-story" ? ["game", "interactive-story"] : type === "asset-canvas" ? [] : ["game"]).map((id) => ({ id, config: {} })) };
 }
