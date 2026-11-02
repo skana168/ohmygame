@@ -227,6 +227,25 @@ describe("coding workspace", () => {
     expect(html).toContain('aria-label="Reload preview"');
   });
 
+  it("retains the preview of a saved game when its renderer business module is absent", async () => {
+    const { rendererContributions } = await import("../src/renderer/business-contributions.js");
+    const previous = rendererContributions.game;
+    rendererContributions.game = undefined;
+    try {
+      const html = renderToStaticMarkup(createElement(CodingWorkspace, {
+        project: previewProject,
+        publishing: false, workspaceRevision: 0, onPublish: async () => false,
+        onClosePublish: () => {}, onRestart: () => {},
+      }));
+      expect(html).toContain("<iframe");
+      expect(html).not.toContain("preview-play-button");
+      expect(html).not.toContain("Record game");
+      expect(html).not.toContain('aria-label="Tune the game"');
+    } finally {
+      rendererContributions.game = previous;
+    }
+  });
+
   it("keeps the preview panel mounted while the workspace is rendered", () => {
     const html = renderToStaticMarkup(
       createElement(CodingWorkspace, {

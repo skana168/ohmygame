@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import path from "node:path";
-import { act, useEffect, type ComponentProps, type ReactNode } from "react";
+import { act, useEffect, Fragment, type ComponentProps, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopRuntimeState } from "../src/shared/desktop-runtime.js";
@@ -204,7 +204,8 @@ async function openProject(
   const { updateRuntimeConnection } =
     await import("../src/renderer/runtime-connection.js");
   const { ProjectShell } = await import("../src/renderer/project-shell.js");
-  const { AuthProvider } = await import("../src/renderer/auth.js");
+  const { rendererContributions } = await import("../src/renderer/business-contributions.js");
+  const AuthProvider = rendererContributions.account?.AuthProvider ?? Fragment;
   updateRuntimeConnection(READY);
   const render = (conversationId: string) => act(async () =>
     root.render(
@@ -257,6 +258,24 @@ describe("project shell layout", () => {
     expect([...container.querySelectorAll(".dock-tab-label")].map((tab) => tab.textContent)).toEqual(expect.arrayContaining(["Chat", "Canvas", "Code", "Assets"]));
     expect([...container.querySelectorAll(".dock-tab-label")].map((tab) => tab.textContent)).not.toContain("Story");
     expect(daemon.requests.some((request) => /playable|interactive-story/.test(request.route))).toBe(false);
+  });
+
+  it("preserves a saved story in shared panels when its renderer module is absent", async () => {
+    const { rendererContributions } = await import("../src/renderer/business-contributions.js");
+    const previous = rendererContributions.story;
+    rendererContributions.story = undefined;
+    try {
+      const daemon = await openProject((route) => route === "/projects/project" ? Response.json({
+        id: "project", name: "Saved story", type: "interactive-story", storyCapability: true,
+        workspacePath: "/tmp/project", updatedAt: new Date(0).toISOString(), preview: { status: "stopped" },
+      }) : undefined);
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain("Your saved story files are preserved");
+      expect([...container.querySelectorAll(".dock-tab-label")].map((tab) => tab.textContent)).not.toContain("Story");
+      expect([...container.querySelectorAll(".dock-tab-label")].map((tab) => tab.textContent)).toEqual(expect.arrayContaining(["Chat", "Canvas", "Code", "Assets"]));
+      expect(daemon.requests.some((request) => /playable|interactive-story/.test(request.route))).toBe(false);
+    } finally {
+      rendererContributions.story = previous;
+    }
   });
 
   it("opens the design route on the canvas panel and keeps a closed chat closed across project updates", async () => {

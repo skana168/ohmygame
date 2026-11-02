@@ -35,10 +35,9 @@ describe("renderer composition", () => {
           setup(builder) {
             builder.onResolve({ filter: /.*/ }, async (args) => {
               if (args.pluginData?.checked) return;
-              const target =
-                args.path === "./business-contributions.js"
-                  ? "./core-contributions.js"
-                  : args.path;
+              const target = args.path.endsWith("/business-contributions.js")
+                ? "./core-contributions.js"
+                : args.path;
               const resolved = await builder.resolve(target, {
                 kind: args.kind,
                 importer: args.importer,
@@ -78,6 +77,7 @@ describe("renderer composition", () => {
     ]) {
       expect(inputs).toContain(`src/renderer/${source}`);
     }
+    expect(inputs).toContain("src/modules/example/note.tsx");
     expect(inputs.some(rendererBusinessSource)).toBe(false);
   });
 });

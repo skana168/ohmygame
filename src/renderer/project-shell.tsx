@@ -110,8 +110,8 @@ import { ProjectAppearanceDialog } from "./project-appearance-settings.js";
 import { AgentTimeline } from "./agent-timeline.js";
 import type { TurnChangesControls } from "./turn-changes.js";
 import { CodingWorkspace, WorkspaceCodeView } from "./coding-workspace.js";
-import type { StoryView } from "./playable-editor-workspace.js";
-import type { PlayableChatState } from "./playable-chat.js";
+import type { StoryView } from "./contribution-contract.js";
+import type { PlayableChatState } from "./contribution-contract.js";
 import { Composer, type ComposerDraft } from "./composer.js";
 import { FloatingChat } from "./floating-chat.js";
 import { composerDrafts } from "./composer-drafts.js";
@@ -125,7 +125,7 @@ import { useAgentModels } from "./model-selector.js";
 import { useOptionalAccount } from "./account-context.js";
 import { rendererContributions } from "./business-contributions.js";
 import type { PluginUiConfirm } from "../shared/plugin-ui-protocol.js";
-import type { PublishDetails } from "./publish-dialog.js";
+import type { PublishDetails } from "./contribution-contract.js";
 import { useRuntimeConnection } from "./runtime-connection.js";
 import { ErrorBoundary } from "./error-boundary.js";
 import { closePanel, createPanelNodes, PanelLayout, PanelMount, place, showPanel, visiblePanels, areaOf, type Layout, type PanelNodes } from "./panel-layout.js";
@@ -220,7 +220,7 @@ export function ProjectShell({
   const plugins = useProjectPluginContributions(state.project, capabilitiesRevision);
   const pluginPanels = new Map(plugins.panels.map((panel) => [pluginPanelId(panel), panel]));
   const homes: PanelHomes = Object.fromEntries(plugins.panels.map((panel) => [pluginPanelId(panel), panel.area]));
-  const offered: PanelId[] = state.project ? [...panelsOf(state.project), ...pluginPanels.keys()] : [];
+  const offered: PanelId[] = state.project ? [...panelsOf(rendererContributions.story ? state.project : { ...state.project, storyCapability: false }), ...pluginPanels.keys()] : [];
   const [saved, setSaved] = useState<SavedLayout | undefined>();
   const opening = useMemo(() => state.project ? openingLayout(offered, homes) : undefined, [!!state.project]);
   const current = saved ?? opening;
@@ -1346,7 +1346,7 @@ export function ProjectShell({
   return (
     <>
     {chatInput}
-    {project?.type === "interactive-story" && !storyCapabilityEnabled(project) ? <p role="alert" className="settings-note">{t("storyModule.unavailable")}</p> : null}
+    {project?.type === "interactive-story" && !storyCapabilityEnabled(project, !!rendererContributions.story) ? <p role="alert" className="settings-note">{t("storyModule.unavailable")}</p> : null}
     {project ? <PluginChangesSheet projectId={project.id} open={pluginChangesOpen} busy={agentBusy} onClose={() => setPluginChangesOpen(false)}
       onUndone={() => setWorkspaceRevision((value) => value + 1)} /> : null}
     {pluginLink ? <Dialog open title={t("pluginCommands.openLinkTitle")} onClose={() => setPluginLink(undefined)} footer={<>

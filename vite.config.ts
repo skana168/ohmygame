@@ -19,7 +19,7 @@ const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
 export default defineConfig({
   base: "./",
   resolve: {
-    alias: applicationComposition.id === "non-game" ? [{ find: /^\.\/business-contributions\.js$/, replacement: path.resolve(import.meta.dirname, "src/renderer/core-contributions.ts") }] : [],
+    alias: applicationComposition.id === "non-game" ? [{ find: /^.*\/business-contributions\.js$/, replacement: path.resolve(import.meta.dirname, "src/renderer/core-contributions.ts") }] : [],
   },
   define: {
     __APP_NAME__: JSON.stringify(application.name),

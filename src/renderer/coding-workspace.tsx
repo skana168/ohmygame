@@ -58,7 +58,7 @@ import "./library.css";
 import { ProjectRenameDialog } from "./project-rename-dialog.js";
 import { HighlightedCode } from "./highlighted-code.js";
 import { MarkdownContent, workspaceLinkPath } from "./markdown-content.js";
-import type { PublishDetails } from "./publish-dialog.js";
+import type { PublishDetails } from "./contribution-contract.js";
 import { ProjectSettingsDialog } from "./project-settings-dialog.js";
 import { AssetMedia } from "./asset-gallery.js";
 import { useWorkspaceAssetUrl } from "./use-workspace-asset-url.js";
@@ -156,7 +156,7 @@ export function CodingWorkspace({
 }: CodingWorkspaceProps) {
   const { GameTuningPanel, GameRecordButton } = rendererContributions.game ?? {};
   const PublishDialog = rendererContributions.publishing?.PublishDialog;
-  const gameEnabled = !!project && gameCapabilityEnabled(project);
+  const gameEnabled = !!rendererContributions.game && !!project && gameCapabilityEnabled(project);
   const supportsPreview = supportsWebPreview(project);
   const hasPreview = supportsWebPreview(project);
   const visible = panels?.visible ?? new Set<CodingView>([canvasOpen ? "canvas" : hasPreview ? "preview" : "code"]);
@@ -200,7 +200,7 @@ export function CodingWorkspace({
   const [reload, setReload] = useState(0);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [agentPlaytestWatch, setAgentPlaytestWatch] = useState<PlaytestWatchState | undefined>(() => (
-    typeof window !== "undefined" && window.ohMyGameDesktop?.agentPlaytests ? { visible: false, activeSessions: 0 } : undefined
+    rendererContributions.game && typeof window !== "undefined" && window.ohMyGameDesktop?.agentPlaytests ? { visible: false, activeSessions: 0 } : undefined
   ));
   const [agentPlaytestWatchPending, setAgentPlaytestWatchPending] = useState(false);
   const fileRequest = useRef(0);
@@ -246,7 +246,7 @@ export function CodingWorkspace({
   }, [project?.id]);
 
   useEffect(() => {
-    const watch = window.ohMyGameDesktop?.agentPlaytests;
+    const watch = rendererContributions.game && window.ohMyGameDesktop?.agentPlaytests;
     if (!watch) return;
     let disposed = false;
     const unsubscribe = watch.onState((state) => { if (!disposed) setAgentPlaytestWatch(state); });
@@ -836,7 +836,7 @@ export function PreviewView({ project, client, onAskAgent, onOpenFile, onLogs, r
   const runtime = useRuntimeConnection();
   const preview = project?.preview;
   const frame = useRef<HTMLElement | null>(null);
-  const native = project && gameCapabilityEnabled(project) && typeof window !== "undefined" ? window.ohMyGameDesktop?.webGamePlayer?.preview : undefined;
+  const native = rendererContributions.game && project && gameCapabilityEnabled(project) && typeof window !== "undefined" ? window.ohMyGameDesktop?.webGamePlayer?.preview : undefined;
   const captureTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [started, setStarted] = useState(active && !suspended);
   const [cover, setCover] = useState<string>();
