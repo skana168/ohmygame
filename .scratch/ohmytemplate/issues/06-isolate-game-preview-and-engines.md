@@ -13,7 +13,7 @@ Status: claimed
 - [x] Preserve reusable web preview startup, proxying, and shutdown behavior for applications that select it independently of game playtesting.
 - [x] Closing workspaces, conversations, or the application cleans up owned drivers and preview resources as before.
 - [x] Extend existing preview, game-use, playtest-driver, and plugin integration coverage for enabled, disabled, unsupported-environment, and cleanup cases; do not claim new engine implementations.
-- [ ] Run focused tests and type checking, exercise the relevant Electron/browser flows, and document supported capabilities and any remaining manual engine checks.
+- [x] Run focused tests and type checking, exercise the relevant Electron/browser flows, and document supported capabilities and any remaining manual engine checks.
 
 **Context:** App-wide resource preparation and final build exclusion are consolidated in ticket 10. Follow the [parent specification](../spec.md), [glossary](../../../GLOSSARY.md), and [accepted ADR](../../../docs/adr/0001-extract-a-reusable-workbench.md).
 
@@ -38,3 +38,16 @@ Browser non-game preview flow exercised. Electron fractional resize failure
 reproduces with baseline player code; later smoke assertions and actual desktop
 capability UI flow remain unverified. Status stays claimed and final acceptance
 item stays unchecked. See report for precise run order and retained evidence.
+
+
+## Desktop acceptance completion (2026-11-02)
+
+The focused actual Electron application/daemon/preload flow passed on Electron
+43.3.0, including non-game iframe usability, absent game controls, direct IPC
+rejection without windows, real enabled game player and agent driver, workspace
+owner cleanup and application shutdown. Supplemental desktop canvas title and
+Markdown editing/reopen passed with API-created two-board fixtures. See the
+[report](../reports/06-isolate-game-preview-and-engines.md#focused-desktop-acceptance-completion-2026-11-02)
+for commands, screenshots and limits. The original native resize smoke remains
+unchanged and its baseline failure is not represented as passing. Final criterion
+is now evidenced; status remains claimed for root merger.

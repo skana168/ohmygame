@@ -304,3 +304,20 @@ gives the format and how a game connects. The game defines
   through the dev server, which is why games `fetch` it.
 - The bridge can't run where a page's security policy blocks it or in HTML the
   proxy doesn't inject. The panel then says the game isn't connected.
+
+## Desktop capability smoke
+
+After `bun run build:host` and `bun run build:renderer`, run
+`node scripts/test-web-game-runtime.mjs --capabilities` with the installed declared
+Electron binary. This starts the actual desktop main process, authenticated
+daemon and sandboxed renderer with isolated temporary storage. It checks the
+non-game preview iframe and absent game controls, rejected game IPC and agent
+tool calls, enabled native player and agent-driver behavior, workspace-owned
+cleanup, and application shutdown. It also edits and reopens a generic canvas
+document in the desktop renderer using API-created workspace/board fixtures.
+
+Set `OHMYGAME_SMOKE_DIRECTORY` to a fresh absolute temporary directory to retain
+logs, data and screenshots for inspection. Without it, the runner removes its
+own temporary directory after exit. This focused mode is independent of the
+original native-player smoke: running without `--capabilities` retains all
+original resizing, fullscreen, storage, playback and cleanup assertions.
