@@ -73,3 +73,7 @@ No Electron UI run was performed: this frozen installation has no `node_modules/
 - Confirmed `node_modules/electron/dist/Electron.app` is still absent. Electron creation/multi-board/edit/reopen, real provider/CLI and private-cloud validation remain unverified as detailed above. Document-title browser editing remains unverified.
 - Merged latest local `refactor/ohmytemplate-integration` tip `5be4b4ed355f2a6b43c21cb2dab8d54aa29de6c1`: already up to date, no composition conflicts. Preview06 and account/provider09 were not implemented or altered. No other tickets or execution-state were edited.
 - Ticket remains claimed for merger review; remaining manual acceptance stays open. This recovery commit contains implementation, tests, documentation, report and original screenshots.
+
+## Serial integration (2026-11-02)
+
+Resolved by merger at `366f0dab6b62e8684bf47b98e168d0d10f143606` from `f0a99325f2e342a1e6692aa0877ada369cd44b1d`. The sole conflict was adjacent accountServices/workspace policy imports; both retained. Fresh root 15-suite command recorded above passed 392 tests (including provider09 additions), typecheck and diff checks passed. Logs: `/tmp/ohmytemplate-merge04-tests.log`, `/tmp/ohmytemplate-merge04-types.log`. No new browser evidence claimed; title editing remains unverified. Earlier statements treating outstanding Electron UI alone as a ticket blocker are superseded: the criterion explicitly permits recording validation still required. Electron remains mandatory for overall template delivery.

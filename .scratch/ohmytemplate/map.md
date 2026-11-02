@@ -32,6 +32,8 @@ Execution details are recorded in [execution-state.json](execution-state.json).
   See its report for inherited UI evidence and live-provider/Electron/platform gaps.
   Tickets 04/06 and the ticket 08 queue retain their prior state.
 
+- [Ticket 04](issues/04-open-non-game-workspaces.md) resolved at `366f0dab`; 392 merged-root tests and typecheck passed. Generic tools/canvas retain independent account configuration. Tickets05/07 ready; Electron overall validation and browser title editing remain unverified.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction
