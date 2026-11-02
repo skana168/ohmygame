@@ -48,7 +48,7 @@ import type { PreviewViewport, ProjectFileOpenMode, ProjectState, WorkspaceFile,
 import type { PlaytestWatchState } from "../shared/playtest.js";
 import { buildsWebPreview, isWebRuntimeProjectType, supportsWebPreview } from "../shared/project-runtime.js";
 import type { GameTuningState } from "../shared/game-tuning.js";
-import { GameTuningPanel } from "./game-tuning-panel.js";
+import { rendererContributions } from "./business-contributions.js";
 import { createWorkspaceEntry, deleteWorkspaceEntry, setPreviewPicking, getProjectCover, getProjectCoverState, getWorkspaceFile, listWorkspaceFiles, renameWorkspaceEntry, saveProjectAssetToLibrary, setProjectCover } from "./api.js";
 import { captureElementImage } from "./page-capture.js";
 import { AssetThumbnail, WorkspaceAssetDialog, fileExtension, fileName, filterAssets, hasMediaType, libraryAssetOriginLabel, mediaTypeLabel, type BrowsableAsset, type MediaFilter, type ProjectAssetFilters } from "./asset-browser.js";
@@ -58,15 +58,12 @@ import "./library.css";
 import { ProjectRenameDialog } from "./project-rename-dialog.js";
 import { HighlightedCode } from "./highlighted-code.js";
 import { MarkdownContent, workspaceLinkPath } from "./markdown-content.js";
-import { PublishDialog, type PublishDetails } from "./publish-dialog.js";
+import type { PublishDetails } from "./publish-dialog.js";
 import { ProjectSettingsDialog } from "./project-settings-dialog.js";
 import { AssetMedia } from "./asset-gallery.js";
 import { useWorkspaceAssetUrl } from "./use-workspace-asset-url.js";
-import { useWebGamePlayer } from "./use-web-game-player.js";
-import { GameRecordButton } from "./game-recording.js";
 import { ErrorBoundary } from "./error-boundary.js";
 import { useRuntimeConnection } from "./runtime-connection.js";
-import { DesktopGamePreview } from "./desktop-game-preview.js";
 import { t } from "./i18n.js";
 import { GitChangesList, useWorkspaceGitChanges, WorkspaceGitDiff } from "./workspace-git-changes.js";
 import type { PanelNodes } from "./panel-layout.js";
@@ -157,6 +154,8 @@ export function CodingWorkspace({
   onPickingChange,
   panels,
 }: CodingWorkspaceProps) {
+  const { GameTuningPanel, GameRecordButton } = rendererContributions.game ?? {};
+  const PublishDialog = rendererContributions.publishing?.PublishDialog;
   const gameEnabled = !!project && gameCapabilityEnabled(project);
   const supportsPreview = supportsWebPreview(project);
   const hasPreview = supportsWebPreview(project);
@@ -207,19 +206,19 @@ export function CodingWorkspace({
   const fileRequest = useRef(0);
   const preview = project?.preview;
   const previewBaseUrl = preview?.status === "ready" ? preview.url : undefined;
-  const player = useWebGamePlayer(gameEnabled && supportsPreview ? project?.id : undefined, previewBaseUrl, preview?.revision, preview?.pages?.find((page) => page.source === "player")?.path);
+  const player = rendererContributions.game?.useWebGamePlayer(gameEnabled && supportsPreview ? project?.id : undefined, previewBaseUrl, preview?.revision, preview?.pages?.find((page) => page.source === "player")?.path);
   const nativePreview = gameEnabled && typeof window !== "undefined" && window.ohMyGameDesktop?.webGamePlayer?.preview;
-  const gameClient = nativePreview ? player.client ?? previewClient : previewClient;
+  const gameClient = nativePreview ? player?.client ?? previewClient : previewClient;
   const previewPageUrl = previewBaseUrl ? isolatedPreviewUrl(new URL(previewPath, previewBaseUrl).toString(), "editor", gameClient) : undefined;
   const currentPreviewUrl = previewBaseUrl ? isolatedPreviewUrl(new URL(actualPreviewPath, previewBaseUrl).toString(), "editor", gameClient) : undefined;
   const previewStage = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const page = preview?.pages?.find((page) => nativePreview ? page.client === gameClient : player.open ? page.source === "player" : page.client === previewClient);
+    const page = preview?.pages?.find((page) => nativePreview ? page.client === gameClient : player?.open ? page.source === "player" : page.client === previewClient);
     if (!page) return;
     setActualPreviewPath(page.path);
     setKnownPaths((current) => current.includes(page.path) ? current : [...current, page.path]);
-  }, [preview?.pages, gameClient, previewClient, player.open, nativePreview]);
+  }, [preview?.pages, gameClient, previewClient, player?.open, nativePreview]);
 
   useEffect(() => {
     setPreviewPath(project?.previewPath ?? "/");
@@ -231,12 +230,12 @@ export function CodingWorkspace({
   }, [preview?.status]);
   const previousPlayerOpen = useRef(false);
   useEffect(() => {
-    if (!nativePreview && previousPlayerOpen.current && !player.open) {
+    if (!nativePreview && previousPlayerOpen.current && !player?.open) {
       const page = preview?.pages?.find((page) => page.source === "player");
       if (page) { setPreviewPath(page.path); setActualPreviewPath(page.path); }
     }
-    previousPlayerOpen.current = player.open;
-  }, [player.open]);
+    previousPlayerOpen.current = !!player?.open;
+  }, [player?.open]);
 
   useEffect(() => {
     setViewport(project?.previewViewport ?? "fit");
@@ -327,7 +326,7 @@ export function CodingWorkspace({
 
   function refreshPreview(): void {
     if (preview?.status === "ready") {
-      if (player.open) void player.reload();
+      if (player?.open) void player.reload();
       else if (nativePreview) setReload((value) => value + 1);
       else { setPreviewPath(actualPreviewPath); setReload((value) => value + 1); }
     } else if (preview?.status === "error" || preview?.status === "stopped") {
@@ -336,7 +335,7 @@ export function CodingWorkspace({
   }
 
   function playGame(): void {
-    void player.play({ path: actualPreviewPath, viewport: playerViewport(viewport) });
+    void player?.play({ path: actualPreviewPath, viewport: playerViewport(viewport) });
   }
 
   async function toggleAgentPlaytestWatch(): Promise<void> {
@@ -369,17 +368,17 @@ export function CodingWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, [picking]);
 
-  const canPlay = !player.open && (!project || preview?.status === "waiting" || preview?.status === "starting");
+  const canPlay = !player?.open && (!project || preview?.status === "waiting" || preview?.status === "starting");
   const playButton = gameEnabled && supportsPreview ? <Button
     size="sm"
     variant="ghost"
-    className={`preview-play-button${player.open ? " is-active" : ""}`}
-    icon={player.pending ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}
-    data-tooltip={player.pending ? t("workspace.openingGame") : player.open ? undefined : t("workspace.playInWindow")}
-    disabled={player.pending || (player.checking && !player.error) || canPlay}
+    className={`preview-play-button${player?.open ? " is-active" : ""}`}
+    icon={player?.pending ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}
+    data-tooltip={player?.pending ? t("workspace.openingGame") : player?.open ? undefined : t("workspace.playInWindow")}
+    disabled={player?.pending || (player?.checking && !player?.error) || canPlay}
     onClick={playGame}
-  >{player.open ? t("workspace.returnToGame") : t("workspace.play")}</Button> : null;
-  const recordButton = gameEnabled && supportsPreview && project ? <GameRecordButton projectId={project.id} gameRunning={player.open || preview?.status === "ready"} /> : null;
+  >{player?.open ? t("workspace.returnToGame") : t("workspace.play")}</Button> : null;
+  const recordButton = gameEnabled && supportsPreview && project && GameRecordButton ? <GameRecordButton projectId={project.id} gameRunning={player?.open || preview?.status === "ready"} /> : null;
   const settingsButton = project && project.pluginType?.preview !== "native" && isWebRuntimeProjectType(project.type) ? <button
     className="icon-button pane-header-action"
     type="button"
@@ -407,7 +406,7 @@ export function CodingWorkspace({
           agentPlaytestWatch={gameEnabled ? agentPlaytestWatch : undefined}
           agentPlaytestWatchPending={agentPlaytestWatchPending}
           picking={picking}
-          pickDisabled={!project || preview?.status !== "ready" || player.open}
+          pickDisabled={!project || preview?.status !== "ready" || !!player?.open}
           tuningOpen={tuningOpen}
           onToggleTuning={!gameEnabled || buildsWebPreview(project) ? undefined : () => setTuningOpen((open) => !open)}
           onOpenSettings={() => setProjectSettingsOpen(true)}
@@ -428,13 +427,13 @@ export function CodingWorkspace({
             <PreviewView
               project={project} client={gameClient} onAskAgent={onAskAgent} onLogs={() => setLogsOpen(true)} onOpenFile={(path) => { openCode(path); void selectFile(path); }} reload={reload} revision={workspaceRevision} url={previewPageUrl} viewport={viewport}
               pausedAfterRecovery={previewPaused}
-              active={shows("preview")} playerOpen={player.open} suspended={player.suspended} pending={player.pending || player.checking}
-              error={player.error} onPlay={playGame} stageRef={previewStage}
+              active={shows("preview")} playerOpen={player?.open} suspended={player?.suspended} pending={player?.pending || player?.checking}
+              error={player?.error} onPlay={playGame} stageRef={previewStage}
               onRetry={() => onRestart()} onSettings={() => setProjectSettingsOpen(true)}
             />
             </ErrorBoundary>
             {picking ? <span className="preview-pick-hint" role="status">{t("workspace.pickHint")}</span> : null}
-            {gameEnabled && tuningOpen && project && !buildsWebPreview(project) ? <GameTuningPanel projectId={project.id} previewReady={preview?.status === "ready"} announced={gameTuning} revision={workspaceRevision} onAskAgent={onAskAgent} onClose={() => setTuningOpen(false)} /> : null}
+            {gameEnabled && tuningOpen && project && !buildsWebPreview(project) && GameTuningPanel ? <GameTuningPanel projectId={project.id} previewReady={preview?.status === "ready"} announced={gameTuning} revision={workspaceRevision} onAskAgent={onAskAgent} onClose={() => setTuningOpen(false)} /> : null}
           </div>
         ) : null}
       </>,
@@ -521,13 +520,13 @@ export function CodingWorkspace({
     <>
       {placed}
       {topPlay}
-      {project && publishDialog ? <PublishDialog project={project} publishing={publishing} justPublished={publishDialog === "success"} onClose={onClosePublish} onPublish={onPublish} /> : null}
+      {project && publishDialog && PublishDialog ? <PublishDialog project={project} publishing={publishing} justPublished={publishDialog === "success"} onClose={onClosePublish} onPublish={onPublish} /> : null}
       {project && projectSettingsOpen ? <ProjectSettingsDialog
         project={project}
         previewUrl={currentPreviewUrl}
         previewActions={supportsPreview ? {
           onRestart: (reinstall) => onRestart(undefined, reinstall),
-          onStop: onStop ? () => { void player.close().catch(() => {}).then(onStop); } : undefined,
+          onStop: onStop ? () => { void player?.close().catch(() => {}).then(onStop); } : undefined,
           onLogs: () => { setProjectSettingsOpen(false); setLogsOpen(true); },
         } : undefined}
         onClose={() => setProjectSettingsOpen(false)}
@@ -833,6 +832,7 @@ export function PreviewView({ project, client, onAskAgent, onOpenFile, onLogs, r
   stageRef?: React.Ref<HTMLDivElement>;
   onRetry?: () => void; onSettings?: () => void;
 }) {
+  const DesktopGamePreview = rendererContributions.game?.DesktopGamePreview;
   const runtime = useRuntimeConnection();
   const preview = project?.preview;
   const frame = useRef<HTMLElement | null>(null);
@@ -887,7 +887,7 @@ export function PreviewView({ project, client, onAskAgent, onOpenFile, onLogs, r
   return (
     <div ref={stageRef} className={`viewer-stage viewer-stage-${viewport}`}>
       {showFrame ? <div className="preview-frame-wrap" hidden={suspended}>
-        {native && project ? <DesktopGamePreview
+        {native && project && DesktopGamePreview ? <DesktopGamePreview
           bridge={native} refresh={window.ohMyGameDesktop!.webGamePlayer!.refresh} projectId={project.id} url={url!} reload={reload}
           visible={active && !suspended && !diagnostic && !error && runtime.status === "ready"}
           onReady={scheduleCoverCapture}

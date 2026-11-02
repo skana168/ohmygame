@@ -21,7 +21,7 @@ import { CanvasChipSelect } from "./canvas-chip-select.js";
 import { CanvasContextMenu } from "./editor-canvas.js";
 import { loadLibraryAssets, type LibraryAsset } from "./library-assets.js";
 import { CanvasAssetProvider, canvasAssetSources } from "./use-workspace-asset-url.js";
-import "./game-design.css";
+import "./canvas-workspace.css";
 import { ProjectMediaModelSettings } from "./media-model-defaults.js";
 import { CanvasNotice } from "./canvas-notice.js";
 import { useDesktopSave } from "./desktop-close-guard.js";

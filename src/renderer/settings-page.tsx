@@ -2,12 +2,11 @@ import { accountServicesEnabled } from "../shared/application-services.js";
 import { useEffect, useState, type ReactNode } from "react";
 import { Cloud, ExternalLink, Globe2, MessageCircle } from "./icons.js";
 import githubMark from "@lobehub/icons-static-svg/icons/github.svg";
-import { useAuth } from "./auth.js";
+import { rendererContributions } from "./business-contributions.js";
 import { ModelsSettings, type ModelsView } from "./models-settings.js";
 import { AgentsSettings, OHMYGAME_AGENT } from "./agents-settings.js";
 import { PageFrame } from "./page-frame.js";
 import type { AppNavigationTarget, SettingsSection } from "./routes.js";
-import { UserAvatar } from "./user-avatar.js";
 import { BrandLogo } from "./brand-logo.js";
 import { WindowDragRegion } from "./window-drag-region.js";
 import { useDesktopUpdate } from "./use-desktop-update.js";
@@ -46,6 +45,7 @@ export function SettingsPage({ section, agent, onSectionChange, onNavigate, onOp
   onNavigate: (page: AppNavigationTarget) => void;
   onOpenOnboarding?: () => void;
 }) {
+  const AccountSettings = rendererContributions.account?.AccountSettings;
   const [modelsView, setModelsView] = useState<ModelsView>({ page: "providers" });
 
   function chooseSection(next: SettingsSection): void {
@@ -85,7 +85,7 @@ export function SettingsPage({ section, agent, onSectionChange, onNavigate, onOp
           {!inDetail && current ? <header className="settings-head"><h1>{current.label}</h1></header> : null}
           {section === "general" ? <GeneralSettings /> : null}
           {section === "appearance" ? <AppearanceSettings /> : null}
-          {section === "account" ? accountServicesEnabled ? <AccountSettings /> : <SettingsNote>{t("settings.account.unavailable")}</SettingsNote> : null}
+          {section === "account" ? accountServicesEnabled && AccountSettings ? <AccountSettings /> : <SettingsNote>{t("settings.account.unavailable")}</SettingsNote> : null}
           {section === "billing" && accountServicesEnabled ? <BillingSettings /> : null}
           {section === "notifications" ? <NotificationSettings /> : null}
           {section === "providers" ? <ModelsSettings view={modelsView} onViewChange={setModelsView} onOpenAgents={() => chooseSection("agents")} onOpenChatModel={() => onSectionChange("agents", OHMYGAME_AGENT)} /> : null}
@@ -316,37 +316,6 @@ function AppearanceSettings() {
 }
 
 // ---------- account and billing ----------
-
-function AccountSettings() {
-  const auth = useAuth();
-  const [error, setError] = useState<string>();
-  if (auth.state.status !== "signed-in") {
-    const loading = auth.state.status === "loading";
-    return (
-      <SettingsGroup>
-        <SettingsRow title={loading ? t("settings.account.loading") : t("settings.account.signedOut")} description={t("settings.account.signedOutHint")}>
-          <Button variant="primary" disabled={loading} onClick={auth.openSignIn}>{t("common.signIn")}</Button>
-        </SettingsRow>
-      </SettingsGroup>
-    );
-  }
-  const { user } = auth.state;
-  return (
-    <>
-      <SettingsGroup>
-        <div className="settings-identity">
-          <UserAvatar className="settings-avatar" name={user.name} avatarUrl={user.avatarUrl} />
-          <div className="settings-identity-text">
-            <strong>{user.name}</strong>
-            <span>{user.email ? t("settings.account.signedInWith", { email: user.email }) : t("settings.account.signedInAs")}</span>
-          </div>
-          <Button onClick={() => void auth.signOut().catch((cause) => setError(errorMessage(cause)))}>{t("common.signOut")}</Button>
-        </div>
-      </SettingsGroup>
-      {error ? <SettingsNote tone="danger">{error}</SettingsNote> : null}
-    </>
-  );
-}
 
 async function openExternal(url: string): Promise<void> {
   if (window.ohMyGameDesktop?.openExternal) await window.ohMyGameDesktop.openExternal(url);
