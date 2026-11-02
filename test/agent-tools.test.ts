@@ -83,6 +83,11 @@ describe("agent tools", () => {
     expect(projectPiToolNames("planning", [], names)).not.toContain("example_echo");
     const echo = tools.find((tool) => tool.name === "example_echo")!;
     expect(await echo.execute("pi", { message: "hello" }, undefined, undefined, {} as never)).toMatchObject({ content: [{ text: "hello" }], details: { workspaceId: project.id } });
+    const otherProject = await projects.create("Other example");
+    const otherTools = createAgentTools(otherProject, runner, projects, undefined, undefined, undefined, undefined, undefined, [createExampleToolContribution(otherProject)], { game: false, story: false });
+    const otherBridge = new ToolBridge(otherTools);
+    expect(await otherBridge.call("example_echo", { message: "other workspace" }, "other")).toMatchObject({ result: { details: { workspaceId: otherProject.id } } });
+    expect(otherProject.id).not.toBe(project.id);
     const bridge = new ToolBridge(tools);
     expect(await bridge.call("example_echo", { message: "bridge" }, "native")).toMatchObject({ isError: false, result: { content: [{ text: "bridge" }], details: { workspaceId: project.id } } });
     expect(await bridge.call("example_echo", { message: 42 }, "invalid")).toMatchObject({ isError: true });
@@ -210,7 +215,7 @@ describe("agent tools", () => {
       const indexed = await indexPluginPackage(sourcePath);
       if (!indexed.ok) throw new Error("Expected a valid package");
       return indexed.entry;
-    }).find(({ name }) => name === "install_plugin");
+    }, undefined, undefined, undefined, [], { game: false, story: false }).find(({ name }) => name === "install_plugin");
     if (!tool) throw new Error("Expected install plugin tool");
 
     if (skills) {
