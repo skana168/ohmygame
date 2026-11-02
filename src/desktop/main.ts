@@ -217,6 +217,14 @@ function executeFile(command: string, args: string[]): Promise<void> {
   });
 }
 
+// Provider authorization and ordinary HTTPS links belong to the reusable shell.
+handle("ohmygame:open-external", async (event, url: unknown) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || typeof url !== "string") throw new Error("Invalid external URL");
+  let target: URL;
+  try { target = new URL(url); } catch { throw new Error("Invalid external URL"); }
+  if (target.protocol !== "https:") throw new Error("Invalid external URL");
+  await shell.openExternal(target.href);
+});
 handle("ohmygame:clipboard-files", async (event) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Invalid clipboard source");
   const paths = await clipboardFilePaths(clipboard);
