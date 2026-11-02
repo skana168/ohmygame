@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, ensureProjectPreview, getNodeRuntime } from "./api.js";
+import { ApiError, ensureGamePreview, getNodeRuntime } from "./api.js";
 import { NodePlayer } from "./playable-player.js";
 import { askToFixPlaytest, askToFixPlaytestStart, PlaytestOverlay, PlaytestProblem, requestAskAgent, takePlaytestRequest, usePlaytestRequests, type PlaytestProblemState, type PlaytestRequest, type PlaytestStart } from "./playable-playtest.js";
 import { PlayableStateHistory, playableDebugRecord } from "../shared/playable-debug.js";
@@ -46,7 +46,7 @@ export function PlaytestPage({ projectId }: { projectId: string }) {
         return;
       }
       // The story plays its own page, which keeps its saves on the preview's origin.
-      const { url } = await ensureProjectPreview(projectId);
+      const { url } = await ensureGamePreview(projectId);
       if (disposed) return;
       setPlayable({ status: "ready", definition: result.definition, page: url });
     }).catch((cause) => {

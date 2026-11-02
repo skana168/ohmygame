@@ -124,6 +124,8 @@ export interface PluginServicesOptions {
   /** The folder for the index and decisions, inside the app's data folder. */
   directory: string;
   hosts?: ExtensionHostOptions;
+  /** Host/workspace game selection; omitted preserves existing plugin behavior. */
+  gameEnabled?: (folder?: string) => boolean;
   /** The plugins that ship with the app, indexed by `ready()` before anything is served. */
   bundled?: string;
   /** Told when the bundled plugins can't be indexed; everything else still loads. */
@@ -160,6 +162,7 @@ export class PluginServices {
   readonly packagesDirectory: string;
   #packageChanges: Promise<unknown> = Promise.resolve();
   readonly #bundledOff: ReadonlySet<string>;
+  readonly #gameEnabled: NonNullable<PluginServicesOptions["gameEnabled"]>;
   /** Holds each plugin's data folder, `<publisher>/<name>`. */
   readonly dataDirectory: string;
   readonly #bundled: Pick<PluginServicesOptions, "bundled" | "onBundledError">;
@@ -189,6 +192,7 @@ export class PluginServices {
     );
     this.packagesDirectory = path.join(options.directory, "packages");
     this.#bundledOff = new Set(options.bundledOff);
+    this.#gameEnabled = options.gameEnabled ?? (() => true);
     this.dataDirectory = path.join(options.directory, "data");
     this.#bundled = options;
     this.native = new NativePlugins({
@@ -198,6 +202,14 @@ export class PluginServices {
       configuration: (entry) => this.values.forNative(entry),
       dataFolder: (id) => this.dataFolder(id),
     });
+  }
+
+  /** Engine integrations and shipped game workflows follow business selection.
+   * Art/helper plugins keep their ordinary compatibility and consent rules. */
+  allowed(entry: PluginIndexEntry, folder?: string): boolean {
+    const gameOnly = (entry.manifest.categories as readonly string[] | undefined)?.includes("engine") ||
+      ["ohmygame/game-studio", "ohmygame/web-game-studio", "ohmygame/threejs-world"].includes(entry.id);
+    return !gameOnly || this.#gameEnabled(folder);
   }
 
   /**
@@ -243,7 +255,7 @@ export class PluginServices {
     const tools: ToolDefinition[] = [];
     for (const plugin of resolved.plugins) {
       const entry = plugin.entry;
-      if (plugin.status !== "active" || !entry?.manifest.entrypoints?.native)
+      if (plugin.status !== "active" || !entry?.manifest.entrypoints?.native || !this.allowed(entry, folder))
         continue;
       for (const tool of entry.manifest.contributes?.tools ?? [])
         tools.push(
@@ -269,7 +281,7 @@ export class PluginServices {
     const named = new Set(resolved?.ok ? resolved.plugins.map((plugin) => plugin.id) : []);
     return [...new Set(this.index.entries().map((entry) => entry.id))].sort().flatMap((id) => {
       const entry = this.index.get(id);
-      if (!entry || named.has(id) || !isAppWidePlugin(entry.manifest) || pluginApiIssue(entry.manifest) || this.grants.plugin(id)?.enabled === false) return [];
+      if (!entry || !this.allowed(entry, project?.workspacePath) || named.has(id) || !isAppWidePlugin(entry.manifest) || pluginApiIssue(entry.manifest) || this.grants.plugin(id)?.enabled === false) return [];
       return !project || appWidePluginSuits(entry.manifest.appliesTo, project) ? [entry] : [];
     });
   }
@@ -291,7 +303,7 @@ export class PluginServices {
       grants: this.grants,
     }).catch(() => undefined);
     if (!resolved?.ok) return [];
-    return projectSkills(resolved).map((skill) => skillRegistration(this.index.get(skill.plugin)!, path.join(skill.root, skill.path)));
+    return projectSkills(resolved).filter((skill) => this.allowed(this.index.get(skill.plugin)!, folder)).map((skill) => skillRegistration(this.index.get(skill.plugin)!, path.join(skill.root, skill.path)));
   }
 
   /** A plugin's data folder; ids are `publisher/name`, so it stays under `dataDirectory`. */
@@ -319,7 +331,7 @@ export class PluginServices {
     const servers: Record<string, McpServerDefinition> = {};
     for (const plugin of resolved.plugins) {
       const entry = plugin.entry;
-      if (plugin.status !== "active" || !entry) continue;
+      if (plugin.status !== "active" || !entry || !this.allowed(entry, folder)) continue;
       for (const server of entry.manifest.contributes?.mcpServers ?? []) {
         const definition = await this.#mcpDefinition(entry, server);
         if (definition) servers[`plugin-${createHash("sha256").update(entry.id).digest("hex").slice(0, 12)}-v2-${server.id}`] = definition;
@@ -407,7 +419,7 @@ export class PluginServices {
     const commands: ProjectCommand[] = [];
     for (const plugin of resolved.plugins) {
       const entry = plugin.entry;
-      if (plugin.status !== "active" || !entry) continue;
+      if (plugin.status !== "active" || !entry || !this.allowed(entry, folder)) continue;
       for (const command of entry.manifest.contributes?.commands ?? [])
         commands.push({
           id: `${entry.id}:${command.id}`,
@@ -436,7 +448,7 @@ export class PluginServices {
     const panels: ProjectPanel[] = [];
     for (const plugin of resolved.plugins) {
       const entry = plugin.entry;
-      if (plugin.status !== "active" || !entry) continue;
+      if (plugin.status !== "active" || !entry || !this.allowed(entry, folder)) continue;
       const capabilities = entry.manifest.capabilities ?? {};
       for (const panel of entry.manifest.contributes?.panels ?? [])
         panels.push({
@@ -470,7 +482,7 @@ export class PluginServices {
     const plugin = resolved?.ok
       ? resolved.plugins.find((item) => item.id === pluginId)
       : undefined;
-    if (!plugin?.entry || plugin.status !== "active") return undefined;
+    if (!plugin?.entry || plugin.status !== "active" || !this.allowed(plugin.entry, folder)) return undefined;
     const command = plugin.entry.manifest.contributes?.commands?.find(
       (item) => item.id === id.slice(at + 1),
     );
@@ -493,7 +505,7 @@ export class PluginServices {
     const plugin = resolved?.ok ? resolved.plugins.find((item) => item.id === owner) : undefined;
     const entry = plugin?.status === "active" ? plugin.entry : undefined;
     const check = entry?.manifest.contributes?.projectTypes?.find((item) => `${owner}:${item.id}` === type)?.ready;
-    if (!entry || !check) return { ready: true };
+    if (!entry || !check || !this.allowed(entry, folder)) return { ready: true };
     let answer: unknown;
     try {
       answer = await this.native.runCommand(`${owner}:${check.command}`, {
@@ -751,6 +763,8 @@ export class PluginServices {
     initialType?: string,
   ): Promise<void> {
     await this.ready();
+    const entry = version ? this.index.get(id, version) : undefined;
+    if (entry && !this.allowed(entry, folder)) throw new Error(`The game capability is disabled for plugin ${id}`);
     await setProjectPlugin({
       folder,
       id,
@@ -888,6 +902,7 @@ export class PluginServices {
     name: string,
     options: Omit<PluginCallOptions, "version">,
   ): Promise<unknown> {
+    if (!this.allowed(entry, options.folder)) throw new Error(`The game capability is disabled for plugin ${entry.id}`);
     const tool = entry.manifest.contributes?.tools?.find((item) => item.name === name);
     if (!tool) throw new Error(`${entry.id} does not declare a tool named ${name}`);
     const id = `${entry.id}:${name}`;
@@ -911,6 +926,7 @@ export class PluginServices {
     command: PluginCommand,
     options: Pick<PluginCallOptions, "folder" | "input" | "onProgress">,
   ): Promise<unknown> {
+    if (!this.allowed(entry, options.folder)) throw new Error(`The game capability is disabled for plugin ${entry.id}`);
     const { run } = command;
     const id = `${entry.id}:${command.id}`;
     if ("tool" in run) return this.callTool(entry, run.tool, { ...options, input: options.input ?? run.input ?? {} });

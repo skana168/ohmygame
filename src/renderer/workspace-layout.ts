@@ -35,7 +35,7 @@ const TYPE_PANELS: Record<ProjectType, readonly WorkspacePanel[]> = {
 
 /** The panels a project offers: its type's, less the game where it has no preview. */
 export function panelsOf(project: Pick<ProjectState, "type"> & Partial<Pick<ProjectState, "workspaceManifest" | "workspaceDiagnostics">> & Parameters<typeof supportsWebPreview>[0]): WorkspacePanel[] {
-  if (!workspaceHasModule(project, "game") && project.type !== "asset-canvas") return ["chat", "canvas", "code", "assets"];
+  if (!workspaceHasModule(project, "game") && project.type !== "asset-canvas") return ["chat", "canvas", ...(supportsWebPreview(project) ? ["game" as const] : []), "code", "assets"];
   return TYPE_PANELS[project.type].filter((panel) => panel !== "game" || supportsWebPreview(project));
 }
 

@@ -7,11 +7,12 @@ import { stageSkills } from "../src/daemon/agent-runtimes/skills.js";
 import { BUNDLED_PLUGINS_OFF, PluginServices } from "../src/daemon/plugin-services.js";
 
 describe("plugin runtime", () => {
-  async function bundled() {
+  async function bundled(gameEnabled = true) {
     const services = new PluginServices({
       directory: path.join(await mkdtemp(path.join(tmpdir(), "ohmygame-runtime-")), "store"),
       bundled: path.resolve("plugins"),
       bundledOff: BUNDLED_PLUGINS_OFF,
+      gameEnabled: () => gameEnabled,
     });
     await services.ready();
     return services;
@@ -33,6 +34,20 @@ describe("plugin runtime", () => {
     await services.setEnabled("ohmygame/unity", false);
     expect(await services.appWideSkills({ type: "general" })).toEqual(before);
     await services.close();
+  });
+
+  it("keeps engine and game workflow Skills out of non-game applications without removing asset helpers", async () => {
+    const services = await bundled(false);
+    try {
+      for (const id of ["ohmygame/unity", "ohmygame/unreal-engine", "ohmygame/cocos-creator", "ohmygame/godot"])
+        await services.setEnabled(id, true);
+      const names = (await services.appWideSkills({ type: "general" })).map((skill) => skill.pluginDisplayName);
+      expect(names).toContain("Blender");
+      for (const name of ["Unity", "Unreal Engine", "Cocos Creator", "Godot", "Game Studio"])
+        expect(names).not.toContain(name);
+      expect((await services.appWideSkills({ type: "web-game" })).some((skill) => skill.pluginDisplayName === "Web Game Studio")).toBe(false);
+      expect((await services.appWideSkills()).some((skill) => skill.pluginDisplayName === "Unity")).toBe(false);
+    } finally { await services.close(); }
   });
 
   it("stages enabled plugin Skills for coding agent CLIs", async () => {

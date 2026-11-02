@@ -1,3 +1,4 @@
+import { gameCapabilityEnabled } from "../shared/project-runtime.js";
 import { canvasPolicy } from "../shared/workspace-policy.js";
 import type { GameTuningState } from "../shared/game-tuning.js";
 import { isAccountRuntimeId, isAgentRuntimeId, type ApprovalDecision, type AgentAccountProfileStatus } from "../shared/agent-runtimes.js";
@@ -250,7 +251,7 @@ export function ProjectShell({
     const plugin = pluginPanels.get(id);
     if (plugin) return { title: plugin.title, icon: Plug, source: plugin.plugin };
     const builtIn = PANELS[id as WorkspacePanel];
-    return { title: builtIn.title(), icon: builtIn.icon };
+    return { title: id === "game" && state.project && !gameCapabilityEnabled(state.project) ? t("workspace.tab.preview") : builtIn.title(), icon: builtIn.icon };
   }
   const [publishing, setPublishing] = useState(false);
   const [publishDialog, setPublishDialog] = useState<{ projectId: string; status: "open" | "success" }>();

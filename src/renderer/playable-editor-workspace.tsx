@@ -1,3 +1,4 @@
+import { gameCapabilityEnabled } from "../shared/project-runtime.js";
 import { workspaceVersion } from "./workspace-version.js";
 import {
   LoaderCircle,
@@ -1048,7 +1049,7 @@ export function PlayableEditorWorkspace({ project, publishing, workspaceRevision
 
   /** Saves the project, sends any requested action, and opens or focuses Playtest. */
   async function startPlaytest(request?: PlaytestRequest): Promise<void> {
-    if (!codebase || playtesting) return;
+    if (!gameCapabilityEnabled(project) || !codebase || playtesting) return;
     // A story with no Scenes has nothing to play, so the editor says so instead of opening Playtest.
     if (!codebase.graph.nodes.length) {
       setNotice(t("storyEditor.playtestNeedsScene"));
@@ -1148,7 +1149,7 @@ export function PlayableEditorWorkspace({ project, publishing, workspaceRevision
         <button className="icon-button pane-header-action" type="button" title={t("projectSettings.title")} aria-label={t("projectSettings.title")} aria-haspopup="dialog" disabled={phase !== "ready"} onClick={() => setProjectSettingsOpen(true)}>
           <Settings size={14} />
         </button>
-        <PlaytestControls disabled={phase !== "ready"} busy={playtesting} onOpen={() => void startPlaytest()} onAction={(action) => void startPlaytest({ action })} />
+        {gameCapabilityEnabled(project) ? <PlaytestControls disabled={phase !== "ready"} busy={playtesting} onOpen={() => void startPlaytest()} onAction={(action) => void startPlaytest({ action })} /> : null}
       </>,
       body: <>
         <div className="interactive-story-body">

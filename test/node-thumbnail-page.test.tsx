@@ -28,7 +28,7 @@ let playerProps: { page?: string; preview?: unknown } = {};
 vi.doMock(path.resolve("src/renderer/api.ts"), async original => ({
   ...(await original<typeof import("../src/renderer/api.js")>()),
   getNodeRuntime: loadRuntime,
-  ensureProjectPreview: startPreview,
+  ensureGamePreview: startPreview,
   setPlayableThumbnail: upload,
 }));
 vi.doMock(path.resolve("src/renderer/page-capture.ts"), () => ({ captureElementImage: capture }));

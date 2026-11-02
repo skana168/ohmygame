@@ -428,6 +428,8 @@ export interface ProjectAppearance {
 }
 
 export interface ProjectState extends ProjectPreviewSettings {
+  /** Effective host/workspace game selection, supplied in daemon responses only. */
+  gameCapability?: boolean;
   workspaceManifest?: WorkspaceManifest;
   /** Loading diagnostics preserve the registration and all workspace files. */
   workspaceDiagnostics?: string[];
