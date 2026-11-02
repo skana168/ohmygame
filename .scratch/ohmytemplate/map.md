@@ -36,6 +36,8 @@ Execution details are recorded in [execution-state.json](execution-state.json).
 
 - [Ticket 06](issues/06-isolate-game-preview-and-engines.md) merged at `7a6dbf98` but remains claimed. Shared workspace policy and reusable preview navigation integrated; browser flow passed. Electron resize timeout reproduces with baseline player, later native smoke and desktop capability flow remain unverified; see report for exact automated evidence.
 
+- [Ticket 08](issues/08-isolate-publishing-and-community.md) resolved after conflict-free merge `c1885b30`; optional service construction/routes and UI guards preserve defaults, metadata, archives and local assets. Fresh 194 tests passed/23 private-cloud skips and typecheck passed; see report for inherited public/browser evidence and remaining manual gaps.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction

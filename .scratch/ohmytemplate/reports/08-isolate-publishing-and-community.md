@@ -1,6 +1,6 @@
 # Ticket 08 implementation report
 
-Status: implemented, claimed pending serial merger.
+Status: resolved after serial integration.
 
 ## Scope and composition
 
@@ -48,3 +48,14 @@ Final verification after merging integration through `e83e93a9`:
 Logs are under `/tmp/ticket08-merged-*.log` in this environment. The extra final fixture changes affect tests only and were covered by the focused run; the full-suite count above precedes the additional enabled/disabled asset parameterization.
 
 Private `ohmygame-cloud` contract cases in `test/publish.test.ts` are unavailable/skipped in this public checkout; hosted publishing, real OAuth, remote deployment/listing and staging remain unverified. Public local/client fixtures are not hosted-service verification. Electron native-window flow was not exercised; browser smoke and Node runtime checks do not establish desktop UI behavior. Windows/Linux manual flows were not exercised on this macOS host. No model credentials or real provider calls were used. Existing happy-dom tests emit localhost:3000 connection diagnostics while passing; these do not represent cloud verification.
+
+## Serial merger verification
+
+- Shared root: `/Users/yoyun/ohmygame`, branch `refactor/ohmytemplate-integration`.
+- Implementation branch: `t3/isolate-publishing-community`; SHA `ff8cf6cae14bdc6fd2c2d23d05d93366769d2aee`; worktree `/Users/yoyun/.t3/worktrees/ohmygame/t3-bde12462`.
+- Conflict-free conventional merge: `c1885b30c9180fd1a0c71ad283dc2b7bf5773391`. No integration edits needed; merged 04/06/09/11 composition and defaults retained.
+- Inspected constructor suppression when both services are disabled, independent route selection, direct publish rejection before build/metadata writes, and matching source-owned renderer guards. Defaults remain enabled; archive/local asset fixtures and saved deployment metadata pass.
+- Fresh exact command with `PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH` (Bun 1.4.2): `bun run test -- test/publish.test.ts test/publish-client.test.ts test/publish-dialog.test.tsx test/app.test.ts test/project-archive.test.ts test/renderer-routes.test.ts test/command-menu.test.tsx`: 6 files passed, 1 skipped; 194 tests passed, 23 skipped. Log: `/tmp/ticket08-root-tests.log`.
+- Same PATH: `bun run typecheck`: passed; log `/tmp/ticket08-root-typecheck.log`. `git diff --check`: passed.
+- Full suite/build/lint/plugin/Node checks and browser observations above are inherited implementation evidence, not fresh merger runs. No full rerun solely for elapsed time. No browser/Electron session was run by the merger; private-cloud contract and hosted/staging/OAuth/deployment verification remain unavailable, and native UI/other-platform/live-provider gaps remain as stated above.
+- Ticket 08 resolved. Tickets 05/06 validation status and ticket 07 scheduling were not changed. All worktrees and untracked `.codegraph/` retained; no push or PR.
