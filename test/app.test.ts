@@ -884,9 +884,9 @@ describe("daemon", () => {
     expect(updated.graph.assets.opening).toBeUndefined();
   });
 
-  it("materializes a Library asset once", async () => {
+  it.each([true, false])("materializes a Library asset once with publishing/community enabled: %s", async (enabled) => {
     const dataDirectory = await mkdtemp(path.join(tmpdir(), "ohmygame-library-materialize-"));
-    const app = createApp({ dataDirectory });
+    const app = createApp({ dataDirectory, publishing: enabled, community: enabled });
     apps.push(app);
     const source = (await app.inject({ method: "POST", url: "/projects", payload: { name: "Source" } })).json();
     const target = (await app.inject({ method: "POST", url: "/projects", payload: { name: "Target" } })).json();
