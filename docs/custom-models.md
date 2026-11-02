@@ -298,3 +298,42 @@ Animate 3D selects Meshy or Tripo independently of generation-model visibility.
 Compatible custom connections opt into additional operations in their 3D capability
 settings. See [3D provider workflows](3d-providers.md) for operation inputs, rig and
 texture versions, task recovery, GLB checks and the remaining documented APIs.
+
+## Applications without OhMyGame accounts
+
+Application authors can set `accountServicesEnabled` to `false` in
+`src/shared/application-services.ts`. This source-owned selection is shared by
+renderer and daemon startup. Embedded daemon hosts can also pass
+`createApp({ accountServices: false })`; keep their renderer composition aligned.
+The default remains enabled for OhMyGame. This selection is independent of
+workspace business modules and does not change application identity or storage.
+Use separate application identity, data, and Pi directories as described in
+[runtime configuration](runtime.md#application-identity); do not copy
+another application's provider credentials or account sessions.
+
+With account services disabled, startup does not construct the OhMyGame cloud
+model client, accept account tokens, list free cloud models, or register cloud
+quota/job/result routes. The renderer does not initialize Supabase, restore its
+sessions, or synchronize account tokens, even if Supabase environment values are
+present. Account and billing controls are unavailable. Publishing and Community
+are separate application capabilities; this switch does not configure those
+features or exclude their code from the build.
+
+Start at the first-run **Choose your AI** step, or open **Settings → Providers**. Connect a language provider with your own credentials (or configure a
+coding agent in **Settings → Agents**), select a model, then optionally configure
+image, video, 3D, and audio providers. You can skip model and media setup and
+configure them later. No OhMyGame sign-in or free quota is needed. A configured
+provider still needs its own network access and credentials where required.
+Provider capabilities determine which operations are available; missing keys,
+disabled providers, and unsupported operations report provider/configuration
+errors rather than missing workspace modules. Saved selections, generated
+assets, cancellation, and supported paid-task recovery use the same paths in
+both compositions. See [audio providers](audio-providers.md) and
+[3D workflows](3d-providers.md) for provider-specific requirements.
+
+Before shipping an independent application, exercise onboarding and provider
+settings in both English and Chinese, then verify a real language-model turn
+and each supported paid media operation with that application's own credentials.
+Verify cancellation and restart recovery for asynchronous paid providers.
+Regression fixtures simulate external services; they do not verify current
+provider access, billing, or the hosted OhMyGame cloud contract.

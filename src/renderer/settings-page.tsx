@@ -1,3 +1,4 @@
+import { accountServicesEnabled } from "../shared/application-services.js";
 import { useEffect, useState, type ReactNode } from "react";
 import { Cloud, ExternalLink, Globe2, MessageCircle } from "./icons.js";
 import githubMark from "@lobehub/icons-static-svg/icons/github.svg";
@@ -63,8 +64,8 @@ export function SettingsPage({ section, agent, onSectionChange, onNavigate, onOp
         <div className="settings-nav-title">{t("common.settings")}</div>
         {NAV.map((group, index) => (
           <div className="settings-nav-group" key={index}>
-            {group.heading ? <div className="settings-nav-heading">{group.heading}</div> : null}
-            {group.items.map((item) => {
+            {group.heading && (accountServicesEnabled || !group.items.some((item) => item.section === "account")) ? <div className="settings-nav-heading">{group.heading}</div> : null}
+            {group.items.filter((item) => accountServicesEnabled || item.section !== "account").map((item) => {
               const Icon = item.icon;
               const active = section === item.section;
               return (
@@ -84,8 +85,8 @@ export function SettingsPage({ section, agent, onSectionChange, onNavigate, onOp
           {!inDetail && current ? <header className="settings-head"><h1>{current.label}</h1></header> : null}
           {section === "general" ? <GeneralSettings /> : null}
           {section === "appearance" ? <AppearanceSettings /> : null}
-          {section === "account" ? <AccountSettings /> : null}
-          {section === "billing" ? <BillingSettings /> : null}
+          {section === "account" ? accountServicesEnabled ? <AccountSettings /> : <SettingsNote>{t("settings.account.unavailable")}</SettingsNote> : null}
+          {section === "billing" && accountServicesEnabled ? <BillingSettings /> : null}
           {section === "notifications" ? <NotificationSettings /> : null}
           {section === "providers" ? <ModelsSettings view={modelsView} onViewChange={setModelsView} onOpenAgents={() => chooseSection("agents")} onOpenChatModel={() => onSectionChange("agents", OHMYGAME_AGENT)} /> : null}
           {section === "agents" ? <AgentsSettings agent={agent} onOpen={(id) => onSectionChange("agents", id)} onBack={() => onSectionChange("agents")} onOpenSection={chooseSection} onOpenPlugins={() => onNavigate("plugins")} /> : null}

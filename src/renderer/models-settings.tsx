@@ -1,3 +1,4 @@
+import { accountServicesEnabled } from "../shared/application-services.js";
 import { ChevronDown, ChevronRight, CirclePlus, Code2, ExternalLink, LoaderCircle, Pencil, Server, RefreshCw, SettingsMinimal, Trash2, UserRound } from "./icons.js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type {
@@ -156,7 +157,7 @@ function ProviderList({ onProvider, onOpenChatModel }: { onProvider: (provider: 
     connected: connectedProviders, free: freeProviders, popular: popularProviders, local: localProviders, more: moreProviders,
   } = groupProviders(visibleProviders, {
     isConnected: (provider) => provider.status === "connected",
-    isFree: (provider) => provider.managed === "free_cloud" || provider.id === "hyper3d",
+    isFree: (provider) => provider.managed === "free_cloud" || accountServicesEnabled && provider.id === "hyper3d",
     isLocal: (provider) => provider.id === "codex-cli" || isLocalModelProvider(provider),
   });
   const filteredProviders = [...connectedProviders, ...freeProviders, ...popularProviders, ...localProviders, ...moreProviders];
@@ -361,12 +362,12 @@ function Hyper3DProviderDetail({ provider, onBack, onRemoved }: { provider: Prov
   const account = providers.find((item) => item.id === HYPER3D_CONNECTION_ID);
   const current = keyProvider ?? { ...provider, id: "hyper3d", name: "Hyper3D" };
   return <section className="settings-panel settings-provider-detail">
-    <ProviderDetailHeader provider={current} description={t("providers.hyper3d.description")} onBack={onBack}>
+    <ProviderDetailHeader provider={current} description={t(accountServicesEnabled ? "providers.hyper3d.description" : "providers.hyper3d.keyDescription")} onBack={onBack}>
       {keyProvider?.configured ? <ProviderDeleteButton deletion={deletion} disabled={savingKey} label={t("providers.delete.removeKey")} /> : null}
       <ProviderEnableControl provider={current} disabled={deletion.busy || savingKey} onChanged={() => void refreshRef.current()} />
     </ProviderDetailHeader>
     <ProviderDeleteConfirmation provider={keyProvider ?? current} deletion={deletion} disabled={savingKey} />
-    <FreeCloudAccount provider={account} refreshing={refreshing} onRefresh={() => void refreshRef.current(true)} />
+    {account ? <FreeCloudAccount provider={account} refreshing={refreshing} onRefresh={() => void refreshRef.current(true)} /> : null}
     {keyProvider ? <Native3DProviderKeyForm key={String(keyProvider.configured)} provider={keyProvider} deletion={deletion} onSavingChange={setSavingKey} /> : null}
     {error ? <p className="settings-note is-danger" role="alert">{error}</p> : null}
     <ProviderModels key={`${userId}-${keyProvider?.configured}-${modelsRevision}`} providerId="hyper3d" additionalProviderId={account?.id}
@@ -963,7 +964,7 @@ function Native3DProviderKeyForm({ provider, deletion, onSaved, onSavingChange }
         <Button variant="primary" type="submit" disabled={saving || deletion.busy || !apiKey.trim()}>{saving ? t("common.saving") : t("common.save")}</Button>
       </div>
     </form>
-    {provider.id === "hyper3d" ? <p className="settings-detail-hint">{t("providers.hyper3d.keyHint")}</p> : null}
+    {provider.id === "hyper3d" && accountServicesEnabled ? <p className="settings-detail-hint">{t("providers.hyper3d.keyHint")}</p> : null}
     {provider.configured ? <Provider3DBalance model={{ provider: provider.id, id: MODEL3D_CONNECTION_ID }} /> : null}
     {error || deletion.error ? <p className="settings-note is-danger" role="alert">{deletion.error ?? error}</p> : null}
   </>;
@@ -1282,7 +1283,7 @@ function useProviderEndpoint(providerId: string) {
 
 function providerDescription(provider: Pick<ProviderSummary, "id" | "methods" | "custom" | "preset" | "managed">): string {
   if (provider.id === "codex-cli") return t("codexImages.description");
-  if (provider.id === "hyper3d") return t("providers.description.hyper3d");
+  if (provider.id === "hyper3d") return t(accountServicesEnabled ? "providers.description.hyper3d" : "providers.apiKey");
   if (provider.managed) return t("providers.group.free");
   if (isLocalModelProvider(provider)) return t("providers.description.local");
   if (provider.custom) return t("providers.description.custom");
