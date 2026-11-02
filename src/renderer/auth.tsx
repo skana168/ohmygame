@@ -1,3 +1,4 @@
+import { accountServicesEnabled } from "../shared/application-services.js";
 import { applicationStorageKey } from "./application-identity.js";
 import { createClient, type User } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -29,7 +30,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const supabase = createSupabaseClient();
-export const localDebug = isLocalDebugEnabled(
+export const localDebug = accountServicesEnabled && isLocalDebugEnabled(
   import.meta.env.DEV && typeof window !== "undefined" && isLoopbackHostname(window.location.hostname),
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const cloudSync = useRef(Promise.resolve());
   const cloudSyncRevision = useRef(0);
   function synchronizeCloud(session: { access_token: string; user: User } | null): void {
+    if (!accountServicesEnabled) return;
     const revision = ++cloudSyncRevision.current;
     cloudSync.current = cloudSync.current.catch(() => {}).then(async () => {
       if (revision !== cloudSyncRevision.current) return;
@@ -139,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     state,
     openSignIn: () => {
+      if (!accountServicesEnabled) return;
       if (localDebug) {
         signInLocally();
         return;
@@ -161,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }), [state]);
 
   async function requestAccessToken(): Promise<string | undefined> {
+    if (!accountServicesEnabled) return undefined;
     if (localDebug) {
       signInLocally();
       return LOCAL_DEBUG_ACCESS_TOKEN;
@@ -329,6 +333,7 @@ export function createSupabaseClient(
   configuredUrl = import.meta.env.VITE_SUPABASE_URL,
   configuredKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
 ): AuthClient | undefined {
+  if (!accountServicesEnabled) return undefined;
   const url = configuredUrl?.trim();
   const key = configuredKey?.trim();
   if (!url || !key) return undefined;

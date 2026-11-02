@@ -1,3 +1,4 @@
+import { accountServicesEnabled } from "../shared/application-services.js";
 import { OHMYGAME_WORKSPACE_MODULES, type WorkspaceModuleDescriptor } from "../shared/workspace-manifest.js";
 import { readWorkspaceManifest, validateWorkspaceManifest } from "./workspace-manifest.js";
 import type { BusinessToolSelection } from "./business-tools.js";
@@ -167,6 +168,8 @@ import {
 } from "./playable-thumbnails.js";
 
 export interface AppOptions {
+  /** Optional OhMyGame account cloud integration; user providers remain available. */
+  accountServices?: boolean;
   /** Source-registered modules available to workspace declarations. */
   workspaceModules?: readonly WorkspaceModuleDescriptor[];
   /** Select source-registered business tools; both modules are enabled by default. */
@@ -617,7 +620,7 @@ export function createApp(options: AppOptions = {}) {
   const artifacts = new ArtifactBuilder();
   const examples = new ExampleStore(options.examplesDirectory);
   const localPublisher = options.localDebug ? new LocalPublisher() : undefined;
-  const cloudModels = new CloudModelsClient(options.cloudApiUrl ?? options.publishApiUrl ?? process.env.CLOUD_API_URL ?? process.env.PUBLISH_API_URL ?? "http://127.0.0.1:43130", options.cloudFetch);
+  const cloudModels = (options.accountServices ?? accountServicesEnabled) === false ? undefined : new CloudModelsClient(options.cloudApiUrl ?? options.publishApiUrl ?? process.env.CLOUD_API_URL ?? process.env.PUBLISH_API_URL ?? "http://127.0.0.1:43130", options.cloudFetch);
   const publisher = localPublisher ?? new RemotePublisher({
     apiUrl: options.publishApiUrl ?? process.env.CLOUD_API_URL ?? process.env.PUBLISH_API_URL ?? "http://127.0.0.1:43130",
     fetch: options.publishFetch,
@@ -727,7 +730,7 @@ export function createApp(options: AppOptions = {}) {
     },
   });
   const providerEnabled = (id: string) => id === "hyper3d" || id === "cloud-hyper3d"
-    ? providerModelSettings.isEnabled("hyper3d") && providerModelSettings.isEnabled("cloud-hyper3d")
+    ? providerModelSettings.isEnabled("hyper3d") && (!cloudModels || providerModelSettings.isEnabled("cloud-hyper3d"))
     : providerModelSettings.isEnabled(id);
   const codexImages = new CodexImageProvider(path.join(dataDirectory, "agent-runtimes"), (recheck) => agentRuntimes.codexImageConnection(recheck));
   const providerImages = new ProviderImages(getModelRuntime, options.imageFetch, () => seedanceSettings.key("volcengine-ark"), providerEnabled, {
@@ -782,6 +785,12 @@ export function createApp(options: AppOptions = {}) {
         const selected = providerAudio.resolveModel(audioOperation, explicit);
         if (!selected) {
           if (options.audioGenerator) return input;
+          if (explicit) {
+            const provider = providerAudio.catalog().providers.find((provider) => provider.provider === explicit.provider);
+            if (provider?.state === "disabled") throw new ToolRunError("The selected audio provider is disabled. Enable it in Providers.", 409);
+            if (provider?.state === "not_configured") throw new ToolRunError(`Connect ${provider.name} before generating audio.`, 503);
+            throw new ToolRunError("The selected audio model does not support this operation or is unavailable. Choose a compatible model.", 400);
+          }
           throw new ToolRunError(`No ${audioOperation === "sound-effect" ? "sound effect" : audioOperation} model is available. Connect an audio provider first.`, 503);
         }
         return { ...input, model: { provider: selected.provider, id: selected.id } };
@@ -2750,9 +2759,9 @@ export function createApp(options: AppOptions = {}) {
     // Cloud quota/catalog verification can take tens of seconds. Refresh it in
     // the background and serve the last known snapshot so opening Settings does
     // not wait on the cloud service.
-    void cloudModels.refresh();
+    void cloudModels?.refresh();
     const codex = codexImages.summarySnapshot(providerEnabled("codex-cli"));
-    return [...providers, ...directProviders, codex, ...cloudModels.providersSnapshot(providerEnabled)].sort((left, right) => left.name.localeCompare(right.name));
+    return [...providers, ...directProviders, codex, ...(cloudModels?.providersSnapshot(providerEnabled) ?? [])].sort((left, right) => left.name.localeCompare(right.name));
   };
   app.get("/settings/providers", providerSummaries);
   registerDiagnosticsRoutes(app, {
@@ -2809,24 +2818,26 @@ export function createApp(options: AppOptions = {}) {
     }
     return onboarding.update(request.body);
   });
-  app.put<{ Body: { accessToken: string; userId: string } | null }>("/cloud/session", {
-    schema: { body: { anyOf: [{ type: "null" }, { type: "object", additionalProperties: false, required: ["accessToken", "userId"], properties: {
-      accessToken: { type: "string", minLength: 1, maxLength: 16_384 }, userId: { type: "string", minLength: 1, maxLength: 128 },
-    } }] } },
-  }, async (request, reply) => {
-    // Update identity immediately; cloud verification runs when catalogs are requested.
-    void cloudModels.setSession(options.localDebug ? null : request.body);
-    return reply.code(204).send();
-  });
-  app.get("/cloud/quotas", async () => cloudModels.quotas());
-  app.get("/cloud/jobs", async (_request, reply) => {
-    try { return await cloudModels.jobs(); }
-    catch (cause) { if (cause instanceof Model3DGenerationError) return reply.code(cause.statusCode).send({ error: cause.message }); throw cause; }
-  });
-  app.get<{ Params: { id: string } }>("/cloud/jobs/:id/result", async (request, reply) => {
-    try { return reply.type("model/gltf-binary").send(await cloudModels.result(request.params.id)); }
-    catch (cause) { if (cause instanceof Model3DGenerationError) return reply.code(cause.statusCode).send({ error: cause.message }); throw cause; }
-  });
+  if (cloudModels) {
+    app.put<{ Body: { accessToken: string; userId: string } | null }>("/cloud/session", {
+      schema: { body: { anyOf: [{ type: "null" }, { type: "object", additionalProperties: false, required: ["accessToken", "userId"], properties: {
+        accessToken: { type: "string", minLength: 1, maxLength: 16_384 }, userId: { type: "string", minLength: 1, maxLength: 128 },
+      } }] } },
+    }, async (request, reply) => {
+      // Update identity immediately; cloud verification runs when catalogs are requested.
+      void cloudModels.setSession(options.localDebug ? null : request.body);
+      return reply.code(204).send();
+    });
+    app.get("/cloud/quotas", async () => cloudModels.quotas());
+    app.get("/cloud/jobs", async (_request, reply) => {
+      try { return await cloudModels.jobs(); }
+      catch (cause) { if (cause instanceof Model3DGenerationError) return reply.code(cause.statusCode).send({ error: cause.message }); throw cause; }
+    });
+    app.get<{ Params: { id: string } }>("/cloud/jobs/:id/result", async (request, reply) => {
+      try { return reply.type("model/gltf-binary").send(await cloudModels.result(request.params.id)); }
+      catch (cause) { if (cause instanceof Model3DGenerationError) return reply.code(cause.statusCode).send({ error: cause.message }); throw cause; }
+    });
+  }
 
   registerProviderSettingsRoutes(app, {
     providerSummaries,
@@ -3851,7 +3862,7 @@ export function createApp(options: AppOptions = {}) {
     await pluginMcpHost.close();
     await pluginServices.close();
     await (await pluginUi?.catch(() => undefined))?.close();
-    await cloudModels.setSession(null);
+    await cloudModels?.setSession(null);
     await canvasStore.close();
     await tools.close();
     modelAuth.close();

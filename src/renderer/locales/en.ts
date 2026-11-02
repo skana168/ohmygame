@@ -277,6 +277,7 @@ const en = {
     account: {
       signedInAs: "Signed in as",
       loading: "Loading account",
+      unavailable: "Account services are disabled. Configure your own providers in Providers.",
       signedOut: "Not signed in",
       signedOutHint: "Sign in to publish games and use OhMyGame Cloud.",
       signedInWith: "Signed in as {{email}}",
@@ -412,6 +413,7 @@ const en = {
     custom: "Custom",
     enableProvider: "Enable {{name}}",
     hyper3d: {
+      keyDescription: "Generate 3D models using your Hyper3D API key.",
       description: "Free account credits and your API key",
       yourKey: "Your API key",
       keyRequired: "API key required",

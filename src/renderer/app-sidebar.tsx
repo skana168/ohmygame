@@ -1,3 +1,4 @@
+import { accountServicesEnabled } from "../shared/application-services.js";
 import { applicationName, applicationStorageKey } from "./application-identity.js";
 import { cloneElement, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import {
@@ -602,10 +603,10 @@ function AccountMenu({ active, avatarSize, onNavigate }: { active: boolean; avat
   const auth = useAuth();
   const signedIn = auth.state.status === "signed-in" ? auth.state.user : undefined;
   const loading = auth.state.status === "loading";
-  const name = signedIn?.name ?? (loading ? t("sidebar.loadingAccount") : t("common.signIn"));
+  const name = !accountServicesEnabled ? t("common.settings") : signedIn?.name ?? (loading ? t("sidebar.loadingAccount") : t("common.signIn"));
   const settings: MenuEntry = { label: t("common.settings"), icon: <Settings size={16} />, shortcut: shortcut(","), onSelect: () => onNavigate("settings") };
   const about: MenuEntry = { label: t("sidebar.about"), icon: <InfoCircle size={16} />, onSelect: () => openSettings("about") };
-  const items: MenuEntry[] = signedIn ? [
+  const items: MenuEntry[] = !accountServicesEnabled ? [settings, about] : signedIn ? [
     settings,
     { label: t("sidebar.account"), icon: <UserRound size={16} />, onSelect: () => openSettings("account") },
     // The games you published, to edit or unpublish.

@@ -27,7 +27,7 @@ afterEach(async () => {
   );
 });
 
-async function fixture() {
+async function fixture(accountServices = true) {
   const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-onboarding-"));
   directories.push(directory);
   const auth = { configured: false };
@@ -51,6 +51,7 @@ async function fixture() {
   } as unknown as ModelRuntime;
   const create = (accessToken?: string) => {
     const app = createApp({
+      accountServices,
       dataDirectory: directory,
       piAgentDirectory: directory,
       createModelRuntime: async () => runtime,
@@ -120,8 +121,8 @@ describe("onboarding persistence", () => {
 });
 
 describe("onboarding API", () => {
-  it("starts a new install at welcome, remembers skip after restart, and supports reopening", async () => {
-    const { create } = await fixture();
+  it.each([true, false])("starts a new install at welcome, remembers skip after restart, and supports reopening (account services: %s)", async (accountServices) => {
+    const { create } = await fixture(accountServices);
     const app = create();
     expect((await app.inject("/settings/onboarding")).json()).toEqual(
       INITIAL_ONBOARDING_STATE,
@@ -177,8 +178,8 @@ describe("onboarding API", () => {
     );
   });
 
-  it("requires an available, enabled and visible language model to complete", async () => {
-    const { directory, auth, model, create } = await fixture();
+  it.each([true, false])("requires an available, enabled and visible language model to complete (account services: %s)", async (accountServices) => {
+    const { directory, auth, model, create } = await fixture(accountServices);
     const complete = (app: ReturnType<typeof createApp>) =>
       app.inject({
         method: "PUT",
