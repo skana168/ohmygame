@@ -1,3 +1,4 @@
+import { registerStoryProjectRoutes } from "./story-project-routes.js";
 import { storyWebEditorBridge } from "./story-web-bundle.js";
 import { GameTuning, GameTuningError } from "./game-tuning.js";
 import { registerStoryWebRoutes } from "./story-web-routes.js";
@@ -40,6 +41,9 @@ import {
 } from "./playable-codebase.js";
 
 export const ohmygameHost = {
+  get registerStoryProjectRoutes() {
+    return registerStoryProjectRoutes;
+  },
   get storyWebEditorBridge() {
     return storyWebEditorBridge;
   },

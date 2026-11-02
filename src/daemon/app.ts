@@ -1,4 +1,3 @@
-import type { AddPlayableNodeRequest } from "./playable-add-node.js";
 import { createAgentTools as createCoreAgentTools } from "./agent-tools.js";
 import { hostBusiness, requireHostBusiness, type HostBusiness } from "./host-business.js";
 import { gameDesignReference } from "./document-context.js";
@@ -141,7 +140,6 @@ import { EXTERNAL_MCP_PATH, EXTERNAL_MCP_ROOTS_HEADER, type ExternalAgentSetting
 import type { UpdateWebSearchSettings } from "../shared/web-search.js";
 import { WebSearchSettingsStore } from "./web-search-settings.js";
 import { WebSearchService } from "./web-search.js";
-import type { NodeCodebaseUpdate } from "../shared/playable-codebase.js";
 
 export interface AppOptions {
   composition?: ApplicationCompositionId;
@@ -1986,174 +1984,7 @@ export function createApp(options: AppOptions = {}) {
       return reply.code(409).send({ error: storyUnavailable });
   });
 
-  if (hostBusiness) {
-  app.get<{ Params: { projectId: string } }>("/projects/:projectId/playable", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Node Runtime requires an Interactive Story project" });
-    try {
-      const definition = await business().buildPlayableProject(project.workspacePath);
-      if (!definition) return { available: false };
-      // A web story carries its own runtime and plays as a page.
-      const web = await business().isWebStory(project.workspacePath);
-      return { available: true, definition, ...(web ? { web: true } : {}) };
-    } catch (cause) {
-      return reply.code(400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-  });
-
-  app.get<{ Params: { projectId: string }; Querystring: { mode?: "draft" | "publish" } }>(
-    "/projects/:projectId/playable/validation",
-    {
-      schema: {
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: { mode: { enum: ["draft", "publish"] } },
-        },
-      },
-    },
-    async (request, reply) => {
-      const project = projects.get(request.params.projectId);
-      if (!project) return reply.code(404).send({ error: "Project not found" });
-      if (project.type !== "interactive-story") return reply.code(409).send({ error: "Playable validation requires an Interactive Story project" });
-      return business().validatePlayableProject(project.workspacePath, request.query.mode ?? "draft");
-    },
-  );
-
-  app.get<{ Params: { projectId: string } }>("/projects/:projectId/playable/codebase", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Playable codebases require an Interactive Story project" });
-    try {
-      return await business().openNodeCodebaseDetail(project.workspacePath);
-    } catch (cause) {
-      return reply.code(400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-  });
-
-  app.put<{ Params: { projectId: string }; Body: NodeCodebaseUpdate }>("/projects/:projectId/playable/codebase", {
-    schema: { body: { type: "object" } },
-    bodyLimit: 1_000_000,
-  }, async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Playable codebases require an Interactive Story project" });
-    if (typeof request.body.revision !== "string") return reply.code(400).send({ error: "Playable codebase updates require the revision they were made from" });
-    let revision: string;
-    try {
-      revision = await business().writeNodeCodebase(project.workspacePath, request.body);
-    } catch (cause) {
-      return reply.code((hostBusiness && cause instanceof hostBusiness.NodeCodebaseConflictError) ? 409 : 400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-    try {
-      await projects.touch(project.id);
-    } catch {
-      return reply.code(500).send({ error: "Playable codebase was saved, but project metadata could not be updated" });
-    }
-    return { revision };
-  });
-
-  app.get<{ Params: { projectId: string } }>("/projects/:projectId/playable/thumbnails", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!storyEnabled(project)) return reply.code(409).send({ error: storyUnavailable });
-    try {
-      return { thumbnails: await business().listPlayableThumbnails(project.workspacePath) };
-    } catch (cause) {
-      return reply.code(400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-  });
-
-  app.get<{ Params: { projectId: string; nodeId: string } }>("/projects/:projectId/playable/thumbnails/:nodeId", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!storyEnabled(project)) return reply.code(409).send({ error: storyUnavailable });
-    try {
-      const image = await business().readPlayableThumbnail(project.workspacePath, request.params.nodeId);
-      if (!image) return reply.code(404).send({ error: "Thumbnail not found" });
-      reply.header("content-type", "image/webp");
-      reply.header("cache-control", "no-store");
-      reply.header("x-content-type-options", "nosniff");
-      return reply.send(image);
-    } catch (cause) {
-      if ((hostBusiness && cause instanceof hostBusiness.PlayableThumbnailError)) return reply.code(400).send({ error: cause.message });
-      throw cause;
-    }
-  });
-
-  app.put<{ Params: { projectId: string; nodeId: string }; Querystring: { hash: string }; Body: Buffer }>("/projects/:projectId/playable/thumbnails/:nodeId", {
-    schema: {
-      querystring: {
-        type: "object",
-        additionalProperties: false,
-        required: ["hash"],
-        properties: { hash: { type: "string", maxLength: 64 } },
-      },
-    },
-  }, async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Node thumbnails require an Interactive Story project" });
-    if (!isWebp(request.body)) return reply.code(400).send({ error: "A Node thumbnail must be a WebP image" });
-    try {
-      const nodeIds = await business().readGraphNodeIds(project.workspacePath);
-      return await business().writePlayableThumbnail(project.workspacePath, request.params.nodeId, request.query.hash, request.body, nodeIds);
-    } catch (cause) {
-      if ((hostBusiness && cause instanceof hostBusiness.PlayableThumbnailError)) return reply.code(400).send({ error: cause.message });
-      throw cause;
-    }
-  });
-
-  app.get("/playable/presets", async (_request, reply) => {
-    if (!storyHostEnabled) return reply.code(409).send({ error: storyUnavailable });
-    return {
-      presets: business().PLAYABLE_PRESETS.map((preset) => ({
-        id: preset.id,
-        label: preset.label,
-        summary: preset.summary,
-      })),
-    };
-  });
-
-  app.post<{ Params: { projectId: string }; Body: AddPlayableNodeRequest }>("/projects/:projectId/playable/nodes", {
-    schema: {
-      body: {
-        type: "object",
-        additionalProperties: false,
-        required: ["preset", "id"],
-        properties: {
-          preset: { type: "string", maxLength: 60 },
-          id: { type: "string", minLength: 1, maxLength: 60 },
-          title: { type: "string", maxLength: 120 },
-          position: {
-            type: "object",
-            additionalProperties: false,
-            required: ["x", "y"],
-            properties: { x: { type: "number" }, y: { type: "number" } },
-          },
-        },
-      },
-    },
-  }, async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Playable Nodes require an Interactive Story project" });
-    let result;
-    try {
-      result = await business().addPlayableNode(project.workspacePath, request.body);
-    } catch (cause) {
-      return reply.code((hostBusiness && cause instanceof hostBusiness.NodeCodebaseConflictError) ? 409 : 400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-    try {
-      await projects.touch(project.id);
-    } catch {
-      return reply.code(500).send({ error: "The Node was created, but project metadata could not be updated" });
-    }
-    return result;
-  });
-
-  }
+  hostBusiness?.registerStoryProjectRoutes(app, { projects, storyEnabled, storyHostEnabled, storyUnavailable });
 
   const textGenerationOptions = {
     schema: {
@@ -3361,8 +3192,8 @@ export function createApp(options: AppOptions = {}) {
   app.get<{ Params: { projectId: string } }>("/projects/:projectId/tuning", async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
-    return gameTuning!.state(project);
+    if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
+    return gameTuning.state(project);
   });
   // Changes reach the game at once and stay drafts until saved; null goes back to what is saved. A value of
   // the wrong type is dropped against the file's entry, which knows the type.
@@ -3372,18 +3203,18 @@ export function createApp(options: AppOptions = {}) {
     async (request, reply) => {
       const project = projects.get(request.params.projectId);
       if (!project) return reply.code(404).send({ error: "Project not found" });
-      if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
-      return gameTuning!.setDraft(project, request.body.values);
+      if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
+      return gameTuning.setDraft(project, request.body.values);
     },
   );
   app.post<{ Params: { projectId: string } }>("/projects/:projectId/tuning/save", async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
+    if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
     try {
       // Its own undoable change, kept with the changes plugins make outside a turn.
-      const { change } = await gameTuning!.save(project, (operation) => pluginWrites.run(project, { plugin: "ohmygame/tuning", action: "tuning:save", title: "Save tuning values", inPlace: true }, operation));
-      return { state: await gameTuning!.state(project), ...(change ? { changeId: change.id } : {}) };
+      const { change } = await gameTuning.save(project, (operation) => pluginWrites.run(project, { plugin: "ohmygame/tuning", action: "tuning:save", title: "Save tuning values", inPlace: true }, operation));
+      return { state: await gameTuning.state(project), ...(change ? { changeId: change.id } : {}) };
     } catch (cause) {
       if ((hostBusiness && cause instanceof hostBusiness.GameTuningError)) return reply.code(409).send({ error: cause.message });
       return pluginChangeReply(reply, cause);
@@ -3814,7 +3645,7 @@ export function createApp(options: AppOptions = {}) {
     "/projects/:projectId/publish",
     { schema: publishProjectSchema },
     async (request, reply) => {
-      if (!allowPublishing || !publisher) return reply.code(404).send({ error: "Game publishing is unavailable" });
+      if (!allowPublishing || !publisher || !artifacts) return reply.code(404).send({ error: "Game publishing is unavailable" });
       const project = projects.get(request.params.projectId);
       if (!project) return reply.code(404).send({ error: "Project not found" });
       if (project.pluginType?.preview === "native") return reply.code(409).send({ error: "This project runs outside OhMyGame. Follow its plugin's publishing workflow." });
@@ -3831,7 +3662,7 @@ export function createApp(options: AppOptions = {}) {
       try {
         const result = await publisher.publish(
           project,
-          await artifacts!.create(project, await projectCover(project.id)),
+          await artifacts.create(project, await projectCover(project.id)),
           request.body.accessToken,
           { title: request.body.title.trim(), description: request.body.description?.trim() },
         );
@@ -3865,7 +3696,7 @@ export function createApp(options: AppOptions = {}) {
     if (!hostBusiness || !artifacts) return reply.code(404).send({ error: "Game builds are unavailable" });
     building.add(project.id);
     try {
-      const artifact = await artifacts!.build(project);
+      const artifact = await artifacts.build(project);
       return reply
         .header("content-type", "application/zip")
         .header("content-disposition", `attachment; filename="${encodeURIComponent(project.name)}.zip"`)

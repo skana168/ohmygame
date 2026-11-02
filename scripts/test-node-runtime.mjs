@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { cp, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,7 +36,7 @@ try {
     const body = await response.json();
     if (route === "/projects") assert.deepEqual(body, []);
   }
-  if (nonGame) await checkNonGame(daemon.runtime);
+  if (nonGame) await checkNonGame(daemon.runtime, path.join(directory, "data"));
   else await checkStoryWeb(daemon.runtime);
   const headers = { authorization: `Bearer ${daemon.runtime.token}`, "content-type": "application/json" };
   const projects = await fetch(`${daemon.runtime.url}/projects`, { headers }).then(response => response.json());
@@ -87,7 +87,7 @@ console.log(
 );
 
 // Same authenticated built daemon and persisted canvas API as application consumers.
-async function checkNonGame(runtime) {
+async function checkNonGame(runtime, dataDirectory) {
   const headers = { authorization: `Bearer ${runtime.token}`, "content-type": "application/json" };
   const request = async (route, method = "GET", body) => {
     const response = await fetch(runtime.url + route, { method, headers,
@@ -114,6 +114,34 @@ async function checkNonGame(runtime) {
   await request(boardRoute, "PUT", detail);
   assert((await request(boardRoute)).board.nodes.some(node => node.id === "runtime-note" && node.data.value.text === "Persisted non-game note"));
   assert.equal((await request(`${base}/workspace`)).mainDocumentId, undefined);
+  await request("/settings/external-agents", "PUT", { enabled: true });
+  const endpoint = JSON.parse(await readFile(path.join(dataDirectory, "external-mcp/endpoint.json"), "utf8"));
+  let session;
+  let id = 0;
+  const rpc = async (method, params = {}) => {
+    const response = await fetch(endpoint.url, { method: "POST", headers: {
+      "content-type": "application/json", authorization: `Bearer ${endpoint.token}`,
+      ...(session ? { "mcp-session-id": session } : {}),
+    }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }), signal: AbortSignal.timeout(10_000) });
+    assert.equal(response.status, 200);
+    session ??= response.headers.get("mcp-session-id");
+    return response.json();
+  };
+  await rpc("initialize", { protocolVersion: "2025-06-18" });
+  const listed = await rpc("tools/list");
+  const names = listed.result.tools.map(tool => tool.name);
+  for (const name of ["example_echo", "example_note", "canvas_check", "generate_image"]) assert(names.includes(name), `${name} must remain available`);
+  for (const name of ["game_use", "playable_check", "playable_add_node"]) assert(!names.includes(name), `${name} must be absent`);
+  await rpc("tools/call", { name: "open_project", arguments: { project: project.id } });
+  const echo = await rpc("tools/call", { name: "example_echo", arguments: { message: "Source-independent host" } });
+  assert.deepEqual(echo.result.content, [{ type: "text", text: "Source-independent host" }]);
+  const saved = await request(boardRoute);
+  const note = await rpc("tools/call", { name: "example_note", arguments: { boardId: saved.board.id, nodeId: "runtime-tool-note", revision: saved.revision, text: "Saved by an actual module tool", done: false } });
+  assert(!note.result.isError, JSON.stringify(note));
+  assert((await request(boardRoute)).board.nodes.some(node => node.id === "runtime-tool-note" && node.data.value.text === "Saved by an actual module tool"));
+  const rejected = await rpc("tools/call", { name: "game_use", arguments: {} });
+  assert.equal(rejected.result.isError, true);
+
 }
 
 // The built host runs plugins' native code, and its heap limit holds on Node.
