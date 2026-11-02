@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 — Create and use a non-game workspace with the shared workbench.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Story editing, playable graph handling, runtime startup, templates, and related instructions are owned by an explicit story business capability.
 - [ ] With the module enabled, existing story projects open, edit, validate, and run with their prior behavior and persisted content intact.

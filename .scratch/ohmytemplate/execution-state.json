@@ -89,7 +89,7 @@
       ]
     },
     "06": {
-      "status": "claimed",
+      "status": "merged_validation_running",
       "previous_failure": "provider usage limit; user confirmed availability and requested retry",
       "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-8d167db2",
       "previous_branch": "t3/isolate-game-playtest-engines",
@@ -102,7 +102,8 @@
       "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-f92edbee",
       "merge_sha": "7a6dbf9804aa29f1ca586437ad58bc9c2831dd32",
       "merge_result": "Shared workspace policy consolidated; reusable preview navigation fixed red-green; 658 affected tests; full pre-navigation run 4312 passed/41 skipped; final six suites 189 passed; typecheck/lint/build/Node checks passed",
-      "remaining_validation": "Not resolved: actual Electron capability UI and later native smoke assertions unverified. Fractional resize timeout reproduced on root and baseline player (667x375 observed instead of 549x309). Browser reusable preview exercised; no screenshot due snapshot timeout. External engines and recording remain manual."
+      "remaining_validation": "Not resolved: actual Electron capability UI and later native smoke assertions unverified. Fractional resize timeout reproduced on root and baseline player (667x375 observed instead of 549x309). Browser reusable preview exercised; no screenshot due snapshot timeout. External engines and recording remain manual.",
+      "taskId": "node:delegated-task:command%3Amcp%3A06c8b30f-d5fa-4f76-bc38-03dc446b8abc%3Adelegate-task%3Aee754bc4-643a-4635-a1b6-40cf4ac4bfa6"
     },
     "09": {
       "status": "resolved",
@@ -121,7 +122,8 @@
       "remaining_validation": "Prior full-suite/build/Node/browser evidence is inherited, not rerun. Real language/paid media and live recovery, private Supabase/cloud, Electron, other platforms and packaging remain manual; publishing/community and full composition remain tickets 08/10."
     },
     "05": {
-      "status": "launching"
+      "status": "running",
+      "taskId": "node:delegated-task:command%3Amcp%3A06c8b30f-d5fa-4f76-bc38-03dc446b8abc%3Adelegate-task%3Abadd8a74-7ad1-4dfc-99a7-2a51f7598474"
     },
     "08": {
       "status": "resolved",
@@ -133,6 +135,9 @@
       "merge_sha": "c1885b30c9180fd1a0c71ad283dc2b7bf5773391",
       "merge_result": "Conflict-free; no integration fixes; fresh 6 suites passed/1 skipped, 194 tests passed/23 private-cloud skips; Bun 1.4.2 typecheck and diff check passed.",
       "remaining_validation": "Full public checks and browser smoke inherited from implementation report; hosted/private-cloud, OAuth/deployment/listing/staging, Electron UI, other platforms and live providers remain unverified."
+    },
+    "07": {
+      "status": "launching"
     }
   },
   "notes": [
@@ -140,7 +145,5 @@
     "Upstream dev is newer than the originally assessed main; inspect current implementations before editing.",
     "Planning stash retained as backup; .codegraph stays untracked."
   ],
-  "next_ready_queue": [
-    "07"
-  ]
+  "next_ready_queue": []
 }
