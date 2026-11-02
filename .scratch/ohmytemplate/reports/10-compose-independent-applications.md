@@ -283,3 +283,12 @@ source/resource build and authenticated startup; resolving selected-suite
 failures; selected Electron/custom-node restart and visual QA. Live paid providers,
 private hosted services, other platforms and release packaging remain unverified.
 Exporter12 and initializer13 were not implemented. No completion is claimed.
+
+Final continuation checks: selected non-game typecheck, lint and renderer rebuild
+passed after the starter follow-up (logs:`/tmp/ohmytemplate-10-selected-typecheck.log`,
+`/tmp/ohmytemplate-10-selected-lint.log`,
+`/tmp/ohmytemplate-10-selected-renderer-final.log`). These still run with all
+business source implementations present. Final merge of
+`refactor/ohmytemplate-integration` at `8e90a7f2c6544c1e2c44658bdeeb116f0ac2c8e1`
+reported Already up to date; no source changed and no affected rerun was needed.
+Continuation checkpoint:`d8678969` plus this evidence-only report update.
