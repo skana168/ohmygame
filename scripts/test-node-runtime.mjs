@@ -56,6 +56,11 @@ try {
   assert.notEqual(copy.id, story.id);
   assert.equal(copy.type, story.type);
   assert.equal(copy.name, story.name);
+  if (nonGame) {
+    const workspace = await fetch(`${daemon.runtime.url}/projects/${copy.id}/canvas/workspace`, { headers }).then(response => response.json());
+    const board = await fetch(`${daemon.runtime.url}/projects/${copy.id}/canvas/boards/${workspace.boards[0].id}`, { headers }).then(response => response.json());
+    assert(board.board.nodes.some(node => node.id === "runtime-note" && node.data.value.text === "Persisted non-game note"), "Archive import must retain custom module data");
+  }
   const createdResponse = await fetch(`${daemon.runtime.url}/connections`, {
     method: "POST", headers, body: JSON.stringify({ displayName: "Node runtime fixture", definition: {
       command: process.execPath, args: [path.join(root, "test", "fixtures", "plugin-mcp-server.mjs")],
@@ -96,7 +101,7 @@ async function checkNonGame(runtime) {
   assert.equal(project.storyCapability, false);
   assert.deepEqual(project.workspaceManifest.modules, [{ id: "example", config: {} }]);
   assert.deepEqual((await request("/project-types")).map(type => type.id), ["general"]);
-  for (const route of ["/cloud/session", "/community/games"]) {
+  for (const route of ["/cloud/session", "/community/games", "/playable/presets"]) {
     assert.equal((await fetch(runtime.url + route, { headers })).status, 404);
   }
   const base = `/projects/${project.id}/canvas`;
@@ -167,12 +172,26 @@ async function checkApplicationIdentity(folder) {
   };
   let running = await launch();
   try {
-    await request(running, "/projects", "POST", { name: "Independent notes", type: "general" });
+    const project = await request(running, "/projects", "POST", { name: "Independent notes", type: "general" });
+    let boardRoute;
+    if (nonGame) {
+      const workspace = await request(running, `/projects/${project.id}/canvas/workspace`);
+      boardRoute = `/projects/${project.id}/canvas/boards/${workspace.boards[0].id}`;
+      const detail = await request(running, boardRoute);
+      detail.board.nodes.push({ id: "restart-note", type: "custom", position: { x: 20, y: 30 }, data: { module: "example", kind: "note", value: { text: "Survives process restart", done: false } } });
+      detail.board.editorLayout.nodes["restart-note"] = { x: 20, y: 30 };
+      await request(running, boardRoute, "PUT", detail);
+    }
     await request(running, "/settings/models/providers/meshy", "PUT", { apiKey: "identity-fixture-key" });
     await running.stop();
     running = await launch();
     const projects = await request(running, "/projects");
     assert.equal(projects[0]?.name, "Independent notes");
+    if (boardRoute) {
+      const detail = await request(running, boardRoute);
+      assert(detail.board.nodes.some(node => node.id === "restart-note" && node.data.value.text === "Survives process restart"));
+      assert.deepEqual(projects[0].workspaceManifest.modules, [{ id: "example", config: {} }]);
+    }
     assert(projects[0].workspacePath.startsWith(path.join(await realpath(folder), "notes-state")), "Standalone startup must honor configured storage");
     assert.equal((await request(running, "/settings/models/providers/meshy")).configured, true);
   } finally { await running.stop(); }

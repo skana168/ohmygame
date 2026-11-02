@@ -18,7 +18,7 @@ import type { AssetLibrary } from "./asset-library.js";
 import { isProjectPackageManager } from "./package-manager.js";
 import { validateNodeGraph } from "../shared/playable-graph-validation.js";
 import type { NodeGraph } from "../shared/playable-nodes.js";
-import { AGENT_INSTRUCTIONS, changeNodeCodebase } from "./playable-codebase.js";
+import { requireHostBusiness } from "./host-business.js";
 import { canvasLibraryAssetUsage, canvasReferencesAsset, removeCanvasAssetReferences, renameCanvasAssetPaths } from "./canvas-workspace.js";
 import { readCanvasAssets } from "./canvas-assets.js";
 import { readCanvasFile, writeCanvasJson } from "./canvas-files.js";
@@ -274,7 +274,7 @@ export class ProjectManager {
     if (existing === undefined) await writeWorkspaceManifest(project.workspacePath, manifest);
     else if (!isDeepStrictEqual(existing, manifest)) throw new ProjectWorkspaceError("workspace.json already exists; initialization cannot replace its module selection");
     const instructions = [
-      manifest.modules.some((entry) => entry.id === "interactive-story") ? AGENT_INSTRUCTIONS : "# Workspace\n\nRead workspace.json for this workspace's module declaration. Preserve existing files and user edits. Read canvas/AGENTS.md before editing an existing canvas. Module availability is controlled by the application.",
+      manifest.modules.some((entry) => entry.id === "interactive-story") ? requireHostBusiness().AGENT_INSTRUCTIONS : "# Workspace\n\nRead workspace.json for this workspace's module declaration. Preserve existing files and user edits. Read canvas/AGENTS.md before editing an existing canvas. Module availability is controlled by the application.",
       ...manifest.modules.flatMap((entry) => this.workspaceModules.find((module) => module.id === entry.id)?.agentInstructions ?? []),
     ].join("\n\n");
     try { await writeFile(path.join(project.workspacePath, "AGENTS.md"), `${instructions}\n`, { flag: "wx" }); }
@@ -960,7 +960,7 @@ export class ProjectManager {
       }
       if (project.type === "interactive-story" && await exists(path.join(project.workspacePath, PLAYABLE_GRAPH_FILE))) {
         let changed = false;
-        await changeNodeCodebase(project.workspacePath, (codebase) => {
+        await requireHostBusiness().changeNodeCodebase(project.workspacePath, (codebase) => {
           const removedIds = new Set(Object.entries(codebase.graph.assets).flatMap(([id, asset]) => (
             asset.source.kind === "library" && asset.source.assetId === assetId ? [id] : []
           )));
