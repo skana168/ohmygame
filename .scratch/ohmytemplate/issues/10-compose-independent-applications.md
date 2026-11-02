@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 — Register and persist a custom non-game canvas node; 06 — Make game playtesting and engine integrations optional; 07 — Make interactive stories an optional business module; 08 — Make game publishing and community optional; 09 — Run the workbench with user-configured model and media providers.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Supply explicit OhMyGame and non-game compositions using the module boundaries established by the preceding tickets, including the example non-game node and tool.
 - [ ] Navigation, project creation options, daemon/desktop services, plugin compatibility, and agent instructions agree on the selected application capabilities.

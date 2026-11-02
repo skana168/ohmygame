@@ -170,9 +170,7 @@
       ]
     },
     "10": {
-      "status": "ready-for-agent",
-      "merged": false,
-      "note": "All blocking tickets resolved; ready for root scheduling, not claimed or started by ticket07 merger."
+      "status": "launching"
     }
   },
   "notes": [
