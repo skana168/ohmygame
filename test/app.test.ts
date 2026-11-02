@@ -2775,7 +2775,8 @@ describe("Playable Nodes projects", () => {
   });
 
   it("lists Presets and adds a Node from one", async () => {
-    const app = await createPlayableApp("ohmygame-playable-presets-");
+    const dataDirectory = await mkdtemp(path.join(tmpdir(), "ohmygame-playable-presets-"));
+    const app = await createPlayableApp("ohmygame-playable-presets-", { dataDirectory });
     const project = (await app.inject({ method: "POST", url: "/projects", payload: { type: "interactive-story" } })).json();
 
     const presets = await app.inject({ method: "GET", url: "/playable/presets" });
@@ -2798,6 +2799,24 @@ describe("Playable Nodes projects", () => {
     expect(codebase.graph.nodes.map((node: { id: string }) => node.id)).toEqual(["menu"]);
     expect(codebase.graph.entryNodeId).toBe("menu");
     expect(await readFile(path.join(project.workspacePath, "nodes/menu/index.html"), "utf8")).toContain("Ash Club");
+
+    // A saved Scene in a legacy project survives a full daemon reopen.
+    const graph = await readFile(path.join(project.workspacePath, "graph.json"), "utf8");
+    const scene = await readFile(path.join(project.workspacePath, "nodes/menu/index.html"), "utf8");
+    await rm(path.join(project.workspacePath, "workspace.json"));
+    await app.close();
+    const reopened = createApp({ dataDirectory });
+    apps.push(reopened);
+    expect((await reopened.inject(`/projects/${project.id}`)).json().storyCapability).toBe(true);
+    const restored = await reopened.inject(`/projects/${project.id}/playable/codebase`);
+    expect(restored.statusCode, restored.body).toBe(200);
+    expect(restored.json()).toEqual(codebase);
+    const playable = await reopened.inject(`/projects/${project.id}/playable`);
+    expect(playable.statusCode, playable.body).toBe(200);
+    expect(playable.json()).toMatchObject({ available: true, web: true, definition: { graph: { entryNodeId: "menu" } } });
+    expect((await reopened.inject(`/projects/${project.id}/playable/validation`)).statusCode).toBe(200);
+    expect(await readFile(path.join(project.workspacePath, "graph.json"), "utf8")).toBe(graph);
+    expect(await readFile(path.join(project.workspacePath, "nodes/menu/index.html"), "utf8")).toBe(scene);
   });
 
   it("rejects a duplicate Node and an unknown Preset", async () => {
