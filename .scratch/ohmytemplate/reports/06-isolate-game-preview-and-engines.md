@@ -309,3 +309,36 @@ unverified as previously recorded. Desktop creation-dialog coverage from04 is
 still outstanding for overall delivery. Browser capability evidence above remains
 valid; this run adds actual Electron evidence, not another browser run. No UI
 text changed, so locale files and English agent instructions remain intact.
+
+## Root validation merge and resolution (2026-11-02)
+
+Final ticket06 status: **resolved**. Validation commit `4b781b2d5f63e87919d931f7495e209f3d1c7ae3`
+merged conflict-free at `ee9c428a58604dd8626a0256ffab384fe8f937e8`. Inspected complete new smoke and runner
+diff, final actual Electron log `/tmp/ohmytemplate-06-capabilities-evidence.log`,
+and both committed screenshots. Evidence supports final criterion; no product
+changes or fresh full runtime run were needed for this identical validation tree.
+
+Fresh root verification (Bun1.4.2): six suites /112 tests passed without skips;
+typecheck and script syntax checks exited0; diff check passed. Logs:
+`/tmp/ohmytemplate-06-merger-tests.log`, `/tmp/ohmytemplate-06-merger-types.log`.
+Existing MaxListeners warnings appeared in tests. Commands:
+
+```sh
+PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH bun run test -- test/desktop-close.test.ts test/desktop-game-preview.test.tsx test/playtest-tools.test.ts test/owned-playtest.test.ts test/workspace-layout.test.ts test/game-design.test.ts
+PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH bun run typecheck
+node --check scripts/desktop-capability-runtime-check.cjs
+node --check scripts/test-web-game-runtime.mjs
+git diff 8fabb50e HEAD -- scripts/web-game-runtime-check.cjs
+git diff --check
+```
+
+The original `scripts/web-game-runtime-check.cjs` has zero diff against
+pre-merge root; default runner still selects it and propagates its failure.
+No native resize assertions changed. Actual capability smoke success remains
+separate from the baseline failure. Full checks/builds were not repeated because
+this merge adds validation scripts/docs only; prior evidence stays scoped above.
+
+Baseline native fractional resize remains nonpassing (expected 549x309, observed 667x375); later fullscreen/playback assertions are unverified. Actual Godot export and Unity/Unreal/Cocos installations/launches, recording encoders, real providers/CLIs, private cloud and platforms other than macOS arm64 remain unverified. Desktop UI creation-dialog and full daemon-restart canvas persistence remain outstanding for overall delivery; API-created canvas renderer edit/reload is verified. Full build/resource exclusion and generated-template build/startup are not established by ticket06.
+
+Overall generated template is not verified. Only ticket06 tracker state was
+updated; tickets05/07, `.codegraph/` and all worktrees were preserved.
