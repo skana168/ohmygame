@@ -49,7 +49,8 @@ const TYPE_IDEAS: Record<string, (typeof IDEAS)[keyof typeof IDEAS]> = {
   "ohmygame/godot:godot-game": IDEAS.godot,
 };
 const GENERAL_IDEAS = ["home.ideas.general.platformer", "home.ideas.general.puzzle", "home.ideas.general.story"] as const;
-type IdeaKey = (typeof IDEAS)[keyof typeof IDEAS][number] | (typeof GENERAL_IDEAS)[number];
+const WORKSPACE_IDEAS = ["home.ideas.workspace.research", "home.ideas.workspace.media", "home.ideas.workspace.plan"] as const;
+type IdeaKey = (typeof WORKSPACE_IDEAS)[number] | (typeof IDEAS)[keyof typeof IDEAS][number] | (typeof GENERAL_IDEAS)[number];
 
 /**
  * Home's prompt box. Sending hands the prompt to the new-project dialog as the
@@ -162,7 +163,7 @@ export function ProjectPromptCreator({ draftKey, placeholder, disabled: creating
     .filter((plugin): plugin is Plugin => plugin !== undefined && plugin !== starter && starters.includes(plugin));
   // Until plugins load, the draft's own extras stand, so neither sending nor editing drops them.
   const extraMentions = capabilitiesLoaded ? extras.map(toPluginMention) : extraPlugins ?? [];
-  const ideas: readonly IdeaKey[] = TYPE_IDEAS[type] ?? (starter && starter.name in IDEAS ? IDEAS[starter.name as keyof typeof IDEAS] : undefined) ?? GENERAL_IDEAS;
+  const ideas: readonly IdeaKey[] = !applicationComposition.game ? WORKSPACE_IDEAS : TYPE_IDEAS[type] ?? (starter && starter.name in IDEAS ? IDEAS[starter.name as keyof typeof IDEAS] : undefined) ?? GENERAL_IDEAS;
   // Plugins that add types are picked in the Type menu. The other plugins must suit this project's file type.
   const projectPlugins = projectPluginChoices.filter((plugin) => !plugin.providesTypes.length && pluginAppliesTo(plugin.appliesTo, projectFileTypeFor(type)));
   /** The prompt as sent: the chosen plugins in order, then the text with its own mentions and Skills. */

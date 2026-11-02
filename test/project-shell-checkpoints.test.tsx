@@ -1207,6 +1207,19 @@ describe("checkpoints in the project shell", () => {
     }
   });
 
+  it("omits game build and publishing actions in a non-game application", async () => {
+    const { applicationComposition } = await import("../src/shared/application-composition.js");
+    const previous = { ...applicationComposition };
+    Object.assign(applicationComposition, { game: false, story: false, publishing: false });
+    try {
+      await openProject(() => undefined);
+      expect(container.textContent).not.toContain("Export web build");
+      expect(container.textContent).not.toContain("Publish");
+    } finally {
+      Object.assign(applicationComposition, previous);
+    }
+  });
+
   it("publishes from the top bar's Publish menu, or exports the web build there after saving", async () => {
     const publishDialog = vi.fn();
     const save = vi.fn(async () => {});

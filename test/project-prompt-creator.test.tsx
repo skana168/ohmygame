@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import path from "node:path";
+import { applicationComposition } from "../src/shared/application-composition.js";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -479,4 +480,19 @@ describe("Home prompt box", () => {
     await act(async () => onSubmit.mock.calls[0]![1]());
     expect(promptText(container)).toBe("");
   });
+});
+
+it("offers workspace ideas in the non-game composition", async () => {
+  const game = applicationComposition.game;
+  applicationComposition.game = false;
+  capabilities = { plugins: [], skills: [] };
+  try {
+    await render();
+    await act(async () => ideasButton().click());
+    expect(document.body.textContent).toContain("Organize a research board with notes and source links");
+    expect(document.body.textContent).not.toContain("platformer");
+    expect(document.body.textContent).not.toContain("branching mystery");
+  } finally {
+    applicationComposition.game = game;
+  }
 });

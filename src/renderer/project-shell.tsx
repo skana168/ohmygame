@@ -1,3 +1,4 @@
+import { applicationComposition } from "../shared/application-composition.js";
 import { publishingEnabled } from "../shared/application-services.js";
 import { storyCapabilityEnabled, gameCapabilityEnabled } from "../shared/project-runtime.js";
 import { canvasPolicy } from "../shared/workspace-policy.js";
@@ -1171,7 +1172,7 @@ export function ProjectShell({
     "separator",
     { label: homeLabel, icon: <ArrowLeft size={14} />, onSelect: requestHome },
   ];
-  const publishButton = project ? publishAction(project, { publishing, agentBusy }) : undefined;
+  const publishButton = project && (applicationComposition.game || applicationComposition.story) ? publishAction(project, { publishing, agentBusy }) : undefined;
 
   // The code panel opens the file, and comes back if it was closed. A game's
   // workspace brings it forward itself.
