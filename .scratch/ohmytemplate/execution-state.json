@@ -67,11 +67,23 @@
         "09"
       ],
       "remaining_validation": "Implementer full public checks retained without repetition; prior 41 full-suite skips, manual browser/Electron, live providers and private cloud remain unverified. Workspace tool gating belongs to ticket04."
+    },
+    "04": {
+      "status": "launching"
+    },
+    "06": {
+      "status": "launching"
+    },
+    "09": {
+      "status": "launching"
     }
   },
   "notes": [
     "No PR requested; local Markdown tracker.",
     "Upstream dev is newer than the originally assessed main; inspect current implementations before editing.",
     "Planning stash retained as backup; .codegraph stays untracked."
+  ],
+  "next_ready_queue": [
+    "08"
   ]
 }

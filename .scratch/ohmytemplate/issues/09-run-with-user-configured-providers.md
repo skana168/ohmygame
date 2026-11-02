@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — Create and reopen workspaces with a versioned module manifest.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Separate OhMyGame account-specific cloud model/credential/quota integration from core provider configuration and model discovery.
 - [ ] A composition without the account service starts and presents a usable provider setup flow without requiring OhMyGame login or private endpoints.

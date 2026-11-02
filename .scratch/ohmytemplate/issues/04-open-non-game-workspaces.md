@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — Select business tools consistently across agent consumers; 03 — Create and reopen workspaces with a versioned module manifest.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Provide a usable creation and navigation flow for a non-game workspace with persisted module selection and clear domain-neutral labels.
 - [ ] Pi conversations and ordinary file operations work in that workspace with the existing workspace isolation and context behavior.

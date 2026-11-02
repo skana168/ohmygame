@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — Select business tools consistently across agent consumers; 03 — Create and reopen workspaces with a versioned module manifest.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Associate game target resolution, driver construction, session ownership, and game-window lifecycle with the enabled game capability.
 - [ ] Enabled game workspaces preserve the existing game-use tool behavior and actual supported preview/engine integrations, including their environment and capability checks.
