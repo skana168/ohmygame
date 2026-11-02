@@ -34,7 +34,9 @@ Execution details are recorded in [execution-state.json](execution-state.json).
 
 - [Ticket 04](issues/04-open-non-game-workspaces.md) resolved at `366f0dab`; 392 merged-root tests and typecheck passed. Generic tools/canvas retain independent account configuration. Tickets05/07 ready; Electron overall validation and browser title editing remain unverified.
 
-- [Ticket 06](issues/06-isolate-game-preview-and-engines.md) merged at `7a6dbf98` but remains claimed. Shared workspace policy and reusable preview navigation integrated; browser flow passed. Electron resize timeout reproduces with baseline player, later native smoke and desktop capability flow remain unverified; see report for exact automated evidence.
+- [Ticket 06](issues/06-isolate-game-preview-and-engines.md) is resolved: production merge `7a6dbf98`, validation merge `ee9c428a58604dd8626a0256ffab384fe8f937e8`. Actual Electron capability/IPC/agent-driver cleanup and canvas title/Markdown reload passed; fresh 112 tests and typecheck passed. Original baseline native fractional resize still fails; later native assertions, external engines/encoders and other-platform checks remain unverified. Desktop creation-dialog and generated-template verification remain overall gaps; see report.
+
+- [Ticket 08](issues/08-isolate-publishing-and-community.md) resolved after conflict-free merge `c1885b30`; optional service construction/routes and UI guards preserve defaults, metadata, archives and local assets. Fresh 194 tests passed/23 private-cloud skips and typecheck passed; see report for inherited public/browser evidence and remaining manual gaps.
 
 ## Fog
 

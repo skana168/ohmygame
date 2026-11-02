@@ -1,3 +1,4 @@
+import { publishingEnabled, communityEnabled } from "../shared/application-services.js";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ProjectCoverMode, ProjectState, PublicationState } from "../shared/contracts.js";
 import { getExploreGameCover, getProjectCover, getProjectCoverState, setProjectCoverMode, setProjectCover } from "./api.js";
@@ -13,7 +14,7 @@ export interface PublishDetails {
   description: string;
 }
 
-export function PublishDialog({ project, publishing, justPublished = false, initialEditing = false, coverAccessToken, profileUrl, onClose, onPublish }: {
+type PublishDialogProps = {
   project: ProjectState;
   publishing: boolean;
   onClose: () => void;
@@ -22,7 +23,13 @@ export function PublishDialog({ project, publishing, justPublished = false, init
   coverAccessToken?: string;
   profileUrl?: string;
   onPublish: (details: PublishDetails) => Promise<boolean>;
-}) {
+};
+
+export function PublishDialog({ available = publishingEnabled, ...props }: PublishDialogProps & { available?: boolean }) {
+  return available ? <EnabledPublishDialog {...props} /> : null;
+}
+
+function EnabledPublishDialog({ project, publishing, justPublished = false, initialEditing = false, coverAccessToken, profileUrl, onClose, onPublish }: PublishDialogProps) {
   const titleId = useId();
   const coverInputId = useId();
   const dialog = useRef<HTMLElement>(null);
@@ -301,7 +308,7 @@ export function PublicationDetails({ publication, name, justPublished = false, c
       <p className={`publication-copy-status${copyError ? " is-error" : ""}`} role={copyError ? "alert" : "status"}>{copyError ? t("publish.copyFailed") : copied ? t("publish.linkCopied") : ""}</p>
     </div>
     <div className="publication-secondary-actions">
-      <a href={profileUrl ?? gameHash(publication.gameId)} onClick={onClose}>{profileUrl ? t("community.viewOnProfile") : t("publish.viewInCommunity")}</a>
+      {communityEnabled ? <a href={profileUrl ?? gameHash(publication.gameId)} onClick={onClose}>{profileUrl ? t("community.viewOnProfile") : t("publish.viewInCommunity")}</a> : null}
       <Button size="sm" icon={<Upload size={14} />} onClick={onUpdate}>{t("publish.update")}</Button>
     </div>
   </div>;

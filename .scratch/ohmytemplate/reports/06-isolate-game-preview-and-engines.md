@@ -197,3 +197,148 @@ other platform checks remain as above. Ticket04's Electron creation/edit/reopen
 validation is still mandatory for overall template delivery. Browser document
  title editing remains unverified. Ticket08 and all existing worktrees/recovery
 snapshots were left untouched.
+
+## Focused desktop acceptance completion (2026-11-02)
+
+Status: **claimed**, final acceptance criterion now checked; awaiting root merger.
+This section supersedes the earlier outstanding desktop capability gap only.
+
+- Prepared worktree: `/Users/yoyun/.t3/worktrees/ohmygame/t3-1ee92686`.
+- Branch: `t3/verify-preview-capabilities`; required integration ancestor
+  `e83e93a9b8426ba84bb75a265243adc31fa5bdf6` confirmed before editing.
+- Merged local `refactor/ohmytemplate-integration`: first fast-forward to
+  `229adfde5c406f2d17d710cafa12ddf1fd82f3a7`, then to
+  `8fabb50eb8f8d7bc7a029c713563ffdb8438ac8d`. Retained concurrent application
+  services and policies unchanged. Other tickets/execution-state were inherited
+  through those merges only, not authored here. No product code needed fixing.
+- Extended the existing `scripts/test-web-game-runtime.mjs` runner with
+  `--capabilities`, using `scripts/desktop-capability-runtime-check.cjs` to load
+  actual built desktop main, its real supervised daemon, production renderer,
+  sandboxed preload and native Electron windows. No Electron/daemon/driver mocks.
+  Original `web-game-runtime-check.cjs` is unchanged, including line101's original
+  fractional resize assertion. No red-green product defect is claimed: initial
+  smoke development failures were fixture mistakes (empty JSON POST header,
+  locale-sensitive navigation, disabled external MCP setting and preload name).
+
+### Actual behavior observed
+
+1. Created explicit empty-module and game-enabled workspaces through authenticated
+   public daemon HTTP. Enabled static reusable previews for both, skipped model
+   onboarding through its public setting, and navigated the desktop renderer.
+2. Non-game Preview navigation rendered the actual reusable iframe. Its page
+   executed JavaScript, had visible layout and displayed “Reusable desktop
+   preview”; its sandbox had no desktop preload bridge. Renderer contained zero
+   player/record/tuning/agent-watch controls. The preview screenshot was delayed
+   until layout and paint; an earlier capture taken before paint was blank and
+   was replaced with final evidence, not treated as visual success.
+3. Invoked sandboxed preload APIs for player open, native preview attach,
+   recording start and story playtest. Each rejected with the game-capability
+   error and created no additional native window. Public tuning returned409.
+4. Enabled external MCP using its public setting and authenticated using its
+   isolated generated endpoint. Bound non-game workspace omitted `game_use` and
+   rejected its invocation, with zero driver sessions and no additional windows.
+   Switched to enabled game: `game_use` was listed and actually opened a desktop
+   agent driver. Public preload state reported one session. Switching back to
+   non-game released it: zero sessions and the original window count restored.
+   Ended the external MCP session explicitly.
+5. Enabled game's public preload player-open call created a native player and
+   loaded the fixture page. Player state was open; closing it destroyed the
+   owned WebContents. Explicit non-game preview stop made its URL unreachable.
+6. Application quit used the real renderer save acknowledgement and daemon stop
+   path. After Electron exited successfully, the parent runner verified both
+   daemon URL and the remaining enabled-game preview URL rejected connections.
+   Final daemon PID14368 no longer exists. Temporary profiles/data are preserved;
+   no application windows or servers from the final run remain.
+7. Supplemental ticket04 evidence: public API-created empty-module workspace,
+   second board and document node; actual Electron renderer edited document title
+   to “Desktop renamed title” and Markdown to “# Desktop persisted Markdown”.
+   Autosave was read through public HTTP, then renderer reload displayed both.
+   Two boards and absence of game-main-document selection persisted. This covers
+   renderer editing and reopen, **not** creation through the desktop UI dialog
+   or a full daemon restart for that canvas. Ticket04 status was not edited.
+
+### Commands and results
+
+All Bun commands use `PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH`
+(Bun1.4.2). Node24.20.0; Electron43.3.0 on macOS arm64.
+
+- `bun install --frozen-lockfile`: passed; `bun.lock` unchanged.
+- `node node_modules/electron/install.js`: installed declared cached binary;
+  no package or dependency changes.
+- `bun run prepare:preinstalled-plugins`: passed;
+  `/tmp/ohmytemplate-06-capabilities-prepare.log`.
+- `bun run build:host` and `bun run build:renderer`: passed after the application
+  services integration merge; logs `/tmp/ohmytemplate-06-capabilities-host.log`
+  and `/tmp/ohmytemplate-06-capabilities-renderer.log`. Existing chunk-size warning.
+  Subsequent integration tip8fabb50e changes tracker state only, no build inputs.
+- `bun run typecheck`: passed; `/tmp/ohmytemplate-06-capabilities-types.log`.
+- `bun run lint`: passed; `/tmp/ohmytemplate-06-capabilities-lint.log`.
+- `bun run test -- test/desktop-close.test.ts test/desktop-game-preview.test.tsx test/playtest-tools.test.ts test/owned-playtest.test.ts test/workspace-layout.test.ts test/game-design.test.ts`:
+  **six files /112 tests passed**, no skips;
+  `/tmp/ohmytemplate-06-capabilities-tests.log`.
+- `bunx --bun --no-install prettier --write scripts/desktop-capability-runtime-check.cjs`:
+  applied repository formatting to the new fixture.
+- Final actual runtime command:
+  `OHMYGAME_SMOKE_DIRECTORY=/tmp/ohmytemplate-06-capabilities-evidence node scripts/test-web-game-runtime.mjs --capabilities > /tmp/ohmytemplate-06-capabilities-evidence.log 2>&1`:
+  **exit0**, all capability, driver, canvas and shutdown checks passed after latest
+  integration merge. Prior successful development runs v2/v4/v5 retained under
+  `/tmp/ohmytemplate-06-capabilities-*`; only final evidence is used here.
+- `git diff --check`, original-smoke-file unchanged check, and lockfile diff:
+  passed. Full suite/Node smoke were not repeated for this smoke-only addition;
+  earlier merged implementation evidence above remains accurately scoped.
+
+Screenshots captured by actual Electron `webContents.capturePage`, inspected:
+
+- [Non-game reusable desktop preview](06-desktop-non-game-preview.png)
+- [Desktop canvas after title/Markdown edit and reload](06-desktop-canvas-reopened.png)
+
+Expected capability rejection stack traces and tuning409 appear in the log.
+The fixture imports real desktop main directly rather than Sentry bootstrap;
+renderer Sentry IPC CSP diagnostics appear in its isolated main log, with no
+impact on the tested local capability flows. Missing fixture cover404 messages
+are also expected. First fixture-development failure used forced exit and left
+its owned daemon PID6252; it was explicitly terminated with SIGTERM. Later error
+handling uses application Quit, and successful final shutdown is asserted above.
+
+Remaining limits: original whole native-player smoke still has the independently
+reproduced baseline fractional resize failure (expected549x309/observed667x375);
+its fullscreen/playback/later assertions are not claimed passing. No native
+player redesign, assertion relaxation or new engine support. External engines,
+recording encoders, real providers/CLIs, private cloud and other platforms remain
+unverified as previously recorded. Desktop creation-dialog coverage from04 is
+still outstanding for overall delivery. Browser capability evidence above remains
+valid; this run adds actual Electron evidence, not another browser run. No UI
+text changed, so locale files and English agent instructions remain intact.
+
+## Root validation merge and resolution (2026-11-02)
+
+Final ticket06 status: **resolved**. Validation commit `4b781b2d5f63e87919d931f7495e209f3d1c7ae3`
+merged conflict-free at `ee9c428a58604dd8626a0256ffab384fe8f937e8`. Inspected complete new smoke and runner
+diff, final actual Electron log `/tmp/ohmytemplate-06-capabilities-evidence.log`,
+and both committed screenshots. Evidence supports final criterion; no product
+changes or fresh full runtime run were needed for this identical validation tree.
+
+Fresh root verification (Bun1.4.2): six suites /112 tests passed without skips;
+typecheck and script syntax checks exited0; diff check passed. Logs:
+`/tmp/ohmytemplate-06-merger-tests.log`, `/tmp/ohmytemplate-06-merger-types.log`.
+Existing MaxListeners warnings appeared in tests. Commands:
+
+```sh
+PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH bun run test -- test/desktop-close.test.ts test/desktop-game-preview.test.tsx test/playtest-tools.test.ts test/owned-playtest.test.ts test/workspace-layout.test.ts test/game-design.test.ts
+PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH bun run typecheck
+node --check scripts/desktop-capability-runtime-check.cjs
+node --check scripts/test-web-game-runtime.mjs
+git diff 8fabb50e HEAD -- scripts/web-game-runtime-check.cjs
+git diff --check
+```
+
+The original `scripts/web-game-runtime-check.cjs` has zero diff against
+pre-merge root; default runner still selects it and propagates its failure.
+No native resize assertions changed. Actual capability smoke success remains
+separate from the baseline failure. Full checks/builds were not repeated because
+this merge adds validation scripts/docs only; prior evidence stays scoped above.
+
+Baseline native fractional resize remains nonpassing (expected 549x309, observed 667x375); later fullscreen/playback assertions are unverified. Actual Godot export and Unity/Unreal/Cocos installations/launches, recording encoders, real providers/CLIs, private cloud and platforms other than macOS arm64 remain unverified. Desktop UI creation-dialog and full daemon-restart canvas persistence remain outstanding for overall delivery; API-created canvas renderer edit/reload is verified. Full build/resource exclusion and generated-template build/startup are not established by ticket06.
+
+Overall generated template is not verified. Only ticket06 tracker state was
+updated; tickets05/07, `.codegraph/` and all worktrees were preserved.

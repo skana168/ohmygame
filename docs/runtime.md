@@ -801,6 +801,23 @@ when an update is published; publication details show that snapshot.
 
 ## Publishing
 
+Application composition in `src/shared/application-services.ts` selects
+`publishingEnabled` and `communityEnabled` independently of the existing
+`accountServicesEnabled`. All default to enabled for OhMyGame. Independent
+applications set their source-owned defaults to false; daemon embeddings can
+also pass `publishing`, `community`, and the existing `accountServices` options
+to `createApp`. Keep renderer defaults and daemon composition aligned.
+
+With publishing disabled, direct publish requests return 404 with an explicit
+unavailable error, the publish dialog and conversation action are absent, and
+the workspace menu retains web build export. With community disabled, community
+routes are unregistered, navigation is hidden, and saved community deep links
+return to Home. No publishing client is constructed when both are disabled.
+Existing deployment metadata is retained. Local assets, project archives, and
+web build export remain independent. This selection does not exclude source
+files or resources from application builds; final assembly owns that boundary.
+
+
 In web game, General, and interactive story chats, type `/publish` and select
 the command or send it to open the existing publish dialog. The command is
 handled locally and is not sent to the agent. It is available while the agent

@@ -1,3 +1,4 @@
+import { publishingEnabled } from "../shared/application-services.js";
 import { gameCapabilityEnabled } from "../shared/project-runtime.js";
 import { canvasPolicy } from "../shared/workspace-policy.js";
 import type { GameTuningState } from "../shared/game-tuning.js";
@@ -598,7 +599,7 @@ export function ProjectShell({
     const project = state.project;
     const busy = sendingInitialPrompt ||
       state.agent.status === "running" || state.agent.status === "cancelling";
-    if (runtime.recovered || !project || (!isWebRuntimeProjectType(project.type) && project.type !== "interactive-story") || auth.state.status !== "signed-in" || state.phase !== "ready" || publishing || busy) return;
+    if (!publishingEnabled || runtime.recovered || !project || (!isWebRuntimeProjectType(project.type) && project.type !== "interactive-story") || auth.state.status !== "signed-in" || state.phase !== "ready" || publishing || busy) return;
     const pending = takePendingPublish(sessionStorage, project.id);
     if (pending) void publish(pending).catch(() => undefined);
   }, [auth.state.status, state.phase, state.project?.id, state.project?.type, state.agent.status, sendingInitialPrompt, publishing]);
@@ -853,7 +854,7 @@ export function ProjectShell({
   }
 
   async function publish(details: PublishDetails): Promise<boolean> {
-    if (!project || publishing || agentBusy) return false;
+    if (!publishingEnabled || !project || publishing || agentBusy) return false;
     const resumeAfterWebSignIn = !window.ohMyGameDesktop && auth.state.status !== "signed-in";
     if (resumeAfterWebSignIn) rememberPendingPublish(sessionStorage, project.id, details);
     setPublishing(true);
@@ -1327,8 +1328,8 @@ export function ProjectShell({
       onRemovePending={removeFollowUp}
       onSteerPending={steerFollowUp}
       onEditPending={editFollowUp}
-      canPublish={Boolean(project && (isWebRuntimeProjectType(project.type) || project.type === "interactive-story") && !publishing && !agentBusy)}
-      onPublish={project ? () => setPublishDialog({ projectId: project.id, status: "open" }) : undefined}
+      canPublish={Boolean(publishingEnabled && project && (isWebRuntimeProjectType(project.type) || project.type === "interactive-story") && !publishing && !agentBusy)}
+      onPublish={publishingEnabled && project ? () => setPublishDialog({ projectId: project.id, status: "open" }) : undefined}
       pluginCommands={{ slash: slashCommands(plugins.commands, plugins.when), add: commandsForSlot(plugins.commands, "composer.add", plugins.when) }}
       onPluginCommand={(command) => void runProjectPluginCommand(command)}
     /> : null}
@@ -1379,12 +1380,11 @@ export function ProjectShell({
         {project && offered.includes("game") ? previewSupported ? <span className="project-top-play" ref={setPlaySlot} />
           : <Button size="sm" variant="ghost" icon={<Play size={14} />} onClick={() => revealPanel("game")}>{t("workspace.play")}</Button> : null}
         {project && publishButton ? <DropdownMenu placement="bottom-end" items={[
-          { label: t("workspace.publishToCommunity"), icon: <Globe2 size={14} />, disabled: exporting === "web", onSelect: () => setPublishDialog({ projectId: project.id, status: "open" }) },
-          "separator",
+          ...(publishingEnabled ? [{ label: t("workspace.publishToCommunity"), icon: <Globe2 size={14} />, disabled: exporting === "web", onSelect: () => setPublishDialog({ projectId: project.id, status: "open" }) }, "separator" as const] : []),
           { label: exporting === "web" ? t("workspace.exportingWebBuild") : t("workspace.exportWebBuild"), icon: <Upload size={14} />, disabled: !!exporting, onSelect: () => void exportFile("web") },
         ]} trigger={(props) => (
           <Button {...props} size="sm" variant="primary" icon={publishing || exporting === "web" ? <LoaderCircle className="spin" size={14} /> : <Share2 size={14} />}
-            disabled={publishButton.disabled} title={publishButton.label}>{t("workspace.publish")}</Button>
+            disabled={publishButton.disabled} title={publishingEnabled ? publishButton.label : t("workspace.exportWebBuild")}>{t(publishingEnabled ? "workspace.publish" : "workspace.exportWebBuild")}</Button>
         )} /> : null}
       </ProjectTop>}>
     {layout || !project ? <PanelLayout layout={layout ?? loadingLayout()} onChange={changeLayout}

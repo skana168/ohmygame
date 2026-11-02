@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — Select business tools consistently across agent consumers; 03 — Create and reopen workspaces with a versioned module manifest.
 
-Status: claimed
+Status: resolved
 
 - [x] Associate game target resolution, driver construction, session ownership, and game-window lifecycle with the enabled game capability.
 - [x] Enabled game workspaces preserve the existing game-use tool behavior and actual supported preview/engine integrations, including their environment and capability checks.
@@ -13,7 +13,7 @@ Status: claimed
 - [x] Preserve reusable web preview startup, proxying, and shutdown behavior for applications that select it independently of game playtesting.
 - [x] Closing workspaces, conversations, or the application cleans up owned drivers and preview resources as before.
 - [x] Extend existing preview, game-use, playtest-driver, and plugin integration coverage for enabled, disabled, unsupported-environment, and cleanup cases; do not claim new engine implementations.
-- [ ] Run focused tests and type checking, exercise the relevant Electron/browser flows, and document supported capabilities and any remaining manual engine checks.
+- [x] Run focused tests and type checking, exercise the relevant Electron/browser flows, and document supported capabilities and any remaining manual engine checks.
 
 **Context:** App-wide resource preparation and final build exclusion are consolidated in ticket 10. Follow the [parent specification](../spec.md), [glossary](../../../GLOSSARY.md), and [accepted ADR](../../../docs/adr/0001-extract-a-reusable-workbench.md).
 
@@ -38,3 +38,45 @@ Browser non-game preview flow exercised. Electron fractional resize failure
 reproduces with baseline player code; later smoke assertions and actual desktop
 capability UI flow remain unverified. Status stays claimed and final acceptance
 item stays unchecked. See report for precise run order and retained evidence.
+
+
+## Desktop acceptance completion (2026-11-02)
+
+The focused actual Electron application/daemon/preload flow passed on Electron
+43.3.0, including non-game iframe usability, absent game controls, direct IPC
+rejection without windows, real enabled game player and agent driver, workspace
+owner cleanup and application shutdown. Supplemental desktop canvas title and
+Markdown editing/reopen passed with API-created two-board fixtures. See the
+[report](../reports/06-isolate-game-preview-and-engines.md#focused-desktop-acceptance-completion-2026-11-02)
+for commands, screenshots and limits. The original native resize smoke remains
+unchanged and its baseline failure is not represented as passing. Final criterion
+is now evidenced; status remains claimed for root merger.
+
+## Answer
+
+Resolved after conflict-free validation merge `ee9c428a58604dd8626a0256ffab384fe8f937e8` from
+`4b781b2d5f63e87919d931f7495e209f3d1c7ae3`. The final criterion is supported
+by actual Electron capability/IPC/agent-driver cleanup and canvas renderer
+edit/reload evidence, plus inherited browser evidence. Earlier claimed/gap
+statements above describe historical runs and are superseded here.
+
+Fresh merged-root checks: six suites / 112 tests passed, no skips; typecheck,
+both script syntax checks and whitespace checks passed. Original native smoke
+fixture has zero diff; its resize assertion was neither weakened nor bypassed
+in the default runner. The separate `--capabilities` run is not a passing result
+for the baseline native smoke. Commands:
+
+```sh
+PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH bun run test -- test/desktop-close.test.ts test/desktop-game-preview.test.tsx test/playtest-tools.test.ts test/owned-playtest.test.ts test/workspace-layout.test.ts test/game-design.test.ts
+PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH bun run typecheck
+node --check scripts/desktop-capability-runtime-check.cjs
+node --check scripts/test-web-game-runtime.mjs
+git diff 8fabb50e HEAD -- scripts/web-game-runtime-check.cjs
+git diff --check
+```
+
+Baseline native fractional resize remains nonpassing (expected 549x309, observed 667x375); later fullscreen/playback assertions are unverified. Actual Godot export and Unity/Unreal/Cocos installations/launches, recording encoders, real providers/CLIs, private cloud and platforms other than macOS arm64 remain unverified. Desktop UI creation-dialog and full daemon-restart canvas persistence remain outstanding for overall delivery; API-created canvas renderer edit/reload is verified. Full build/resource exclusion and generated-template build/startup are not established by ticket06.
+
+See the [report](../reports/06-isolate-game-preview-and-engines.md) for the
+actual Electron command, logs and screenshots. Overall generated template is
+not verified. Tickets05/07 and all worktrees remain untouched.
