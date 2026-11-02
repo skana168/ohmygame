@@ -19,6 +19,12 @@ Execution details are recorded in [execution-state.json](execution-state.json).
   selection merged at `fbeb9975173204340c8688f2bf7359e9ce12f4c7`; 151 focused tests and
   typecheck passed. See its report for full-check evidence and manual limits.
 
+- [Ticket 03](issues/03-version-workspace-manifests.md) is resolved: versioned
+  workspace manifests merged at `2fce6668d411b69066d80063aa44273c254b8a35`;
+  365 affected tests and typecheck passed with no integration edits. Tickets
+  04, 06, 08 and 09 are newly unblocked; root retains scheduling ownership.
+  See its report for preserved validation limits and the ticket04 gating boundary.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction

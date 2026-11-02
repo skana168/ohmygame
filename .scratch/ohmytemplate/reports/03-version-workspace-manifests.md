@@ -1,6 +1,6 @@
 # Ticket 03 implementation report
 
-Status: implementation complete; ticket remains claimed pending merger review.
+Status: resolved after merger acceptance.
 
 - Branch: `t3/workspace-manifest-validation`
 - Worktree: `/Users/yoyun/.t3/worktrees/ohmygame/t3-8f350c20`
@@ -90,3 +90,15 @@ this implementation did not edit those files directly.
 - The full suite's 41 skipped tests were not represented as executed; live model/provider calls and private hosted publishing verification were not performed.
 - Manifest validation/persistence does not itself wire per-workspace selection into tool catalogs or non-game renderer policy. Tool availability remains the host composition boundary from ticket 02; renderer/policy work belongs to ticket 04 and integration wiring. This report does not claim the complete extraction is delivered.
 - No manifest-update endpoint or live file-change reload is introduced. Explicit file repair is loaded on daemon restart, as documented.
+
+## Merger acceptance
+
+- Accepted implementation tip: `b27dd631e49461fa283fc75ae9d7cf8a1b3fcb39`.
+- Conventional merge: `2fce6668d411b69066d80063aa44273c254b8a35`.
+- Conflict-free; no integration source edits. The merge tracked tree equals the implementation tip.
+- Repeated at shared root with the requested Bun PATH: the fourteen affected suites listed above passed, **14 files / 365 tests**, with no skips; `bun run typecheck` and `git diff --check` passed.
+- Inspected daemon creation/loading and manifest schemas, exclusive manifest/instruction writes, invalid-declaration preservation fixtures, legacy story selection, and example/plugin finalization. Acceptance criteria hold.
+- Ticket02 interaction: external MCP flag matrix still omits disabled game/story tools and rejects their invocation after opening a freshly created project with the default manifest. Host flags remain authoritative; per-workspace tool catalog selection belongs to ticket04.
+- Did not repeat plugin preparation, changelog, lint, full suite, renderer build or Node runtime: implementer evidence above covers the identical tracked tree, and no integration edits warranted repeating them. Prior full suite had 41 skips; manual browser/Electron, live providers and private cloud remain unverified.
+- Only ticket03 resolved. Tickets 04/06/08/09 are newly unblocked and remain unclaimed for root orchestration.
+- Root tracked files were clean before tracker edits; `.codegraph/` remains untracked and preserved. All existing worktrees preserved. No push, PR, watch, subagent or new worktree.
