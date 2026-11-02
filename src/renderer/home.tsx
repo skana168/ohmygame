@@ -1,3 +1,4 @@
+import { communityEnabled } from "../shared/application-services.js";
 import { useReadyRuntimeGeneration } from "./runtime-connection.js";
 import { FilePlus, Import, RefreshCw } from "./icons.js";
 import { useEffect, useState } from "react";
@@ -148,7 +149,7 @@ export function Home({ onNavigate, onCreate, onOpen, inert = false, start, onSta
           {visibleExamples.length > 0 ? <section className="home-section home-explore" aria-labelledby="home-examples-heading">
             <header className="home-section-head">
               <h2 id="home-examples-heading">{t("home.explore")}</h2>
-              <Button size="sm" variant="ghost" onClick={() => onNavigate("community")}>{t("home.toCommunity")}</Button>
+              {communityEnabled ? <Button size="sm" variant="ghost" onClick={() => onNavigate("community")}>{t("home.toCommunity")}</Button> : null}
             </header>
             <ExampleShelf examples={visibleExamples} covers={exampleCovers} showType onOpenProject={onOpen} />
           </section> : null}

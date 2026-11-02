@@ -800,7 +800,7 @@ when an update is published; publication details show that snapshot.
 ## Publishing
 
 Application composition in `src/shared/application-services.ts` selects
-`publishingEnabled` and `communityEnabled` independently of ticket 09's
+`publishingEnabled` and `communityEnabled` independently of the existing
 `accountServicesEnabled`. All default to enabled for OhMyGame. Independent
 applications set their source-owned defaults to false; daemon embeddings can
 also pass `publishing`, `community`, and the existing `accountServices` options

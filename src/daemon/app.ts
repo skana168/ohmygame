@@ -171,7 +171,9 @@ import {
 export interface AppOptions {
   /** Optional OhMyGame account cloud integration; user providers remain available. */
   accountServices?: boolean;
+  /** Optional game deployment operations; local builds and archives remain available. */
   publishing?: boolean;
+  /** Optional community browsing and social operations. */
   community?: boolean;
   /** Source-registered modules available to workspace declarations. */
   workspaceModules?: readonly WorkspaceModuleDescriptor[];

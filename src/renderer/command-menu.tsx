@@ -1,3 +1,4 @@
+import { communityEnabled } from "../shared/application-services.js";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { CirclePlus, Gamepad2, Globe2, House, Image, Palette, Plug } from "./icons.js";
 import { listProjects } from "./api.js";
@@ -112,7 +113,7 @@ const PAGES: { page: SidebarPage; label: () => string; icon: typeof House }[] = 
 ];
 
 /** Opens the command menu on ⌘K or when asked, and handles ⌘N and ⌘,. */
-export function CommandMenuHost({ navigate }: { navigate: (hash: string) => void }) {
+export function CommandMenuHost({ navigate, community = communityEnabled }: { navigate: (hash: string) => void; community?: boolean }) {
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<ProjectState[]>([]);
   const latestNavigate = useRef(navigate);
@@ -191,7 +192,7 @@ export function CommandMenuHost({ navigate }: { navigate: (hash: string) => void
 
   const commands: Command[] = open ? [
     ...[...sources].flatMap((source) => source.current()),
-    ...PAGES.map(({ page, label, icon: Icon }): Command => ({
+    ...PAGES.filter((item) => community || item.page !== "community").map(({ page, label, icon: Icon }): Command => ({
       id: `page-${page}`, group: t("commandMenu.goTo"), label: label(), keywords: page, icon: <Icon size={16} />,
       run: () => leave(() => go(sidebarHash(page))),
     })),
