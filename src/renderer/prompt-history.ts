@@ -1,3 +1,4 @@
+import { applicationStorageKey } from "./application-identity.js";
 import type { PluginMention } from "../shared/contracts.js";
 
 export interface PromptHistory {
@@ -51,7 +52,7 @@ export interface StoredPrompt {
   mentions: PluginMention[];
 }
 
-const HOME_PROMPT_HISTORY_KEY = "ohmygame.home-prompt-history";
+const HOME_PROMPT_HISTORY_KEY = applicationStorageKey("ohmygame.home-prompt-history");
 const HOME_PROMPT_HISTORY_LIMIT = 50;
 
 /** Prompts submitted from the home composers, oldest first. Each one starts a new project, so they have no conversation to come from. */

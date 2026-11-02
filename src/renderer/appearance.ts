@@ -1,7 +1,8 @@
+import { applicationStorageKey } from "./application-identity.js";
 export type Appearance = "system" | "light" | "dark";
 type ResolvedAppearance = Exclude<Appearance, "system">;
 
-const APPEARANCE_STORAGE_KEY = "ohmygame:appearance";
+const APPEARANCE_STORAGE_KEY = applicationStorageKey("ohmygame:appearance");
 const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
 let stopWatchingSystemAppearance: (() => void) | undefined;
 
@@ -45,8 +46,8 @@ function resolveAppearance(appearance: Appearance): ResolvedAppearance {
 export type Palette = "neutral" | "warm" | "contrast";
 export type ChatFont = "sans" | "serif";
 
-const PALETTE_STORAGE_KEY = "ohmygame:palette";
-const CHAT_FONT_STORAGE_KEY = "ohmygame:chat-font";
+const PALETTE_STORAGE_KEY = applicationStorageKey("ohmygame:palette");
+const CHAT_FONT_STORAGE_KEY = applicationStorageKey("ohmygame:chat-font");
 
 export function readPalette(): Palette {
   const stored = readStored(PALETTE_STORAGE_KEY);

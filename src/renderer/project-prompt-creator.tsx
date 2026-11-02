@@ -1,3 +1,4 @@
+import { applicationStorageKey } from "./application-identity.js";
 import { Lightbulb, LoaderCircle, SendArrow } from "./icons.js";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { AgentModel, AgentModelRef, AgentReasoningLevel, ConversationCapabilities, PluginMention } from "../shared/contracts.js";
@@ -29,7 +30,7 @@ const STARTERS = [
   "douyin-minigame", "cocos-creator", "unity", "unreal-engine",
 ];
 const DEFAULT_TYPE = "web-game";
-const TYPE_KEY = "ohmygame.home.projectType";
+const TYPE_KEY = applicationStorageKey("ohmygame.home.projectType");
 type Plugin = ConversationCapabilities["plugins"][number];
 
 // Game ideas per starting plugin. The plugins' own prompts are written for an

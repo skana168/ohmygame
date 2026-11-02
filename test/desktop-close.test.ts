@@ -19,7 +19,7 @@ vi.mock("electron", () => ({
     on: (name: string, fn: (...args: any[]) => void) => host.appEvents.set(name, fn),
     whenReady: async () => {}, getPath: () => "/tmp/ohmygame-close-test", getVersion: () => "0.0.0",
     isReady: () => true, quit: host.quit, relaunch: host.relaunch, exit: vi.fn(),
-    setAppUserModelId: vi.fn(), setBadgeCount: vi.fn(),
+    setName: vi.fn(), setPath: vi.fn(), setAppUserModelId: vi.fn(), setBadgeCount: vi.fn(),
   },
   ipcMain: {
     handle: (name: string, fn: (...args: any[]) => any) => host.handlers.set(name, fn),

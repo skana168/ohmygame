@@ -1,3 +1,4 @@
+import { applicationStorageKey } from "./application-identity.js";
 import { useReadyRuntimeGeneration } from "./runtime-connection.js";
 import { Archive, FilePlus, Import, LayoutGrid, List, LoaderCircle, Plus, RefreshCw } from "./icons.js";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -27,7 +28,7 @@ interface ProjectsPageProps {
 }
 
 type Layout = "grid" | "list";
-const LAYOUT_STORAGE_KEY = "ohmygame:projects-layout";
+const LAYOUT_STORAGE_KEY = applicationStorageKey("ohmygame:projects-layout");
 
 /** What the new-project dialog opens with, if it is open. */
 interface CreateRequest {

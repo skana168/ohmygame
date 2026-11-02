@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { cp, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,12 +70,13 @@ try {
   assert.equal(result.status, "connected", JSON.stringify(result));
   assert.equal(result.toolCount, 1);
   await checkExtensionHosts(path.join(directory, "native-plugin"));
+  await checkApplicationIdentity(path.join(directory, "independent-app"));
 } finally {
   await daemon?.stop();
   await rm(directory, { recursive: true, force: true });
 }
 console.log(
-  `Node.js ${process.versions.node}: daemon startup, authenticated API, story creation, upgrade and preview, project export/import, native MCP runtime, extension hosts and graceful shutdown passed`,
+  `Node.js ${process.versions.node}: daemon startup, authenticated API, story creation, upgrade and preview, project export/import, native MCP runtime, extension hosts, configured independent application restart and graceful shutdown passed`,
 );
 
 // The built host runs plugins' native code, and its heap limit holds on Node.
@@ -93,4 +96,52 @@ async function checkExtensionHosts(folder) {
   } finally {
     await hosts.dispose();
   }
+}
+
+
+// A copied build uses its own configuration, without any initializer or source checkout.
+async function checkApplicationIdentity(folder) {
+  await mkdir(folder, { recursive: true });
+  await cp(path.join(root, "dist"), path.join(folder, "dist"), { recursive: true });
+  await cp(path.join(root, ".runtime/preinstalled-plugins"), path.join(folder, ".runtime/preinstalled-plugins"), { recursive: true });
+  await cp(path.join(root, "application-identity.cjs"), path.join(folder, "application-identity.cjs"));
+  await writeFile(path.join(folder, "package.json"), '{"type":"module","name":"identity-fixture"}');
+  await writeFile(path.join(folder, "application.json"), JSON.stringify({
+    name: "Studio Notes", packageName: "studio-notes", desktopId: "org.example.notes", dataDirectory: "notes-state",
+  }));
+  await symlink(path.join(root, "node_modules"), path.join(folder, "node_modules"), process.platform === "win32" ? "junction" : "dir");
+  const environment = { ...process.env, DAEMON_PORT: "0", DAEMON_HOST: "127.0.0.1", OHMYGAME_DAEMON_TOKEN: "identity-check" };
+  for (const key of ["OHMYGAME_DATA_DIR", "PI_CODING_AGENT_DIR", "OHMYGAME_DAEMON_TOKEN_STDIN"]) delete environment[key];
+  const launch = async () => {
+    const child = spawn(process.execPath, [path.join(folder, "dist/daemon/server.js")], { env: environment, stdio: ["ignore", "pipe", "pipe"] });
+    let output = "";
+    const url = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { child.kill(); reject(new Error(`Identity startup timed out: ${output}`)); }, 30_000);
+      child.on("error", error => { clearTimeout(timer); reject(error); });
+      child.on("exit", code => { clearTimeout(timer); reject(new Error(`Identity daemon exited ${code}: ${output}`)); });
+      child.stderr.on("data", chunk => { output += chunk; });
+      child.stdout.on("data", chunk => {
+        output += chunk;
+        const address = output.match(/Server listening at (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
+        if (address) { clearTimeout(timer); resolve(address); }
+      });
+    });
+    return { url, stop: async () => { if (child.exitCode === null) { const exited = once(child, "exit"); child.kill(); await exited; } } };
+  };
+  const request = async (running, route, method = "GET", payload) => {
+    const response = await fetch(`${running.url}${route}`, { method, headers: { authorization: "Bearer identity-check", "content-type": "application/json" }, ...(payload ? { body: JSON.stringify(payload) } : {}), signal: AbortSignal.timeout(10_000) });
+    assert(response.ok, `${method} ${route}: ${await response.clone().text()}`);
+    return response.json();
+  };
+  let running = await launch();
+  try {
+    await request(running, "/projects", "POST", { name: "Independent notes", type: "general" });
+    await request(running, "/settings/models/providers/meshy", "PUT", { apiKey: "identity-fixture-key" });
+    await running.stop();
+    running = await launch();
+    const projects = await request(running, "/projects");
+    assert.equal(projects[0]?.name, "Independent notes");
+    assert(projects[0].workspacePath.startsWith(path.join(await realpath(folder), "notes-state")), "Standalone startup must honor configured storage");
+    assert.equal((await request(running, "/settings/models/providers/meshy")).configured, true);
+  } finally { await running.stop(); }
 }

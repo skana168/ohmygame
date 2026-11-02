@@ -1,0 +1,6 @@
+{
+  "name": "OhMyGame",
+  "packageName": "ohmygame",
+  "desktopId": "ai.ohmygame.desktop",
+  "dataDirectory": ".data"
+}

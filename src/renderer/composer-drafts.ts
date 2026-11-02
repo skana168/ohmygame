@@ -1,3 +1,4 @@
+import { applicationStorageKey } from "./application-identity.js";
 import type { PluginMention, PromptContext, PromptReference } from "../shared/contracts.js";
 import type { ChatReference } from "./chat-reference.js";
 import type { ComposerAttachment } from "./composer-attachments.js";
@@ -41,7 +42,7 @@ export function homeDraftScope(surface: string): ComposerDraftScope {
 }
 
 type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">;
-const STORAGE_PREFIX = "ohmygame:composer-draft:v1:";
+const STORAGE_PREFIX = applicationStorageKey("ohmygame:composer-draft:v1:");
 
 /** A session belongs to a conversation, rather than to a mounted input box. */
 export function createComposerDraftStore(storage?: DraftStorage) {

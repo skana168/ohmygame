@@ -941,3 +941,56 @@ deployments still allow public browsing but cannot accept anonymous likes.
 
 The Publish v1 contract is in the
 [`ohmygame-cloud` repository](https://github.com/WhiteTowerAI/ohmygame-cloud/blob/main/docs/publish-v1.md).
+
+## Application identity
+
+`application.json` is the application identity configuration. Edit all four
+settings together and restart development (or rebuild the desktop application):
+
+```json
+{
+  "name": "Studio Notes",
+  "packageName": "studio-notes",
+  "desktopId": "org.example.notes",
+  "dataDirectory": ".notes-data"
+}
+```
+
+`name` supplies the browser title, application labels in both UI languages,
+Electron application name and packaged product name. Use 1–80 letters, digits,
+spaces, dots, underscores or hyphens, starting with a letter or digit.
+`packageName` is a lowercase, unscoped name starting with a letter; it supplies
+packaged package metadata and the renderer's persisted preference/draft/auth
+namespace. `desktopId` is a reverse DNS identifier with at least three parts.
+It supplies the installer identity, Windows notification identity and independent
+Electron profile directory. Unknown keys, missing fields and invalid values fail
+startup/build with a field-specific error. Identity is source configuration, not
+a runtime-only environment rename; regenerate/rebuild artifacts after changing it.
+The source repository's `package.json` and lockfile remain development metadata;
+electron-builder writes `packageName` to the packaged application's metadata.
+
+For the standalone daemon and browser development, relative `dataDirectory`
+paths resolve from the checkout root. In Electron they resolve from the
+application's profile directory, so installed apps never write inside an archive.
+Absolute paths work in both modes. `OHMYGAME_DATA_DIR` overrides this selection
+in both modes; `PI_CODING_AGENT_DIR` explicitly overrides the agent settings and
+credential directory. For independent applications, choose distinct package
+names, desktop IDs and data directories and do not share either override.
+Browser applications served on the same origin have separate preferences, drafts
+and sign-in storage through their package names; serve them on separate origins
+if they need complete browser-origin isolation.
+
+The default configuration preserves OhMyGame's `.data/` standalone storage,
+Electron's existing user-data profile and its `data/` and `pi-agent/` directories.
+With an explicit desktop data override or a nondefault data directory, Pi settings
+and credentials default to `pi-agent/` within that data directory. Existing default
+renderer storage keys and Supabase session storage are retained.
+
+The package commands use `electron-builder.config.mjs`, which layers identity
+onto `electron-builder.yml`. Direct electron-builder invocations must pass
+`--config electron-builder.config.mjs`. Without `DESKTOP_UPDATE_URL`, local
+packaging disables publish configuration. `bun run package:mac:dir` builds an
+unsigned local macOS directory without notarization or hosted release credentials;
+shipping signed installers and setting up update feeds remain release tasks.
+Identity configuration does not replace product-specific artwork, domain tools,
+plugin identifiers or hosted-service configuration.
