@@ -185,6 +185,9 @@ const en = {
     loadingProviders: "Loading providers…",
     defaultModel: "Default model",
     welcome: "Welcome to OhMyGame",
+    workspaceWelcomeHint: "Describe what you want to create, and work with your AI.",
+    workspaceStartPrompt: "Describe what to create",
+    workspaceStartImportHint: "Keep working in an existing workspace.",
     welcomeHint: "Describe a game, and watch it come together.",
     next: "Next",
     skipStep: "Skip this step",
@@ -892,6 +895,7 @@ const en = {
   home: {
     title: "What are we making today?",
     placeholder: "Describe the game you want to create...",
+    workspacePlaceholder: "Describe what you want to create...",
     startBlank: "Blank project",
     explore: "Explore",
     importFolder: "Import folder",
@@ -908,6 +912,11 @@ const en = {
     projectPluginsFailed: "Couldn't load the plugins a project can turn on.",
     browsePlugins: "Browse plugins",
     ideas: {
+      workspace: {
+        research: "Organize a research board with notes and source links",
+        media: "Create a media mood board for a new project",
+        plan: "Plan a project with tasks and reference documents",
+      },
       web: {
         dungeon: "Make a pixel-art dungeon roguelike with turn-based combat",
         merge: "Make a casual portrait merge game for phones",

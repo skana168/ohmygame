@@ -23,7 +23,7 @@ import {
 } from "./package-manager.js";
 import { ensureProjectDependencies } from "./project-dependencies.js";
 import { projectProcessEnvironment } from "./project-process.js";
-import { ProjectWorkspaceError, resolvePreviewWorkspace } from "./projects.js";
+import { ProjectWorkspaceError, resolvePreviewWorkspace } from "./preview-workspace.js";
 import {
   registerProjectProcess,
   terminateProjectProcess,
@@ -36,10 +36,11 @@ import {
 } from "./preview-launch.js";
 import { startStaticPreview } from "./preview-static.js";
 import { storyCapabilityEnabled } from "../shared/project-runtime.js";
-import { storyWebEditorBridge } from "./story-web-bundle.js";
 
 interface PreviewOptions {
   storyEnabled?: (project: ProjectState) => boolean;
+  /** Optional page editing bridge supplied by the story module's application assembler. */
+  storyBridge?: (project: ProjectState) => (() => Promise<string>) | undefined;
   readinessTimeoutMs?: number;
   installTimeoutMs?: number;
   idleTimeoutMs?: number;
@@ -557,6 +558,7 @@ export class PreviewManager {
       const preferredPort = await this.#savedProxyPort(project);
       assertCurrent();
       let proxyHandle: PreviewProxy | undefined;
+      const storyBridge = this.options.storyBridge?.(project);
       const proxy = await createPreviewProxy(
         `http://127.0.0.1:${port}`,
         (diagnostic, diagnostics) => {
@@ -576,7 +578,7 @@ export class PreviewManager {
         },
         {
           port: preferredPort,
-          ...(project.type === "interactive-story" ? { story: { bridge: storyWebEditorBridge } } : {}),
+          ...(storyBridge ? { story: { bridge: storyBridge } } : {}),
           onActivity: (id, active) => {
             if (proxyHandle && this.#proxies.get(project.id) === proxyHandle)
               this.touch(project, `page:${id}`, active);

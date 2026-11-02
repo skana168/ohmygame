@@ -1,5 +1,4 @@
 import { workspaceHasModule } from "../shared/workspace-policy.js";
-import { createGameToolContribution, createStoryToolContribution, type BusinessToolSelection } from "./business-tools.js";
 import { composeToolContributions, type ToolContribution } from "./tool-contributions.js";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
@@ -11,7 +10,6 @@ import { isAppWidePlugin } from "../shared/plugin-manifest.js";
 import type { ProjectManager } from "./projects.js";
 import type { ToolRunner } from "./tools.js";
 import { getWorkspaceMedia } from "./workspace.js";
-import type { GameRuntimeAdapter, GameUseOpenTarget } from "../shared/playtest.js";
 import type { WebSearchExecution, WebSearchInput } from "../shared/web-search.js";
 import { checkCanvasWorkspace } from "./canvas-check.js";
 import type { CanvasStore } from "./canvas-workspace.js";
@@ -92,17 +90,22 @@ const audioToolSettings = {
   output: Type.Optional(Type.Object({ format: Type.Optional(Type.Union([Type.Literal("mp3"), Type.Literal("wav"), Type.Literal("ogg_opus")])), sampleRate: Type.Optional(Type.Union([8000, 16000, 22050, 24000, 32000, 40000, 44100, 48000].map((value) => Type.Literal(value)))), bitRate: Type.Optional(Type.Integer()) })),
 };
 
+/** Contributions are bound by the application assembler, never imported by core. */
+export interface AgentToolProviders {
+  beforeCanvas?: readonly ToolContribution[];
+  afterCanvas?: readonly ToolContribution[];
+}
+
 export function createAgentTools(
   project: ProjectState,
   tools: ToolRunner,
   projects: ProjectManager,
   askQuestionnaire?: AskQuestionnaire,
   installPlugin?: InstallPlugin,
-  playtest?: { driver: GameRuntimeAdapter; resolveOpenTarget: () => Promise<GameUseOpenTarget> },
   searchWeb?: SearchWeb,
   canvasStore?: CanvasStore,
   contributions: readonly ToolContribution[] = [],
-  businessTools: BusinessToolSelection = {},
+  providers: AgentToolProviders = {},
 ): PiToolDefinition[] {
   const saveGeneratedAudio = async (
     toolId: "generate-speech" | "generate-sound-effect" | "generate-music" | "generate-audio",
@@ -587,9 +590,9 @@ export function createAgentTools(
   // Keep the existing catalog order; core contributes on either side of story tools.
   return composeToolContributions([
     { id: "core", tools: coreTools },
-    ...(businessTools.story === false || !workspaceHasModule(project, "interactive-story") ? [] : [createStoryToolContribution(project)]),
+    ...(providers.beforeCanvas ?? []),
     { id: "core", tools: canvasTools },
-    ...(businessTools.game === false || !workspaceHasModule(project, "game") ? [] : [createGameToolContribution(project, playtest)]),
+    ...(providers.afterCanvas ?? []),
     ...contributions.filter((contribution) => contribution.id === "core" || workspaceHasModule(project, contribution.id) || !project.workspaceManifest && !project.workspaceDiagnostics?.length),
   ]);
 }

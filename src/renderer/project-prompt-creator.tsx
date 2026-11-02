@@ -1,3 +1,4 @@
+import { applicationComposition } from "../shared/application-composition.js";
 import { applicationStorageKey } from "./application-identity.js";
 import { Lightbulb, LoaderCircle, SendArrow } from "./icons.js";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -29,7 +30,7 @@ const STARTERS = [
   "web-game-studio", "game-studio", "threejs-world", "wechat-minigame",
   "douyin-minigame", "cocos-creator", "unity", "unreal-engine",
 ];
-const DEFAULT_TYPE = "web-game";
+const DEFAULT_TYPE = applicationComposition.defaultProjectType;
 const TYPE_KEY = applicationStorageKey("ohmygame.home.projectType");
 type Plugin = ConversationCapabilities["plugins"][number];
 
@@ -48,7 +49,8 @@ const TYPE_IDEAS: Record<string, (typeof IDEAS)[keyof typeof IDEAS]> = {
   "ohmygame/godot:godot-game": IDEAS.godot,
 };
 const GENERAL_IDEAS = ["home.ideas.general.platformer", "home.ideas.general.puzzle", "home.ideas.general.story"] as const;
-type IdeaKey = (typeof IDEAS)[keyof typeof IDEAS][number] | (typeof GENERAL_IDEAS)[number];
+const WORKSPACE_IDEAS = ["home.ideas.workspace.research", "home.ideas.workspace.media", "home.ideas.workspace.plan"] as const;
+type IdeaKey = (typeof WORKSPACE_IDEAS)[number] | (typeof IDEAS)[keyof typeof IDEAS][number] | (typeof GENERAL_IDEAS)[number];
 
 /**
  * Home's prompt box. Sending hands the prompt to the new-project dialog as the
@@ -85,7 +87,7 @@ export function ProjectPromptCreator({ draftKey, placeholder, disabled: creating
   const [starterChosen, setStarterChosen] = useState(false);
   const [savedType, setSavedType] = useState(loadType);
   const allStarters = capabilities.plugins
-    .filter((plugin) => STARTERS.includes(plugin.name))
+    .filter((plugin) => applicationComposition.game && STARTERS.includes(plugin.name))
     .sort((left, right) => STARTERS.indexOf(left.name) - STARTERS.indexOf(right.name));
   const pickable = allStarters;
   const { types: loadedPluginTypes, failed: pluginTypesFailed, retry: retryPluginTypes, storyAvailable } = usePluginProjectTypes();
@@ -161,7 +163,7 @@ export function ProjectPromptCreator({ draftKey, placeholder, disabled: creating
     .filter((plugin): plugin is Plugin => plugin !== undefined && plugin !== starter && starters.includes(plugin));
   // Until plugins load, the draft's own extras stand, so neither sending nor editing drops them.
   const extraMentions = capabilitiesLoaded ? extras.map(toPluginMention) : extraPlugins ?? [];
-  const ideas: readonly IdeaKey[] = TYPE_IDEAS[type] ?? (starter && starter.name in IDEAS ? IDEAS[starter.name as keyof typeof IDEAS] : undefined) ?? GENERAL_IDEAS;
+  const ideas: readonly IdeaKey[] = !applicationComposition.game ? WORKSPACE_IDEAS : TYPE_IDEAS[type] ?? (starter && starter.name in IDEAS ? IDEAS[starter.name as keyof typeof IDEAS] : undefined) ?? GENERAL_IDEAS;
   // Plugins that add types are picked in the Type menu. The other plugins must suit this project's file type.
   const projectPlugins = projectPluginChoices.filter((plugin) => !plugin.providesTypes.length && pluginAppliesTo(plugin.appliesTo, projectFileTypeFor(type)));
   /** The prompt as sent: the chosen plugins in order, then the text with its own mentions and Skills. */
@@ -173,6 +175,10 @@ export function ProjectPromptCreator({ draftKey, placeholder, disabled: creating
 
   useEffect(() => {
     // A lead saved by the old composer that is not a starter belongs in the text.
+    if (!applicationComposition.game && selectedPlugin && STARTERS.includes(selectedPlugin.name)) {
+      setSelectedPlugin(undefined);
+      return;
+    }
     if (capabilitiesLoaded && selectedPlugin && !selectedStarter) {
       setPrompt(formatPluginInvocation(selectedPlugin, prompt));
       setSelectedPlugin(undefined);
