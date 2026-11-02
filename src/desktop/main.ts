@@ -1,17 +1,16 @@
+import { createDesktopBusiness, createDesktopAccount, rejectUnavailableDesktopCapabilities } from "./business-registration.js";
 import identity from "../../application-identity.cjs";
 import { randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
-import { createReadStream, mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { rmdir } from "node:fs/promises";
-import { Readable } from "node:stream";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, powerSaveBlocker, session, shell } from "electron";
 import { clipboardFilePaths, loadClipboardFiles } from "./file-clipboard.js";
 import { installExternalMcpLauncher, markExternalMcpApp } from "./external-mcp-install.js";
 import { DaemonSupervisor } from "./daemon-supervisor.js";
-import { isOAuthAuthorizationUrl, OAuthCallbackFlow } from "./oauth.js";
 import { setGlobalDispatcher } from "undici/index.js";
 import { SYSTEM_PROXY_TARGET } from "../shared/network-settings.js";
 import { createNetworkDispatcher } from "../daemon/proxy.js";
@@ -22,24 +21,15 @@ import { RotatingLogFile } from "./log-file.js";
 import { createLogRedactor } from "../shared/log-redaction.js";
 import { desktopDiagnosticsArchive } from "./diagnostics-export.js";
 import { recordConsole, recordUncaughtErrors, rendererConsoleLines, runtimeStateLine, updateFailureLine } from "./console-log.js";
-import { createDesktopWindow, fitPlaytestContentSize, isValidPlaytestViewport, waitForRenderer, windowsTitleBarOverlay } from "./window.js";
+import { createDesktopWindow, waitForRenderer, windowsTitleBarOverlay } from "./window.js";
 import { DesktopUpdatePreparationError, DesktopUpdater } from "./updater.js";
 import { DesktopUpdateCheckScheduler } from "./update-check-scheduler.js";
-import { ElectronPlaytestDriver } from "./playtest-driver.js";
-import { GameRecorder, type GameRecordingFile } from "./game-recorder.js";
-import { GAME_RECORDING_MAX_SECONDS, gameRecordingFileName, type GameRecordingSaved, type GameRecordingState } from "../shared/game-recording.js";
-import { WebGamePlayerWindows, type WebGamePlayerTarget } from "./web-game-player.js";
 import { RendererCloseRequest } from "./renderer-close.js";
-import { AsyncTaskPool } from "./async-task-pool.js";
 import { AgentNotifications, waitingDotBitmap } from "./agent-notifications.js";
 import { NotificationPermission } from "./notification-permission.js";
 import type { AgentNoticesResponse } from "../shared/agent-notices.js";
 import { parseAgentNotificationPreferences, parseAgentNotificationTarget, type AgentNotificationTarget } from "../shared/agent-notifications.js";
-import { isNodeGraph } from "../shared/playable-graph-validation.js";
-import type { NodeThumbnailResult, PlayableThumbnailSnapshot } from "../shared/playable-player-protocol.js";
 import { PROJECT_FILE_OPEN_MODES, type ProjectFileOpenMode } from "../shared/contracts.js";
-import type { PlaytestWatchState } from "../shared/playtest.js";
-import type { WebGamePlayerRequest, WebGamePreviewLayout } from "../shared/web-game-player.js";
 
 ignoreBrokenStdio();
 
@@ -67,53 +57,17 @@ mainLog.line(`${application.name} ${app.getVersion()} starting on ${process.plat
 // Windows shows notifications only for the app ID of the installer's Start menu shortcut, the `appId` in electron-builder.yml.
 if (process.platform === "win32") app.setAppUserModelId(application.desktopId);
 let mainWindow: BrowserWindow | undefined;
-const playtestWindows = new Map<string, BrowserWindow | Promise<BrowserWindow>>();
-/** A Node that fails to start never reports back; its window gives up after this. */
-const NODE_THUMBNAIL_TIMEOUT_MS = 20_000;
-const CANCELLED_THUMBNAIL: NodeThumbnailResult = { captured: false, error: "The capture was cancelled." };
-const nodeThumbnailCaptures = new AsyncTaskPool(2);
-const nodeThumbnailBatches = new Map<string, { projectId: string; controller: AbortController; requests: number; snapshot?: PlayableThumbnailSnapshot }>();
-/** Hidden Node thumbnail windows by WebContents ID. */
-const nodeThumbnails = new Map<number, { window: BrowserWindow; finish: (result: NodeThumbnailResult) => void; snapshot?: PlayableThumbnailSnapshot }>();
-/** Thumbnail windows run Node code, so they may only capture and report. */
-const NODE_THUMBNAIL_CHANNELS = new Set(["ohmygame:capture-page", "ohmygame:finish-node-thumbnail", "ohmygame:node-thumbnail-snapshot"]);
-
 function handle(channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void {
   ipcMain.handle(channel, (event, ...args) => {
-    if (nodeThumbnails.has(event.sender.id) && !NODE_THUMBNAIL_CHANNELS.has(channel)) {
-      throw new Error("Invalid thumbnail request");
-    }
+    business?.authorizeIpc(channel, event.sender);
     return listener(event, ...args);
   });
 }
-const rendererPage = (page: string) => useBuiltRenderer
-  ? pathToFileURL(path.join(moduleDirectory, "../renderer", page)).href
-  : new URL(page, `${developmentRendererUrl}/`).href;
-const gameRecorder = new GameRecorder({
-  hostUrl: rendererPage("game-recorder.html"),
-  preloadPath: path.join(moduleDirectory, "game-recorder-preload.cjs"),
-  save: saveGameRecording,
-  onSaving: (id) => {
-    // Agents' recordings are not announced. A person can stop one that is still starting.
-    if (gameRecordings.has(id) || gameRecordingStarts.has(id)) publishGameRecording({ projectId: id, status: "saving" });
-  },
+const business = createDesktopBusiness?.({
+  get mainWindow() { return mainWindow; },
+  get daemon() { return daemon; },
+  moduleDirectory, useBuiltRenderer, developmentRendererUrl, handle,
 });
-// Construct the game driver only after an authorized agent actually uses it.
-let agentPlaytests: ElectronPlaytestDriver | undefined;
-const agentPlaytestDriver = () => agentPlaytests ??= new ElectronPlaytestDriver((state) => {
-  mainWindow?.webContents.send("ohmygame:agent-playtest-state", state);
-}, undefined, gameRecorder);
-const webGamePlayers = new WebGamePlayerWindows((state) => {
-  mainWindow?.webContents.send("ohmygame:web-game-player-state", state);
-}, rendererPage("web-game-host.html"), (projectId) => {
-  if (gameRecorder.isRecording(projectId)) gameRecorder.stop(projectId);
-  else void startGameRecording(projectId).catch((cause: unknown) => {
-    publishGameRecording({ projectId, status: "idle", error: cause instanceof Error ? cause.message : String(cause) });
-  });
-});
-/** People's recordings, by project; an agent's belong to its playtest session. */
-const gameRecordings = new Map<string, GameRecordingState>();
-const gameRecordingStarts = new Set<string>();
 let quitting = false;
 let quitPending = false;
 let restartPending = false;
@@ -121,7 +75,8 @@ let rendererClose: RendererCloseRequest | undefined;
 let shutdown: Promise<void> | undefined;
 let updater: DesktopUpdater | undefined;
 let updateChecks: DesktopUpdateCheckScheduler | undefined;
-const oauth = new OAuthCallbackFlow(() => mainWindow?.webContents.send("ohmygame:auth-callback"));
+const account = createDesktopAccount?.({ handle, mainWindow: () => mainWindow });
+rejectUnavailableDesktopCapabilities(handle, { game: Boolean(business), account: Boolean(account) });
 const windowMenuLabels = new Set(["File", "Edit", "View", "Window"]);
 /** The conversation a clicked notification opens, kept until the main window takes it. */
 let notificationTarget: AgentNotificationTarget | undefined;
@@ -195,10 +150,8 @@ let clearExternalMcpApp: (() => Promise<void>) | undefined;
 async function stopServices(): Promise<void> {
   updateChecks?.stop();
   agentNotifications.stop();
-  webGamePlayers.close();
-  agentPlaytests?.close();
-  gameRecorder.close();
-  await Promise.all([daemon?.stop(), oauth.cancel()]);
+  business?.close();
+  await Promise.all([daemon?.stop(), account?.close()]);
   await clearExternalMcpApp?.().catch(() => undefined);
   await Promise.all([daemonLog.close(), mainLog.close()]);
 }
@@ -264,13 +217,6 @@ function executeFile(command: string, args: string[]): Promise<void> {
   });
 }
 
-handle("ohmygame:open-auth-url", async (_event, url: unknown) => {
-  if (typeof url !== "string" || !isOAuthAuthorizationUrl(url)) throw new Error("Invalid OAuth authorization URL");
-  await shell.openExternal(url);
-});
-handle("ohmygame:take-auth-callback", () => oauth.takeCallback());
-handle("ohmygame:auth-callback-url", () => oauth.callbackUrl());
-handle("ohmygame:cancel-auth", () => oauth.cancel());
 handle("ohmygame:clipboard-files", async (event) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Invalid clipboard source");
   const paths = await clipboardFilePaths(clipboard);
@@ -393,106 +339,10 @@ handle("ohmygame:select-project-directory", async (event) => {
 handle("ohmygame:capture-page", async (event, rectangle: unknown) => {
   const window = mainWindow && event.sender === mainWindow.webContents
     ? mainWindow
-    : nodeThumbnails.get(event.sender.id)?.window;
+    : business?.captureWindow(event.sender);
   if (!window) throw new Error("Invalid capture source");
   const bounds = captureBounds(rectangle, window.getContentBounds());
   return window.webContents.capturePage(bounds).then((image) => image.toPNG());
-});
-handle("ohmygame:prepare-node-thumbnails", (event, projectId: unknown, batchId: unknown, value: unknown) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Invalid thumbnail source");
-  const snapshot = value as PlayableThumbnailSnapshot | undefined;
-  if (!validRouteId(projectId) || !validRouteId(batchId) || nodeThumbnailBatches.has(batchId)
-    || !snapshot || typeof snapshot.version !== "string" || (snapshot.web !== undefined && snapshot.web !== true)
-    || snapshot.definition?.version !== 1 || typeof snapshot.definition.graphSignature !== "string"
-    || !isNodeGraph(snapshot.definition.graph) || !isSceneHashes(snapshot.definition.hashes)) {
-    throw new Error("Invalid thumbnail snapshot");
-  }
-  nodeThumbnailBatches.set(batchId, { projectId, snapshot, controller: new AbortController(), requests: 0 });
-});
-handle("ohmygame:node-thumbnail-snapshot", (event) => {
-  const thumbnail = nodeThumbnails.get(event.sender.id);
-  if (!thumbnail) throw new Error("Invalid thumbnail source");
-  return thumbnail.snapshot;
-});
-handle("ohmygame:capture-node-thumbnail", (event, projectId: unknown, nodeId: unknown, viewport: unknown, batchId: unknown) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Invalid thumbnail source");
-  if (!validRouteId(projectId) || !validRouteId(nodeId) || !isValidPlaytestViewport(viewport) || !validRouteId(batchId)) throw new Error("Invalid thumbnail target");
-  return scheduleNodeThumbnail(projectId, nodeId, viewport, batchId);
-});
-handle("ohmygame:cancel-node-thumbnails", (event, batchId: unknown) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents || !validRouteId(batchId)) throw new Error("Invalid thumbnail cancellation");
-  const batch = nodeThumbnailBatches.get(batchId);
-  batch?.controller.abort();
-  if (batch && !batch.requests) nodeThumbnailBatches.delete(batchId);
-});
-handle("ohmygame:finish-node-thumbnail", (event, captured: unknown, error: unknown) => {
-  nodeThumbnails.get(event.sender.id)?.finish(captured === true
-    ? { captured: true }
-    : { captured: false, error: typeof error === "string" && error ? error.slice(0, 500) : "The capture failed." });
-});
-handle("ohmygame:agent-playtest-state", (event): PlaytestWatchState => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Invalid Agent playtest source");
-  return agentPlaytests?.watchState() ?? { visible: false, activeSessions: 0 };
-});
-handle("ohmygame:set-agent-playtest-visible", (event, visible: unknown): PlaytestWatchState => {
-  if (!mainWindow || event.sender !== mainWindow.webContents || typeof visible !== "boolean") {
-    throw new Error("Invalid Agent playtest visibility");
-  }
-  return agentPlaytests?.setVisible(visible) ?? { visible: false, activeSessions: 0 };
-});
-handle("ohmygame:web-game-player-state", (event, projectId: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  return webGamePlayers.state(projectId);
-});
-handle("ohmygame:attach-web-game-preview", async (event, projectId: unknown, attachment: unknown, url: unknown, layout: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  await requireGameCapability(projectId);
-  if (!validRouteId(attachment) || typeof url !== "string" || url.length > 4_000) throw new Error("Invalid game preview target");
-  return webGamePlayers.attach(projectId, attachment, mainWindow!, url, requirePreviewLayout(layout), () => resolvePlayerTarget(projectId));
-});
-handle("ohmygame:layout-web-game-preview", (event, projectId: unknown, attachment: unknown, layout: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  if (!validRouteId(attachment)) throw new Error("Invalid game preview attachment");
-  webGamePlayers.layout(projectId, attachment, requirePreviewLayout(layout));
-});
-handle("ohmygame:detach-web-game-preview", (event, projectId: unknown, attachment: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  if (!validRouteId(attachment)) throw new Error("Invalid game preview attachment");
-  webGamePlayers.detach(projectId, attachment);
-});
-handle("ohmygame:capture-web-game-preview", (event, projectId: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  return webGamePlayers.capture(projectId);
-});
-handle("ohmygame:open-web-game-player", async (event, projectId: unknown, request: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  await requireGameCapability(projectId);
-  const input = request as Partial<WebGamePlayerRequest> | null;
-  if (!input || typeof input.path !== "string" || input.path.length > 2_000 || !isValidPlaytestViewport(input.viewport)) {
-    throw new Error("Invalid game player target");
-  }
-  return webGamePlayers.open(projectId, input as WebGamePlayerRequest, () => resolvePlayerTarget(projectId));
-});
-handle("ohmygame:close-web-game-player", (event, projectId: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  webGamePlayers.closeProject(projectId);
-});
-handle("ohmygame:refresh-web-game-player", (event, projectId: unknown, reload: unknown = false) => {
-  requirePlayerSource(event.sender, projectId);
-  if (typeof reload !== "boolean") throw new Error("Invalid game player refresh");
-  return webGamePlayers.refresh(projectId, () => resolvePlayerTarget(projectId), reload);
-});
-handle("ohmygame:start-game-recording", (event, projectId: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  return startGameRecording(projectId);
-});
-handle("ohmygame:stop-game-recording", (event, projectId: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  gameRecorder.stop(projectId);
-});
-handle("ohmygame:game-recording-state", (event, projectId: unknown) => {
-  requirePlayerSource(event.sender, projectId);
-  return gameRecordings.get(projectId) ?? { projectId, status: "idle" };
 });
 handle("ohmygame:runtime-state", (event) => {
   if (!BrowserWindow.fromWebContents(event.sender) || !daemon) throw new Error("Invalid background service source");
@@ -503,158 +353,6 @@ handle("ohmygame:restart-runtime", (event) => {
   return daemon.restart();
 });
 
-async function startGameRecording(projectId: string): Promise<void> {
-  await requireGameCapability(projectId);
-  // The button and the shortcut can both ask before the first has started.
-  if (gameRecordingStarts.has(projectId)) return;
-  gameRecordingStarts.add(projectId);
-  let outcome: Promise<GameRecordingSaved>;
-  try {
-    const { contents, title } = await webGamePlayers.recordingTarget(projectId);
-    ({ outcome } = await gameRecorder.start(projectId, contents, { title, maxSeconds: GAME_RECORDING_MAX_SECONDS }));
-  } catch (cause) {
-    if (gameRecordings.has(projectId)) publishGameRecording({ projectId, status: "idle" });
-    throw cause;
-  } finally {
-    gameRecordingStarts.delete(projectId);
-  }
-  if (gameRecordings.get(projectId)?.status !== "saving") {
-    publishGameRecording({ projectId, status: "recording", startedAt: Date.now(), maxSeconds: GAME_RECORDING_MAX_SECONDS });
-  }
-  webGamePlayers.setRecording(projectId, true);
-  void outcome.then(
-    (saved) => publishGameRecording({ projectId, status: "idle", saved }),
-    (cause: unknown) => publishGameRecording({ projectId, status: "idle", error: cause instanceof Error ? cause.message : String(cause) }),
-  ).finally(() => webGamePlayers.setRecording(projectId, false));
-}
-
-function publishGameRecording(state: GameRecordingState): void {
-  if (state.status === "idle") gameRecordings.delete(state.projectId);
-  else gameRecordings.set(state.projectId, state);
-  mainWindow?.webContents.send("ohmygame:game-recording-state", state);
-}
-
-/** Recordings go to the Library, where the trimmer can cut them down. */
-async function saveGameRecording(file: GameRecordingFile): Promise<GameRecordingSaved> {
-  if (!daemon) throw new Error("The game service is unavailable.");
-  const name = gameRecordingFileName(file.title, new Date(), file.extension);
-  const query = new URLSearchParams({ name, mediaType: file.mediaType, duration: file.duration.toFixed(3) });
-  const response = await fetch(`${daemon.runtime.url}/library/assets/upload?${query}`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${daemon.runtime.token}`, "content-type": "application/octet-stream" },
-    body: Readable.toWeb(createReadStream(file.path)) as ReadableStream,
-    duplex: "half",
-  } as RequestInit);
-  const asset = await response.json().catch(() => undefined) as { id?: string; error?: string; message?: string } | undefined;
-  if (!response.ok || !asset?.id) throw new Error(asset?.message ?? asset?.error ?? "The recording could not be saved to the Library.");
-  mainWindow?.webContents.send("ohmygame:game-recording-saved");
-  return { assetId: asset.id, name, duration: file.duration, bytes: file.bytes };
-}
-
-function requirePlayerSource(sender: Electron.WebContents, projectId: unknown): asserts projectId is string {
-  if (!mainWindow || sender !== mainWindow.webContents || !validRouteId(projectId) || !daemon) {
-    throw new Error("Invalid game player source");
-  }
-}
-
-function requirePreviewLayout(value: unknown): WebGamePreviewLayout {
-  const layout = value as Partial<WebGamePreviewLayout> | null;
-  const bounds = layout?.bounds;
-  if (!bounds || typeof layout.visible !== "boolean" ||
-      ![bounds.x, bounds.y, bounds.width, bounds.height].every((entry) => Number.isFinite(entry) && entry >= 0 && entry <= 32_768)) {
-    throw new Error("Invalid game preview bounds");
-  }
-  return layout as WebGamePreviewLayout;
-}
-
-async function requireGameCapability(projectId: string): Promise<void> {
-  if (!daemon) throw new Error("The game service is unavailable.");
-  const response = await fetch(`${daemon.runtime.url}/projects/${encodeURIComponent(projectId)}/game-capability`, {
-    headers: { authorization: `Bearer ${daemon.runtime.token}` },
-  });
-  const result = await response.json() as { enabled?: boolean };
-  if (!response.ok || result.enabled !== true) throw new Error("The game capability is disabled or unavailable for this workspace.");
-}
-
-async function resolvePlayerTarget(projectId: string): Promise<WebGamePlayerTarget> {
-  if (!daemon) throw new Error("The game service is unavailable.");
-  const headers = { authorization: `Bearer ${daemon.runtime.token}` };
-  const projectUrl = `${daemon.runtime.url}/projects/${encodeURIComponent(projectId)}`;
-  const current = await fetch(projectUrl, { headers });
-  const project = await current.json() as { error?: string; message?: string };
-  if (!current.ok) throw new Error(project.message ?? project.error ?? "The project could not be loaded.");
-  const version = current.headers.get("x-workspace-version") ?? "0";
-  const response = await fetch(`${projectUrl}/game/preview`, {
-    method: "POST", headers: { ...headers, "x-workspace-version": version },
-  });
-  const result = await response.json() as { url?: string; title?: string; error?: string; message?: string };
-  if (!response.ok || !result.url || !result.title) throw new Error(result.message ?? result.error ?? "The game server could not start.");
-  return { url: result.url, title: result.title };
-}
-
-handle("ohmygame:open-playtest", async (event, projectId: unknown, viewport: unknown) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Invalid playtest source");
-  if (!validRouteId(projectId) || !isValidPlaytestViewport(viewport) || !daemon) throw new Error("Invalid playtest target");
-  await requireGameCapability(projectId);
-  const size = fitPlaytestContentSize(viewport);
-  const aspectRatio = viewport.width / viewport.height;
-  const current = playtestWindows.get(projectId);
-  if (current) {
-    const existing = await current;
-    if (!existing.isDestroyed()) {
-      existing.setAspectRatio(aspectRatio);
-      existing.setContentSize(size.width, size.height);
-      existing.focus();
-      return;
-    }
-    playtestWindows.delete(projectId);
-  }
-  const opening = createDesktopWindow({
-    runtime: daemon.runtime,
-    preloadPath: path.join(moduleDirectory, "preload.cjs"),
-    rendererUrl: useBuiltRenderer ? undefined : developmentRendererUrl,
-    rendererFile: useBuiltRenderer ? path.join(moduleDirectory, "../renderer/index.html") : undefined,
-    rendererHash: `#/playtest/${encodeURIComponent(projectId)}`,
-    nativeTitleBar: true,
-    contentSize: size,
-    aspectRatio,
-    minWidth: Math.max(1, Math.round(size.width / 2)),
-    minHeight: Math.max(1, Math.round(size.height / 2)),
-  });
-  playtestWindows.set(projectId, opening);
-  try {
-    const playtest = await opening;
-    if (!mainWindow) {
-      playtest.close();
-      return;
-    }
-    playtestWindows.set(projectId, playtest);
-    playtest.once("closed", () => {
-      if (playtestWindows.get(projectId) === playtest) playtestWindows.delete(projectId);
-    });
-  } catch (error) {
-    if (playtestWindows.get(projectId) === opening) playtestWindows.delete(projectId);
-    throw error;
-  }
-});
-handle("ohmygame:open-playable-node", async (event, projectId: unknown, nodeId: unknown) => {
-  if (!validRouteId(projectId) || !validRouteId(nodeId)) throw new Error("Invalid Node target");
-  const playtest = await playtestWindows.get(projectId);
-  if (!playtest || playtest.isDestroyed() || event.sender !== playtest.webContents) throw new Error("Invalid Node source");
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("ohmygame:open-playable-node", projectId, nodeId);
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.focus();
-});
-handle("ohmygame:show-playtest-editor", async (event, projectId: unknown) => {
-  if (!validRouteId(projectId)) throw new Error("Invalid Playtest editor target");
-  const playtest = await playtestWindows.get(projectId);
-  if (!playtest || playtest.isDestroyed() || event.sender !== playtest.webContents) throw new Error("Invalid Playtest editor source");
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("ohmygame:show-playtest-editor", projectId);
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.focus();
-});
 handle("ohmygame:notification-preferences", (event, value: unknown) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Invalid notification source");
   const preferences = parseAgentNotificationPreferences(value);
@@ -816,25 +514,11 @@ try {
     healthTimeoutMs: 60_000,
     log: daemonLog,
     logDirectory,
-    handlePlaytestRequest: async (request, signal) => {
-      if (request.operation === "open") {
-        if (!validRouteId(request.projectId)) throw new Error("A game workspace is required for playtesting.");
-        await requireGameCapability(request.projectId);
-        signal?.throwIfAborted();
-        return agentPlaytestDriver().request(request, signal);
-      }
-      if (!agentPlaytests) {
-        if (request.operation === "closeAll") return { operation: "closeAll" };
-        throw new Error("The game playtest session is unavailable.");
-      }
-      return agentPlaytests.request(request, signal);
-    },
+    handlePlaytestRequest: business?.handlePlaytestRequest,
     onState: (state) => {
       mainLog.line(runtimeStateLine(state));
       if (state.status !== "ready") {
-        webGamePlayers.close();
-        agentPlaytests?.close();
-        gameRecorder.close();
+        business?.close();
       }
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) window.webContents.send("ohmygame:runtime-state", state);
@@ -884,7 +568,7 @@ async function openMainWindow(): Promise<void> {
         for (const line of rendererConsoleLines(details)) mainLog.line(line);
       });
       window.on("show", () => {
-        webGamePlayers.synchronize();
+        business?.synchronize();
         updateChecks?.onFocus();
       });
       window.on("focus", () => {
@@ -892,10 +576,10 @@ async function openMainWindow(): Promise<void> {
         if (process.platform !== "darwin") window.flashFrame(false);
         agentNotifications.focusChanged();
       });
-      window.on("hide", () => webGamePlayers.synchronize());
-      window.on("minimize", () => webGamePlayers.synchronize());
-      window.on("restore", () => webGamePlayers.synchronize());
-      window.on("resize", () => webGamePlayers.synchronize());
+      window.on("hide", () => business?.synchronize());
+      window.on("minimize", () => business?.synchronize());
+      window.on("restore", () => business?.synchronize());
+      window.on("resize", () => business?.synchronize());
       const close = new RendererCloseRequest(
         (id) => window.webContents.send("ohmygame:prepare-close", id),
         (id, error) => { if (!window.isDestroyed()) window.webContents.send("ohmygame:cancel-close", id, error); },
@@ -918,13 +602,7 @@ async function openMainWindow(): Promise<void> {
           agentNotifications.setView(null);
           setKeepAwake(false);
         }
-        webGamePlayers.close();
-        for (const playtest of playtestWindows.values()) {
-          void Promise.resolve(playtest).then((window) => window.close(), () => {});
-        }
-        playtestWindows.clear();
-        for (const batch of nodeThumbnailBatches.values()) batch.controller.abort();
-        for (const thumbnail of nodeThumbnails.values()) thumbnail.finish(CANCELLED_THUMBNAIL);
+        business?.closeWindow();
       });
     },
   });
@@ -967,78 +645,6 @@ function captureBounds(value: unknown, content: Electron.Rectangle): Electron.Re
     throw new Error("Invalid capture bounds");
   }
   return bounds;
-}
-
-async function scheduleNodeThumbnail(projectId: string, nodeId: string, viewport: { width: number; height: number }, batchId: string): Promise<NodeThumbnailResult> {
-  let batch = nodeThumbnailBatches.get(batchId);
-  if (!batch) {
-    batch = { projectId, controller: new AbortController(), requests: 0 };
-    nodeThumbnailBatches.set(batchId, batch);
-  } else if (batch.projectId !== projectId) throw new Error("Invalid thumbnail batch");
-  batch.requests += 1;
-  const signal = batch.controller.signal;
-  return nodeThumbnailCaptures.run(
-    async () => {
-      await requireGameCapability(projectId);
-      signal.throwIfAborted();
-      return captureNodeThumbnail(projectId, nodeId, viewport, signal, batch.snapshot);
-    }, signal,
-  ).catch((cause: unknown): NodeThumbnailResult => signal.aborted
-    ? CANCELLED_THUMBNAIL
-    : { captured: false, error: cause instanceof Error ? cause.message : String(cause) }).then((result) => {
-    // A cancelled capture says nothing about the Node; a failed one is kept for bug reports.
-    if (!result.captured && !signal.aborted) console.warn(`Node thumbnail "${nodeId}" was not captured: ${result.error}`);
-    return result;
-  }).finally(() => {
-    batch.requests -= 1;
-    if (!batch.requests) nodeThumbnailBatches.delete(batchId);
-  });
-}
-
-/**
- * Runs one Node in a hidden window. The page stores its own screenshot, with
- * the hash of what it ran, and then reports whether that worked, or why not.
- */
-async function captureNodeThumbnail(projectId: string, nodeId: string, viewport: { width: number; height: number }, signal: AbortSignal, snapshot?: PlayableThumbnailSnapshot): Promise<NodeThumbnailResult> {
-  if (!daemon || !mainWindow || signal.aborted) return CANCELLED_THUMBNAIL;
-  let finish!: (result: NodeThumbnailResult) => void;
-  const finished = new Promise<NodeThumbnailResult>((resolve) => { finish = resolve; });
-  const cancel = () => finish(CANCELLED_THUMBNAIL);
-  signal.addEventListener("abort", cancel, { once: true });
-  const timer = setTimeout(() => finish({ captured: false, error: `The Scene did not finish within ${NODE_THUMBNAIL_TIMEOUT_MS / 1000} seconds.` }), NODE_THUMBNAIL_TIMEOUT_MS);
-  let thumbnailWindow: BrowserWindow | undefined;
-  try {
-    const opening = createDesktopWindow({
-      runtime: daemon.runtime,
-      preloadPath: path.join(moduleDirectory, "preload.cjs"),
-      rendererUrl: useBuiltRenderer ? undefined : developmentRendererUrl,
-      rendererFile: useBuiltRenderer ? path.join(moduleDirectory, "../renderer/index.html") : undefined,
-      rendererHash: `#/thumbnail/${encodeURIComponent(projectId)}/${encodeURIComponent(nodeId)}`,
-      contentSize: fitPlaytestContentSize(viewport),
-      minWidth: 1,
-      minHeight: 1,
-      hidden: true,
-      beforeLoad: (window) => {
-        thumbnailWindow = window;
-        const id = window.webContents.id;
-        nodeThumbnails.set(id, { window, finish, snapshot });
-        window.once("closed", () => { nodeThumbnails.delete(id); finish({ captured: false, error: "The capture window closed." }); });
-      },
-    });
-    return await Promise.race([opening.then(() => finished), finished]);
-  } catch (cause) {
-    return { captured: false, error: cause instanceof Error ? cause.message : String(cause) };
-  } finally {
-    signal.removeEventListener("abort", cancel);
-    clearTimeout(timer);
-    if (thumbnailWindow && !thumbnailWindow.isDestroyed()) thumbnailWindow.destroy();
-  }
-}
-
-/** Each Scene's content hash, by Node ID, as the editor's build reports them. */
-function isSceneHashes(value: unknown): value is Record<string, string> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    && Object.values(value).every((hash) => typeof hash === "string" && /^[0-9a-f]{8,64}$/.test(hash));
 }
 
 /** `publisher/name`, encoded into the route. */

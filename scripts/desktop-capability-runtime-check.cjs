@@ -25,7 +25,7 @@ const deadline = setTimeout(() => {
 }, 120000);
 (async () => {
   await mkdir(directory, { recursive: true });
-  await import(pathToFileURL(path.join(root, "dist/desktop/main.js")).href);
+  await import(pathToFileURL(path.join(root, "dist/desktop/ohmygame-main.js")).href);
   let editor;
   await eventually(() => {
     editor = BrowserWindow.getAllWindows().find((w) =>
