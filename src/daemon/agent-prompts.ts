@@ -1,9 +1,10 @@
+import { storyCapabilityEnabled } from "../shared/project-runtime.js";
 import { workspaceHasModule } from "../shared/workspace-policy.js";
 import type { ProjectState } from "../shared/contracts.js";
 
 /** The parts of a project that change what the agent is told. */
 export type AgentPromptProject = Pick<ProjectState, "type"> &
-  Partial<Pick<ProjectState, "startupDirectory" | "startupScript" | "packageManager" | "workspaceLocation" | "webPreviewEnabled" | "pluginType" | "workspaceManifest" | "workspaceDiagnostics">>;
+  Partial<Pick<ProjectState, "startupDirectory" | "startupScript" | "packageManager" | "workspaceLocation" | "webPreviewEnabled" | "pluginType" | "workspaceManifest" | "workspaceDiagnostics" | "gameCapability" | "storyCapability">>;
 
 const COMMON_AGENT_INSTRUCTIONS = [
   "Do not create or change files for casual conversation or for questions that need no code.",
@@ -46,6 +47,10 @@ const INTERACTIVE_STORY_INSTRUCTIONS = [
 ] as const;
 
 export function appendSystemPromptForProject(project: AgentPromptProject): string[] {
+  if (project.type === "interactive-story" && !storyCapabilityEnabled(project)) return [
+    ...COMMON_AGENT_INSTRUCTIONS,
+    "The interactive-story module is unavailable. Preserve existing story files, graph.json, runtime files and instructions; do not upgrade, convert or execute the story. General workspace files, documents, tables, canvas and media remain usable. Ask the user to enable the module in the application to resume story editing and playback.",
+  ];
   const common = [...COMMON_AGENT_INSTRUCTIONS, ...(workspaceHasModule(project, "game") ? [
     "For game implementation, also read the main document if one is selected. For game work, identify reference mockups and production assets in canvas titles/descriptions. Record production assets' intended gameplay use in the design document; reference mockups do not fulfill those requirements. A game-creation request includes its needed media unless the user narrows the scope.",
   ] : [])];

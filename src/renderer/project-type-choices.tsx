@@ -25,8 +25,9 @@ export function isAppProjectType(value: string): value is ProjectType {
  * itself. `types` is undefined until they load, and stays so when loading
  * failed, so a plugin's type is never swapped for another one unseen.
  */
-export function usePluginProjectTypes(): { types?: AvailableProjectType[]; failed: boolean; retry: () => void } {
+export function usePluginProjectTypes(): { types?: AvailableProjectType[]; storyAvailable?: boolean; failed: boolean; retry: () => void } {
   const [types, setTypes] = useState<AvailableProjectType[]>();
+  const [storyAvailable, setStoryAvailable] = useState<boolean>();
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -34,11 +35,11 @@ export function usePluginProjectTypes(): { types?: AvailableProjectType[]; faile
     const named = new Set<string>(Object.values(PLUGIN_PROJECT_KINDS));
     setFailed(false);
     void listProjectTypes()
-      .then((all) => { if (active) setTypes(all.filter((type) => type.plugin && !named.has(type.id))); })
+      .then((all) => { if (active) { setTypes(all.filter((type) => type.plugin && !named.has(type.id))); setStoryAvailable(all.some((type) => type.id === "interactive-story")); } })
       .catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [attempt]);
-  return { types, failed, retry: () => setAttempt((value) => value + 1) };
+  return { types, storyAvailable, failed, retry: () => setAttempt((value) => value + 1) };
 }
 
 /** The enabled plugins a new project can turn on; `choices` is undefined until they load. */

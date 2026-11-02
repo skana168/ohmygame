@@ -10,6 +10,7 @@ import type {
 } from "../shared/playtest.js";
 import type { ToolContribution } from "./tool-contributions.js";
 import {
+  storyCapabilityEnabled,
   buildsWebPreview,
   gameCapabilityEnabled,
   supportsWebPreview,
@@ -60,7 +61,7 @@ export function createStoryToolContribution(
 }
 
 export function createStoryTools(project: ProjectState): PiToolDefinition[] {
-  return project.type === "interactive-story"
+  return storyCapabilityEnabled(project)
     ? [
         defineTool({
           name: "playable_add_node",

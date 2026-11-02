@@ -84,3 +84,32 @@ Existing root and canvas `AGENTS.md` files are preserved. A previously authored
 instruction can still contain domain-specific guidance; selecting modules does
 not rewrite user instructions. Restart to load deliberate manifest repairs or
 changes; the creation API does not replace an existing declaration.
+
+## Optional interactive stories
+
+The `interactive-story` business module owns Story editing, graph/codebase APIs,
+Scene templates, validation, runtime startup and story agent guidance. Select it
+alongside its `game` dependency in `workspace.json`. Application composition uses
+the existing `businessTools.story` flag and `workspaceModules` registry; there is
+no separate editor selection switch. Omitted host flags retain OhMyGame defaults.
+The game playtesting flag remains independent: disabling `businessTools.game`
+removes game playtest tools without removing story authoring tools.
+
+Daemon project responses expose the effective `storyCapability`. When unavailable,
+a saved story opens with a diagnostic and shared Chat, Canvas, Code and Assets
+panels, without mounting the Story editor or starting its runtime. Direct story
+APIs, upgrade, thumbnails, story preview/build/publish operations and story
+example creation/play cannot bypass the selection. Story tools remain selected
+through the common catalog boundary. Blank story creation and Scene templates
+are unavailable when the host excludes stories.
+
+Loading or importing an unavailable story retains its saved graph, sources,
+schemas, runtime and instructions. Import skips story resource refresh, and
+forced Library deletion is blocked if it would rewrite an unavailable story's
+references. Restore the module (or deliberately repair the declaration) and
+restart to resume editing, validation and playback. Existing instructions are
+preserved, so they can still describe story work even while the host rejects it.
+Generic workspace files, documents, tables, canvas and configured media operations
+remain available. Full build/resource exclusion from the exported template is a
+separate step; this boundary does not remove story source from the application
+bundle.

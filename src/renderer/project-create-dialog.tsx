@@ -94,9 +94,9 @@ export function ProjectCreateDialog({
     mentions.some((mention) => mention.name === plugin.name && mention.marketplaceId === plugin.marketplaceId),
   );
   // Types the mentioned plugins can work in; a plugin that names no types fits all of them.
-  const types = PROJECT_TYPES.filter(({ value }) => pluginProjectType(value, referenced) === value);
-  // Plugins' own types, unless a mentioned plugin works only in some of the app's.
   const installedPluginTypes = usePluginProjectTypes();
+  const types = PROJECT_TYPES.filter(({ value }) => (value !== "interactive-story" || installedPluginTypes.storyAvailable !== false) && pluginProjectType(value, referenced) === value);
+  // Plugins' own types, unless a mentioned plugin works only in some of the app's.
   const offersPluginTypes = referenced.every((plugin) => !plugin.projectTypes?.length);
   const pluginTypes = offersPluginTypes ? installedPluginTypes.types ?? [] : [];
   const offered = (value: string | undefined): value is string =>

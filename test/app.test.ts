@@ -587,6 +587,74 @@ describe("daemon", () => {
     await rm(workspacePath, { recursive: true, force: true });
   });
 
+  it.each(["host", "workspace", "unavailable"])("preserves stories and guards direct operations when the story module is disabled: %s", async (disabled) => {
+    const directory = await mkdtemp(path.join(tmpdir(), "optional-story-"));
+    const first = createApp({ dataDirectory: directory });
+    const created = await first.inject({ method: "POST", url: "/projects", payload: { type: "interactive-story" } });
+    expect(created.statusCode, created.body).toBe(201);
+    const project = created.json();
+    // Legacy projects keep working without a declaration; disabled hosts must not upgrade them.
+    await rm(path.join(project.workspacePath, "workspace.json"));
+    const graph = await readFile(path.join(project.workspacePath, "graph.json"), "utf8");
+    const instructions = await readFile(path.join(project.workspacePath, "AGENTS.md"), "utf8");
+    await first.close();
+    if (disabled === "workspace") await writeFile(path.join(project.workspacePath, "workspace.json"), JSON.stringify({ version: 1, modules: [{ id: "game", config: {} }] }));
+    const app = createApp({ dataDirectory: directory,
+      ...(disabled === "host" ? { businessTools: { story: false } } : {}),
+      ...(disabled === "unavailable" ? { workspaceModules: [{ id: "game", configSchema: { type: "object" } }] } : {}),
+    });
+    apps.push(app);
+    const reopened = (await app.inject(`/projects/${project.id}`)).json();
+    expect(reopened.storyCapability).toBe(false);
+    expect(reopened.workspaceDiagnostics.join(" ")).toMatch(/story|interactive-story/i);
+    const base = `/projects/${project.id}`;
+    for (const [method, suffix, payload] of [
+      ["GET", "/playable", undefined], ["GET", "/playable/codebase", undefined],
+      ["PUT", "/playable/codebase", { revision: "old" }], ["GET", "/playable/validation", undefined],
+      ["GET", "/playable/thumbnails", undefined], ["GET", "/playable/thumbnails/start", undefined],
+      ["POST", "/playable/nodes", { preset: "blank", id: "blocked" }],
+      ["GET", "/interactive-story/upgrade", undefined], ["POST", "/interactive-story/upgrade", undefined],
+      ["POST", "/interactive-story/library-media", undefined], ["POST", "/preview", undefined],
+      ["POST", "/game/preview", undefined],
+    ] as const) {
+      const response = await app.inject({ method, url: base + suffix, payload });
+      expect(response.statusCode, `${suffix}: ${response.body}`).toBe(409);
+      expect(response.json().error).toMatch(/story|interactive-story/i);
+    }
+    expect((await app.inject(`${base}/canvas/workspace`)).statusCode).toBe(200);
+    expect(await readFile(path.join(project.workspacePath, "graph.json"), "utf8")).toBe(graph);
+    expect(await readFile(path.join(project.workspacePath, "AGENTS.md"), "utf8")).toBe(instructions);
+  });
+
+  it("imports an unavailable story without refreshing its saved instructions or runtime", async () => {
+    const first = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "story-export-")) });
+    apps.push(first);
+    const project = (await first.inject({ method: "POST", url: "/projects", payload: { type: "interactive-story" } })).json();
+    await writeFile(path.join(project.workspacePath, "AGENTS.md"), "My saved story instructions\n");
+    await writeFile(path.join(project.workspacePath, "story/story-web/runtime.js"), "// My saved runtime\n");
+    await writeFile(path.join(project.workspacePath, "schemas/graph.schema.json"), "{\"saved\":true}\n");
+    const archive = await first.inject({ method: "POST", url: `/projects/${project.id}/export` });
+    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "story-import-")), businessTools: { story: false } });
+    apps.push(app);
+    const imported = await app.inject({ method: "POST", url: "/projects/import", headers: { "content-type": "application/vnd.ohmygame.project-archive" }, payload: archive.rawPayload });
+    expect(imported.statusCode, imported.body).toBe(201);
+    expect(imported.json().storyCapability).toBe(false);
+    expect(await readFile(path.join(imported.json().workspacePath, "schemas/graph.schema.json"), "utf8")).toBe("{\"saved\":true}\n");
+    expect(await readFile(path.join(imported.json().workspacePath, "AGENTS.md"), "utf8")).toBe("My saved story instructions\n");
+    expect(await readFile(path.join(imported.json().workspacePath, "story/story-web/runtime.js"), "utf8")).toBe("// My saved runtime\n");
+  });
+
+  it("does not initialize story resources into a folder whose declaration excludes stories", async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), "story-excluded-folder-"));
+    await writeFile(path.join(workspacePath, "workspace.json"), JSON.stringify({ version: 1, modules: [] }));
+    await writeFile(path.join(workspacePath, "notes.txt"), "Keep my workspace");
+    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "story-excluded-data-")) });
+    apps.push(app);
+    const response = await app.inject({ method: "POST", url: "/projects", payload: { type: "interactive-story", workspacePath } });
+    expect(response.statusCode, response.body).toBe(409);
+    expect((await readdir(workspacePath)).sort()).toEqual(["notes.txt", "workspace.json"]);
+  });
+
   it("keeps asset canvases outside game ownership", async () => {
     const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-asset-capability-")) });
     apps.push(app);
@@ -906,6 +974,24 @@ describe("daemon", () => {
     expect(missing.statusCode).toBe(404);
     const blocked = await app.inject({ method: "DELETE", url: `/library/assets/${asset.id}` });
     expect(blocked.statusCode).toBe(409);
+  });
+
+  it("preserves story references when forced Library deletion would require an unavailable module", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "story-library-preservation-"));
+    const first = createApp({ dataDirectory: directory });
+    const project = (await first.inject({ method: "POST", url: "/projects", payload: { type: "interactive-story" } })).json();
+    await writeFile(path.join(project.workspacePath, "opening.mp4"), "video bytes");
+    const asset = await saveProjectAsset(first, project.id, "opening.mp4");
+    await useLibraryAssetInGraph(first, project.id, "opening", "video", asset.id);
+    const graph = await readFile(path.join(project.workspacePath, "graph.json"), "utf8");
+    await first.close();
+    const app = createApp({ dataDirectory: directory, businessTools: { story: false } });
+    apps.push(app);
+    const removed = await app.inject({ method: "DELETE", url: `/library/assets/${asset.id}?force=true` });
+    expect(removed.statusCode, removed.body).toBe(409);
+    expect(removed.json().error).toMatch(/interactive-story/);
+    expect(await readFile(path.join(project.workspacePath, "graph.json"), "utf8")).toBe(graph);
+    expect((await app.inject(`/library/assets/${asset.id}/content`)).statusCode).toBe(200);
   });
 
   it("blocks Library deletion when an Interactive Story document cannot be verified", async () => {

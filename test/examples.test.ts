@@ -68,6 +68,15 @@ async function startApp(examplesDirectory?: string) {
 }
 
 describe("examples", () => {
+  it("omits story examples and rejects direct creation and play without the module", async () => {
+    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "optional-story-examples-")), examplesDirectory: await writeExamples(), businessTools: { story: false } });
+    apps.push(app);
+    expect((await app.inject("/examples")).json().map((example: { id: string }) => example.id)).toEqual(["pond"]);
+    expect((await app.inject({ method: "POST", url: "/examples/train/play" })).statusCode).toBe(409);
+    expect((await app.inject({ method: "POST", url: "/projects", payload: { exampleId: "train" } })).statusCode).toBe(409);
+    expect((await app.inject("/projects")).json()).toEqual([]);
+  });
+
   it("retains an explicit module declaration when copying an example", async () => {
     const app = await startApp(await writeExamples());
     const workspaceManifest = { version: 1, modules: [] };

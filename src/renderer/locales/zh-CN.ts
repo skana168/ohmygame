@@ -1,6 +1,7 @@
 import type en from "./en.js";
 
 const zhCN: typeof en = {
+  storyModule: { unavailable: "此工作区未启用互动故事模块。已保存的故事文件会保留。启用 interactive-story 模块后即可编辑和播放故事。文件、画布和媒体功能仍然可用。" },
   customCanvas: { note: "示例便笺", done: "完成", missing: "恢复模块 {{module}}/{{kind}} 后可编辑此节点。已保存的数据会保留。", invalid: "{{module}}/{{kind}} 数据无效。请修复保存的数据；内容会保留。" },
   audioStudio: {
     speechOptions: "语音选项",

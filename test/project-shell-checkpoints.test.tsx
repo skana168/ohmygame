@@ -247,6 +247,18 @@ async function click(name: string) {
 }
 
 describe("project shell layout", () => {
+  it("shows a preserved-story diagnostic and shared panels without starting the Story editor", async () => {
+    vi.doMock(CODING_WORKSPACE, () => ({ CodingWorkspace: () => <div>Shared workspace</div> }));
+    const daemon = await openProject((route) => route === "/projects/project" ? Response.json({
+      id: "project", name: "Saved story", type: "interactive-story", storyCapability: false,
+      workspacePath: "/tmp/project", updatedAt: new Date(0).toISOString(), preview: { status: "stopped" },
+    }) : undefined);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Your saved story files are preserved");
+    expect([...container.querySelectorAll(".dock-tab-label")].map((tab) => tab.textContent)).toEqual(expect.arrayContaining(["Chat", "Canvas", "Code", "Assets"]));
+    expect([...container.querySelectorAll(".dock-tab-label")].map((tab) => tab.textContent)).not.toContain("Story");
+    expect(daemon.requests.some((request) => /playable|interactive-story/.test(request.route))).toBe(false);
+  });
+
   it("opens the design route on the canvas panel and keeps a closed chat closed across project updates", async () => {
     vi.doMock(CODING_WORKSPACE, () => ({ CodingWorkspace: () => null }));
     const daemon = await openProject(() => undefined, detail("live-turn"), {

@@ -36,7 +36,7 @@ import { AgentNoticeLog } from "./agent-notices.js";
 import { diagnosticSection, registerDiagnosticsRoutes } from "./diagnostics.js";
 import { AGENT_REASONING_LEVELS, IMAGE_ASPECT_RATIOS, IMAGE_MAX_REFERENCE_IMAGES, IMAGE_OUTPUT_COUNTS, IMAGE_RESOLUTIONS, IMAGE_SIZES, PROJECT_TYPE_IDS, PREVIEW_VIEWPORTS, TOOL_IDS, VIDEO_ASPECT_RATIOS, VIDEO_RESOLUTIONS, type AgentContextUsage, type AgentModelRef, type AgentReasoningLevel, type AnswerQuestionnaireRequest, type AssetCanvasTextGenerationRequest, type ConversationAgentSettings, type ConversationCapabilities, type ConversationDetail, type CreateConversationRequest, type CreateProjectRequest, type MediaModelDefaults, type ProjectAppearance, type ProjectRunSettings, type ProjectState, type PromptImage, type PromptRequest, type PublishProjectRequest, type RenameConversationRequest, type ReviseLastPromptRequest, type RunToolRequest, type RunVideoToolRequest, type RuntimeEvent, type SetConversationModelRequest, type SetConversationReasoningRequest, type UpdateAgentDefaultsRequest } from "../shared/contracts.js";
 import { findAgentModel, preferredAgentModel } from "../shared/agent-models.js";
-import { gameCapabilityEnabled, appWidePluginSuits, buildsWebPreview, isWebRuntimeProjectType, PLUGIN_PROJECT_KINDS, pluginAppliesTo, supportsWebPreview, webPreviewSettingsChanged } from "../shared/project-runtime.js";
+import { storyCapabilityEnabled, gameCapabilityEnabled, appWidePluginSuits, buildsWebPreview, isWebRuntimeProjectType, PLUGIN_PROJECT_KINDS, pluginAppliesTo, supportsWebPreview, webPreviewSettingsChanged } from "../shared/project-runtime.js";
 import { groupThreadItems } from "../shared/turns.js";
 import { RuntimeEventBus } from "../shared/events.js";
 import { EXAMPLE_ID_PATTERN } from "../shared/examples.js";
@@ -608,8 +608,16 @@ const CHECKPOINT_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export function createApp(options: AppOptions = {}) {
   const gameHostEnabled = options.businessTools?.game !== false &&
     (options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES).some((module) => module.id === "game");
-  const gameEnabled = (project: ProjectState) => gameCapabilityEnabled(project, gameHostEnabled);
-  const projectResponse = (project: ProjectState) => ({ ...project, gameCapability: gameEnabled(project) });
+  const storyHostEnabled = options.businessTools?.story !== false &&
+    (options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES).some((module) => module.id === "interactive-story");
+  const storyEnabled = (project: ProjectState) => storyCapabilityEnabled(project, storyHostEnabled);
+  const gameEnabled = (project: ProjectState) => gameCapabilityEnabled(project, gameHostEnabled) &&
+    (project.type !== "interactive-story" || storyEnabled(project));
+  const storyUnavailable = "The interactive-story module is unavailable for this workspace. Saved story files are preserved; enable the module to edit or run them.";
+  const projectResponse = (project: ProjectState) => ({ ...project, gameCapability: gameEnabled(project), storyCapability: storyEnabled(project),
+    ...(project.type === "interactive-story" && !storyEnabled(project)
+      ? { workspaceDiagnostics: [...(project.workspaceDiagnostics ?? []), storyUnavailable] } : {}),
+  });
   const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const dataDirectory = options.dataDirectory ?? path.join(repositoryRoot, ".data");
   const piAgentDirectory = options.piAgentDirectory ?? process.env.PI_CODING_AGENT_DIR ?? path.join(dataDirectory, "pi-agent");
@@ -642,6 +650,7 @@ export function createApp(options: AppOptions = {}) {
     publish: (project, state) => events.publish(project.id, "preview.tuning", state),
   });
   const previews = new PreviewManager(events, {
+    storyEnabled,
     tuning: {
       refresh: async (project) => { if (gameEnabled(project)) await gameTuning.refresh(project); },
       setConnected: (project, connected) => { if (gameEnabled(project)) gameTuning.setConnected(project, connected); },
@@ -915,7 +924,7 @@ export function createApp(options: AppOptions = {}) {
       webSearch.enabled() ? (input, signal) => webSearch.search(conversation.summary.id, input, signal) : undefined,
       canvasStore,
       options.toolContributions?.(project),
-      { ...options.businessTools, game: gameHostEnabled },
+      { ...options.businessTools, game: gameHostEnabled, story: storyHostEnabled },
     )];
   };
   const conversationAgentTools = async (project: ProjectState, conversation: StoredConversation) => composeToolContributions([
@@ -923,6 +932,7 @@ export function createApp(options: AppOptions = {}) {
     { id: "plugins", tools: await pluginServices.agentTools(project.workspacePath) },
   ]);
   const playtestTarget = async (project: ProjectState, manual = false): Promise<GameUseOpenTarget> => {
+    if (project.type === "interactive-story" && !storyEnabled(project)) throw new Error(storyUnavailable);
     if (!gameEnabled(project)) throw new Error("The game capability is disabled for this workspace.");
     // A story plays its own page, which one made before web stories has once the editor upgrades it.
     if (project.type === "interactive-story" && !await isWebStory(project.workspacePath))
@@ -943,7 +953,7 @@ export function createApp(options: AppOptions = {}) {
       return createAgentTools(
         project, tools, projects, undefined, undefined,
         playtest ? { driver: playtest, resolveOpenTarget: () => playtestTarget(project) } : undefined,
-        undefined, canvasStore, options.toolContributions?.(project), { ...options.businessTools, game: gameHostEnabled },
+        undefined, canvasStore, options.toolContributions?.(project), { ...options.businessTools, game: gameHostEnabled, story: storyHostEnabled },
       );
     },
     // An outside agent's call isn't part of an OhMyGame turn, so it is a change of its own.
@@ -960,7 +970,7 @@ export function createApp(options: AppOptions = {}) {
       // full game_use input is listed; a story's own game_use accepts a subset.
       const placeholder: ProjectState = { id: "", name: "", type: "interactive-story", updatedAt: "", workspacePath: "", preview: { status: "stopped" } };
       return [
-        ...createAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore, options.toolContributions?.(placeholder), { ...options.businessTools, game: gameHostEnabled }),
+        ...createAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore, options.toolContributions?.(placeholder), { ...options.businessTools, game: gameHostEnabled, story: storyHostEnabled }),
         ...(!gameHostEnabled ? [] : [createGameUseTool(options.playtestDriver ?? UNAVAILABLE_GAME_RUNTIME, () => playtestTarget(placeholder))]),
       ];
     },
@@ -1017,7 +1027,7 @@ export function createApp(options: AppOptions = {}) {
       saveGeneratedImage: (fileName, bytes, prompt) => projects.addGeneratedAsset(project.id, fileName, bytes, { prompt }),
       pluginMcp: { config: effectiveMcp, host: pluginMcpHost, agentDir: piAgentDirectory, guard: projectMcpGuard(project, effectiveMcp) },
       skillDirectories: [...pluginSkillFolders(pluginSkills), ...ownSkills],
-      instructions: appendSystemPromptForProject(project).join("\n\n"),
+      instructions: appendSystemPromptForProject(projectResponse(project)).join("\n\n"),
       snapshotBeforeMessage: () => snapshotWorkspace(project),
       turnNotice: () => readWorkspaceNotice(project),
       requestApproval: (details, toolCallId, signal) => agents.askApproval(project.id, conversation.summary.id, toolCallId, details, signal),
@@ -1048,7 +1058,7 @@ export function createApp(options: AppOptions = {}) {
       }
       const effectiveMcp = await projectMcp(project);
       return createPiSession(
-        project,
+        projectResponse(project),
         conversations.open(project, conversation),
         await conversationAgentTools(project, conversation),
         modelRuntime,
@@ -1621,6 +1631,7 @@ export function createApp(options: AppOptions = {}) {
   });
   registerStoryWebRoutes(app, {
     projects, agents, writes: projectWrites, checkpoints, snapshot: snapshotWorkspace, library, events,
+    enabled: storyEnabled,
     busy: (id) => publishing.has(id) || canvasStore.isProjectBusy(id) || tools.jobs().some((job) => job.context?.projectId === id && job.status === "running"),
   });
 
@@ -1781,6 +1792,7 @@ export function createApp(options: AppOptions = {}) {
 
   app.post<{ Body: CreateProjectRequest }>("/projects", { schema: createProjectSchema }, async (request, reply) => {
     try {
+      let creationManifest = request.body?.workspaceManifest;
       if (request.body?.workspaceManifest !== undefined) {
         try { validateWorkspaceManifest(request.body.workspaceManifest, options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES); }
         catch (cause) { throw new ProjectWorkspaceError((cause as Error).message); }
@@ -1789,12 +1801,15 @@ export function createApp(options: AppOptions = {}) {
         try {
           const storedManifest = await readWorkspaceManifest(request.body.workspacePath);
           if (storedManifest !== undefined) {
-            validateWorkspaceManifest(storedManifest, options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES);
+            creationManifest = validateWorkspaceManifest(storedManifest, options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES);
             if (request.body.workspaceManifest && !isDeepStrictEqual(storedManifest, request.body.workspaceManifest)) throw new ProjectWorkspaceError("workspace.json already exists; creation cannot replace its module selection");
           }
         } catch (cause) { throw new ProjectWorkspaceError(`workspace.json: ${(cause as Error).message}`); }
       }
       if (request.body?.exampleId) {
+        const example = examples.list().find((entry) => entry.id === request.body.exampleId);
+        if (example?.type === "interactive-story" && !storyCapabilityEnabled({ type: example.type, workspaceManifest: creationManifest }, storyHostEnabled))
+          return reply.code(409).send({ error: storyUnavailable });
         if (request.body.viewport) {
           return reply.code(400).send({ error: "Examples define their own viewport" });
         }
@@ -1851,6 +1866,8 @@ export function createApp(options: AppOptions = {}) {
         return reply.code(201).send(projectResponse(project));
       }
       const type = request.body?.type ?? "web-game";
+      if (type === "interactive-story" && !storyCapabilityEnabled({ type, workspaceManifest: creationManifest }, storyHostEnabled))
+        return reply.code(409).send({ error: storyUnavailable });
       const project = await projects.create(request.body?.name, type, request.body?.workspacePath, undefined, request.body?.workspaceManifest);
       if (project.type === "interactive-story") {
         try {
@@ -1934,14 +1951,16 @@ export function createApp(options: AppOptions = {}) {
     });
   });
 
-  app.get("/examples", async () => examples.list());
+  app.get("/examples", async () => examples.list().filter((example) => example.type !== "interactive-story" || storyHostEnabled));
 
   // Core project types and those installed plugins contribute.
   app.get<{ Querystring: { locale?: string } }>("/project-types", async (request) =>
-    availableProjectTypes(pluginServices, request.query.locale === "zh-CN" ? "zh-CN" : "en"));
+    availableProjectTypes(pluginServices, request.query.locale === "zh-CN" ? "zh-CN" : "en").then((types) => types.filter((type) => type.id !== "interactive-story" || storyHostEnabled)));
 
   app.post<{ Params: { exampleId: string } }>("/examples/:exampleId/play", async (request, reply) => {
     if (!gameHostEnabled) return reply.code(409).send({ error: "The game capability is disabled for this application." });
+    if (!storyHostEnabled && examples.list().some((example) => example.id === request.params.exampleId && example.type === "interactive-story"))
+      return reply.code(409).send({ error: storyUnavailable });
     try {
       return { url: await examples.playUrl(request.params.exampleId) };
     } catch (cause) {
@@ -1957,6 +1976,15 @@ export function createApp(options: AppOptions = {}) {
     reply.header("cache-control", "no-store");
     reply.header("x-content-type-options", "nosniff");
     return reply.send(cover);
+  });
+
+  app.addHook("preHandler", async (request, reply) => {
+    const route = request.routeOptions.url ?? "";
+    const storyOperation = route.startsWith("/projects/:projectId/playable") || route.startsWith("/projects/:projectId/interactive-story");
+    const execution = ["/preview", "/game/preview", "/build", "/publish"].some((suffix) => route === `/projects/:projectId${suffix}`);
+    const project = projects.get((request.params as { projectId?: string }).projectId ?? "");
+    if (project?.type === "interactive-story" && (storyOperation || execution) && !storyEnabled(project))
+      return reply.code(409).send({ error: storyUnavailable });
   });
 
   app.get<{ Params: { projectId: string } }>("/projects/:projectId/playable", async (request, reply) => {
@@ -2029,6 +2057,7 @@ export function createApp(options: AppOptions = {}) {
   app.get<{ Params: { projectId: string } }>("/projects/:projectId/playable/thumbnails", async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });
+    if (!storyEnabled(project)) return reply.code(409).send({ error: storyUnavailable });
     try {
       return { thumbnails: await listPlayableThumbnails(project.workspacePath) };
     } catch (cause) {
@@ -2039,6 +2068,7 @@ export function createApp(options: AppOptions = {}) {
   app.get<{ Params: { projectId: string; nodeId: string } }>("/projects/:projectId/playable/thumbnails/:nodeId", async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });
+    if (!storyEnabled(project)) return reply.code(409).send({ error: storyUnavailable });
     try {
       const image = await readPlayableThumbnail(project.workspacePath, request.params.nodeId);
       if (!image) return reply.code(404).send({ error: "Thumbnail not found" });
@@ -2075,13 +2105,16 @@ export function createApp(options: AppOptions = {}) {
     }
   });
 
-  app.get("/playable/presets", async () => ({
-    presets: PLAYABLE_PRESETS.map((preset) => ({
-      id: preset.id,
-      label: preset.label,
-      summary: preset.summary,
-    })),
-  }));
+  app.get("/playable/presets", async (_request, reply) => {
+    if (!storyHostEnabled) return reply.code(409).send({ error: storyUnavailable });
+    return {
+      presets: PLAYABLE_PRESETS.map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        summary: preset.summary,
+      })),
+    };
+  });
 
   app.post<{ Params: { projectId: string }; Body: AddPlayableNodeRequest }>("/projects/:projectId/playable/nodes", {
     schema: {
@@ -2306,7 +2339,7 @@ export function createApp(options: AppOptions = {}) {
         : undefined;
     if (!upload) return reply.code(400).send({ error: "Choose a project archive to import." });
     try {
-      const imported = await importProjectArchive(projects, upload, { name: request.query.name });
+      const imported = await importProjectArchive(projects, upload, { name: request.query.name, storyEnabled });
       return reply.code(201).send(projectResponse(projects.get(imported.id) ?? imported));
     } catch (cause) {
       if (cause instanceof ProjectArchiveError) return reply.code(cause.statusCode).send({ error: cause.message });
@@ -2354,7 +2387,7 @@ export function createApp(options: AppOptions = {}) {
 
   if (allowCommunity && publisher) registerCommunityRoutes(app, publisher, projects);
 
-  registerLibraryRoutes(app, { projects, library });
+  registerLibraryRoutes(app, { projects, library, referenceRemovalError: (project) => project.type === "interactive-story" && !storyEnabled(project) ? storyUnavailable : undefined });
 
   app.get<{ Params: { projectId: string } }>("/projects/:projectId", async (request, reply) => {
     const project = projects.get(request.params.projectId);

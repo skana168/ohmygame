@@ -1,3 +1,4 @@
+import { storyCapabilityEnabled } from "../shared/project-runtime.js";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -358,6 +359,7 @@ export async function importProjectArchive(
     /** Names a project from an archive without a manifest, usually after its file. */
     name?: string;
     limits?: ProjectArchiveLimits;
+    storyEnabled?: (project: ProjectState) => boolean;
   } = {},
 ): Promise<ProjectState> {
   const limits = options.limits ?? DEFAULT_LIMITS;
@@ -419,7 +421,7 @@ export async function importProjectArchive(
   }
   try {
     // Agent instructions and schemas follow this app version, not the archive.
-    if (project.type === "interactive-story") {
+    if ((options.storyEnabled ?? storyCapabilityEnabled)(project)) {
       await ensureNodeCodebaseContract(project.workspacePath);
     }
     if (cover) await projects.setCover(project.id, cover.contents, cover.mode);

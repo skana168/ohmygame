@@ -88,12 +88,13 @@ export function ProjectPromptCreator({ draftKey, placeholder, disabled: creating
     .filter((plugin) => STARTERS.includes(plugin.name))
     .sort((left, right) => STARTERS.indexOf(left.name) - STARTERS.indexOf(right.name));
   const pickable = allStarters;
-  const { types: loadedPluginTypes, failed: pluginTypesFailed, retry: retryPluginTypes } = usePluginProjectTypes();
+  const { types: loadedPluginTypes, failed: pluginTypesFailed, retry: retryPluginTypes, storyAvailable } = usePluginProjectTypes();
   const pluginTypes = loadedPluginTypes ?? [];
   // A plugin's type stays chosen only while its plugin is installed and enabled;
   // until plugins and their types load, sending waits rather than sending another type.
   const typePending = !isAppProjectType(savedType) && loadedPluginTypes === undefined;
-  const type = isAppProjectType(savedType) || typePending || pluginTypes.some((option) => option.id === savedType) ? savedType : DEFAULT_TYPE;
+  const type = savedType === "interactive-story" && storyAvailable === false ? DEFAULT_TYPE
+    : isAppProjectType(savedType) || typePending || pluginTypes.some((option) => option.id === savedType) ? savedType : DEFAULT_TYPE;
   const projectType = type;
   const { choices: loadedPluginChoices, failed: pluginChoicesFailed, retry: retryPluginChoices } = useProjectPluginChoices();
   const projectPluginChoices = loadedPluginChoices ?? [];
@@ -407,7 +408,7 @@ export function ProjectPromptCreator({ draftKey, placeholder, disabled: creating
             {contextMenu.button}
             <span className="home-project-type">
               <Select<string> size="sm" label={t("home.projectType")} value={type} onChange={chooseType}
-                options={projectTypeOptions(PROJECT_TYPES.map((option) => option.value), pluginTypes)} />
+                options={projectTypeOptions(PROJECT_TYPES.filter((option) => option.value !== "interactive-story" || storyAvailable !== false).map((option) => option.value), pluginTypes)} />
             </span>
             <HomePluginMenu
               starters={starters}

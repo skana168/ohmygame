@@ -23,6 +23,18 @@ afterEach(async () => {
 });
 
 describe("PreviewManager", () => {
+  it("rejects story runtime startup when its workspace module is absent", async () => {
+    const workspacePath = await createWorkspace(false);
+    await writeFile(path.join(workspacePath, "index.html"), "<p>saved story</p>");
+    const project = { ...createProject(workspacePath), type: "interactive-story" as const,
+      workspaceManifest: { version: 1 as const, modules: [{ id: "game", config: {} }] } };
+    const manager = new PreviewManager(new RuntimeEventBus());
+    managers.push(manager);
+    await expect(manager.ensureStarted(project)).rejects.toThrow(/interactive-story module is unavailable/);
+    await expect(manager.start(project)).rejects.toThrow(/interactive-story module is unavailable/);
+    expect(await readFile(path.join(workspacePath, "index.html"), "utf8")).toBe("<p>saved story</p>");
+  });
+
   it("serves a web story's own page instead of running scripts the project carries", async () => {
     const workspacePath = await createWorkspace(false);
     await writeFile(path.join(workspacePath, "index.html"), "<p>story page</p>");

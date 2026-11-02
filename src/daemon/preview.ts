@@ -35,9 +35,11 @@ import {
   previewScriptArguments,
 } from "./preview-launch.js";
 import { startStaticPreview } from "./preview-static.js";
+import { storyCapabilityEnabled } from "../shared/project-runtime.js";
 import { storyWebEditorBridge } from "./story-web-bundle.js";
 
 interface PreviewOptions {
+  storyEnabled?: (project: ProjectState) => boolean;
   readinessTimeoutMs?: number;
   installTimeoutMs?: number;
   idleTimeoutMs?: number;
@@ -240,6 +242,8 @@ export class PreviewManager {
   }
 
   ensureStarted(project: ProjectState, manual = true): Promise<string> {
+    if (project.type === "interactive-story" && !(this.options.storyEnabled ?? storyCapabilityEnabled)(project))
+      return Promise.reject(new ProjectWorkspaceError("The interactive-story module is unavailable for this workspace."));
     if (!previewable(project))
       return Promise.reject(
         new ProjectWorkspaceError(
@@ -292,6 +296,8 @@ export class PreviewManager {
     reinstall: boolean,
     automatic: boolean,
   ): Promise<string> {
+    if (project.type === "interactive-story" && !(this.options.storyEnabled ?? storyCapabilityEnabled)(project))
+      throw new ProjectWorkspaceError("The interactive-story module is unavailable for this workspace.");
     if (!previewable(project))
       throw new ProjectWorkspaceError(
         "Enable Web preview in project settings first.",
