@@ -1,3 +1,4 @@
+import { storyWebEditorBridge } from "./story-web-bundle.js";
 import { applicationComposition, applicationCompositions, type ApplicationCompositionId } from "../shared/application-composition.js";
 import { createExampleToolContribution } from "./example-tools.js";
 import { accountServicesEnabled, publishingEnabled, communityEnabled } from "../shared/application-services.js";
@@ -665,6 +666,7 @@ export function createApp(options: AppOptions = {}) {
   });
   const previews = new PreviewManager(events, {
     storyEnabled,
+    storyBridge: (project) => storyEnabled(project) && project.type === "interactive-story" ? storyWebEditorBridge : undefined,
     tuning: {
       refresh: async (project) => { if (gameEnabled(project)) await gameTuning.refresh(project); },
       setConnected: (project, connected) => { if (gameEnabled(project)) gameTuning.setConnected(project, connected); },
