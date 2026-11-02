@@ -1,5 +1,6 @@
 import { OHMYGAME_WORKSPACE_MODULES, type WorkspaceModuleDescriptor } from "../shared/workspace-manifest.js";
 import { readWorkspaceManifest, validateWorkspaceManifest } from "./workspace-manifest.js";
+import type { BusinessToolSelection } from "./business-tools.js";
 import { composeToolContributions, type ToolContribution } from "./tool-contributions.js";
 import { CodexImageProvider } from "./agent-runtimes/codex-image-provider.js";
 import { inspectPreviewConfiguration } from "./preview-configuration.js";
@@ -168,6 +169,8 @@ import {
 export interface AppOptions {
   /** Source-registered modules available to workspace declarations. */
   workspaceModules?: readonly WorkspaceModuleDescriptor[];
+  /** Select source-registered business tools; both modules are enabled by default. */
+  businessTools?: BusinessToolSelection;
   /** Source-registered tools. Also called with a schema-only placeholder for the external catalog. */
   toolContributions?: (project: ProjectState) => readonly ToolContribution[];
   cloudApiUrl?: string;
@@ -867,7 +870,7 @@ export function createApp(options: AppOptions = {}) {
   const projectAgentTools = (project: ProjectState, conversation: StoredConversation) => {
     const playtestKey = `${project.id}:${conversation.summary.id}`;
     let playtest = agentPlaytests.get(playtestKey);
-    if (!playtest && options.playtestDriver) {
+    if (!playtest && options.businessTools?.game !== false && options.playtestDriver) {
       playtest = new OwnedPlaytestDriver(options.playtestDriver);
       agentPlaytests.set(playtestKey, playtest);
     }
@@ -886,6 +889,7 @@ export function createApp(options: AppOptions = {}) {
       webSearch.enabled() ? (input, signal) => webSearch.search(conversation.summary.id, input, signal) : undefined,
       canvasStore,
       options.toolContributions?.(project),
+      options.businessTools,
     )];
   };
   const conversationAgentTools = async (project: ProjectState, conversation: StoredConversation) => composeToolContributions([
@@ -905,14 +909,14 @@ export function createApp(options: AppOptions = {}) {
     tools: (project, sessionId) => {
       const playtestKey = `${project.id}:external:${sessionId}`;
       let playtest = agentPlaytests.get(playtestKey);
-      if (!playtest && options.playtestDriver) {
+      if (!playtest && options.businessTools?.game !== false && options.playtestDriver) {
         playtest = new OwnedPlaytestDriver(options.playtestDriver);
         agentPlaytests.set(playtestKey, playtest);
       }
       return createAgentTools(
         project, tools, projects, undefined, undefined,
         playtest ? { driver: playtest, resolveOpenTarget: () => playtestTarget(project) } : undefined,
-        undefined, canvasStore, options.toolContributions?.(project),
+        undefined, canvasStore, options.toolContributions?.(project), options.businessTools,
       );
     },
     // An outside agent's call isn't part of an OhMyGame turn, so it is a change of its own.
@@ -929,8 +933,8 @@ export function createApp(options: AppOptions = {}) {
       // full game_use input is listed; a story's own game_use accepts a subset.
       const placeholder: ProjectState = { id: "", name: "", type: "interactive-story", updatedAt: "", workspacePath: "", preview: { status: "stopped" } };
       return [
-        ...createAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore, options.toolContributions?.(placeholder)),
-        createGameUseTool(options.playtestDriver ?? UNAVAILABLE_GAME_RUNTIME, () => playtestTarget(placeholder)),
+        ...createAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore, options.toolContributions?.(placeholder), options.businessTools),
+        ...(options.businessTools?.game === false ? [] : [createGameUseTool(options.playtestDriver ?? UNAVAILABLE_GAME_RUNTIME, () => playtestTarget(placeholder))]),
       ];
     },
     release: async (projectId, sessionId) => {

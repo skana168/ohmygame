@@ -1,3 +1,4 @@
+import { createExampleToolContribution } from "../src/daemon/example-tools.js";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
@@ -407,13 +408,14 @@ it("releases a session's playtest windows when it ends or changes project", asyn
   expect(await service.end(authorization, session)).toBe(404);
 });
 
-it("serves the public contract from the daemon without the app token", async () => {
+it.each([{}, { game: false }, { story: false }, { game: false, story: false }])("serves the selected public contract without the app token: %j", async (businessTools) => {
   const dataDirectory = await temporaryDirectory();
   const app = createApp({
     dataDirectory,
     piAgentDirectory: path.join(dataDirectory, "pi-agent"),
     accessToken: "app-token",
-    toolContributions: (project) => [{ id: "test-business", tools: [defineTool({
+    businessTools,
+    toolContributions: (project) => [createExampleToolContribution(project), { id: "test-business", tools: [defineTool({
       name: "business_echo", label: "Echo", description: "Echo in a workspace",
       parameters: Type.Object({ value: Type.String() }),
       execute: async (_id, input) => ({ content: [{ type: "text", text: `${project.id}: ${input.value}` }], details: {} }),
@@ -491,18 +493,25 @@ it("serves the public contract from the daemon without the app token", async () 
     "generate_sound_effect",
     "generate_music",
     "generate_audio",
-    "playable_add_node",
-    "playable_check",
+    ...(businessTools.story === false ? [] : ["playable_add_node", "playable_check"]),
     "canvas_check",
     "canvas_initialize",
     "generate_canvas_media",
+    "example_echo",
     "business_echo",
-    "game_use",
+    ...(businessTools.game === false ? [] : ["game_use"]),
   ]);
   const project = (await app.inject({ method: "POST", url: "/projects", headers: { authorization: "Bearer app-token" }, payload: { name: "Contributions" } })).json() as ProjectState;
   await post({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "open_project", arguments: { project: project.id } } }, { "mcp-session-id": session });
   const echoed = await post({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "business_echo", arguments: { value: "hello" } } }, { "mcp-session-id": session });
   expect(echoed.json()).toMatchObject({ result: { content: [{ text: `${project.id}: hello` }] } });
+  const example = await post({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "example_echo", arguments: { message: "hello" } } }, { "mcp-session-id": session });
+  expect(example.json()).toMatchObject({ result: { content: [{ text: "hello" }] } });
+  for (const name of [...(businessTools.game === false ? ["game_use"] : []), ...(businessTools.story === false ? ["playable_check", "playable_add_node"] : [])]) {
+    const rejected = await post({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name, arguments: {} } }, { "mcp-session-id": session });
+    expect(rejected.json()).toMatchObject({ result: { isError: true } });
+  }
+
   expect(
     (
       await app.inject({
