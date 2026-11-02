@@ -1,6 +1,6 @@
 # Ticket 11 implementation evidence
 
-Status: claimed — root merger owns resolution.
+Status: resolved — merged and persisted-history gap verified.
 
 Branch: `t3/configure-application-identity`.
 Worktree: `/Users/yoyun/.t3/worktrees/ohmygame/t3-3de9a0ab`.
@@ -91,11 +91,7 @@ browser tab were stopped.
 
 ## Remaining validation and limits
 
-- Full persisted conversation-history isolation across two separately configured
-  running applications is not newly demonstrated. Empty conversations are
-  intentionally in-memory; the regression verifies their isolation while live.
-  Existing session persistence coverage remains in the public suite. This is why
-  the ticket's broad isolation acceptance box stays unchecked for merger review.
+- Persisted-history isolation is now demonstrated by the merger regression below.
 - No signed installer, notarization, Windows runtime/notification check, or actual
   unsigned macOS packaging was run. Builder configuration/schema and packaging
   regressions pass; release/platform validation remains manual.
@@ -104,3 +100,33 @@ browser tab were stopped.
 - Explicitly sharing data/Pi overrides shares state by design. Separate browser
   origins are needed for complete browser-origin isolation. Artwork, domain tools,
   protocol IDs and hosted services remain product-specific and outside this ticket.
+
+## Merger verification (2026-11-02)
+
+- Implementation `c748f7b8d1c2e706a0d9fd9e8799fda4344585d2` merged without
+  conflicts as `75d14f6fe6c6b27d7ba12a32b1cf38d1180f0178`.
+- Regression commit `4007afd40168fed9690acf6a62dc368bd6baa4de` extends the
+  existing `test/app.test.ts` identity case at the approved daemon/agent seam.
+  It uses the existing version-3 session fixture format and native-session
+  scripted driver pattern. POST turns executes a deterministic NativeCodingSession
+  and writes real persisted user/assistant history; GET conversation observes it.
+  A fresh app without the injected adapter reloads the same ID, renamed title,
+  message count, and both message texts. The second identity registers the same
+  external workspace under its own storage and cannot list or read the foreign
+  session, including after its own restart. Its registration does not overwrite
+  the first identity's persisted history. No provider credentials are required.
+- Initial regression failure was a fixture mismatch: opening a not-yet-persisted
+  pending session directly generated a different ID. Production uses
+  ConversationManager.open to retain its pending manager. The fixture now seeds
+  its session header with the API-created ID before agent execution. No production
+  correction or production red-green cycle was needed.
+- Root checks with Bun 1.4.2: `bun run test -- test/application-identity.test.ts
+  test/app.test.ts test/agent-runtime-session.test.ts test/desktop-close.test.ts
+  test/desktop-runtime-packaging.test.ts` passed all 143 tests in five files.
+  Final title-persistence assertion rerun with `test/app.test.ts -t
+  'independently configured'`: 1 passed, 90 intentionally filtered out.
+  `bun run typecheck`, `bun run lint`, and `git diff --check` passed.
+- Earlier full-suite, renderer, Node startup, browser, and Electron smoke evidence
+  above is from the implementation report, not a new merger rerun. Installer,
+  platform, native-window inspection, and live-provider/cloud limits remain as
+  recorded above. No initializer/template work was added.
