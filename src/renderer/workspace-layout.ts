@@ -1,3 +1,4 @@
+import { workspaceHasModule } from "../shared/workspace-policy.js";
 import { applicationStorageKey } from "./application-identity.js";
 import { movePanel, type AreaId, type AreaState, type Layout } from "./panel-layout.js";
 import type { ProjectState, ProjectType } from "../shared/contracts.js";
@@ -33,7 +34,8 @@ const TYPE_PANELS: Record<ProjectType, readonly WorkspacePanel[]> = {
 };
 
 /** The panels a project offers: its type's, less the game where it has no preview. */
-export function panelsOf(project: Pick<ProjectState, "type"> & Parameters<typeof supportsWebPreview>[0]): WorkspacePanel[] {
+export function panelsOf(project: Pick<ProjectState, "type"> & Partial<Pick<ProjectState, "workspaceManifest" | "workspaceDiagnostics">> & Parameters<typeof supportsWebPreview>[0]): WorkspacePanel[] {
+  if (!workspaceHasModule(project, "game") && project.type !== "asset-canvas") return ["chat", "canvas", "code", "assets"];
   return TYPE_PANELS[project.type].filter((panel) => panel !== "game" || supportsWebPreview(project));
 }
 

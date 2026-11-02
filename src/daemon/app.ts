@@ -1,4 +1,5 @@
 import { accountServicesEnabled, publishingEnabled, communityEnabled } from "../shared/application-services.js";
+import { workspaceHasModule } from "../shared/workspace-policy.js";
 import { OHMYGAME_WORKSPACE_MODULES, type WorkspaceModuleDescriptor } from "../shared/workspace-manifest.js";
 import { readWorkspaceManifest, validateWorkspaceManifest } from "./workspace-manifest.js";
 import type { BusinessToolSelection } from "./business-tools.js";
@@ -883,7 +884,7 @@ export function createApp(options: AppOptions = {}) {
   const projectAgentTools = (project: ProjectState, conversation: StoredConversation) => {
     const playtestKey = `${project.id}:${conversation.summary.id}`;
     let playtest = agentPlaytests.get(playtestKey);
-    if (!playtest && options.businessTools?.game !== false && options.playtestDriver) {
+    if (!playtest && workspaceHasModule(project, "game") && options.businessTools?.game !== false && options.playtestDriver) {
       playtest = new OwnedPlaytestDriver(options.playtestDriver);
       agentPlaytests.set(playtestKey, playtest);
     }
@@ -922,7 +923,7 @@ export function createApp(options: AppOptions = {}) {
     tools: (project, sessionId) => {
       const playtestKey = `${project.id}:external:${sessionId}`;
       let playtest = agentPlaytests.get(playtestKey);
-      if (!playtest && options.businessTools?.game !== false && options.playtestDriver) {
+      if (!playtest && workspaceHasModule(project, "game") && options.businessTools?.game !== false && options.playtestDriver) {
         playtest = new OwnedPlaytestDriver(options.playtestDriver);
         agentPlaytests.set(playtestKey, playtest);
       }

@@ -15,9 +15,16 @@ describe("OhMyGame system prompt", () => {
       expect(text).toContain("Do not create or change files for casual conversation");
       expect(text).toContain("do not revert changes you did not make");
       expect(text).toContain("relevant boards/documents before canvas, design or asset work");
-      expect(text).toContain("For game implementation, also read the main document if one is selected");
+      if (type !== "asset-canvas") expect(text).toContain("For game implementation, also read the main document if one is selected");
       expect(text).not.toContain("may be empty");
     }
+  });
+
+  it("uses neutral guidance when the manifest selects no game module", () => {
+    const text = prompt({ type: "general", workspaceManifest: { version: 1, modules: [] } });
+    expect(text).toContain("workspace assistant");
+    expect(text).not.toMatch(/game|gameplay|player/i);
+    expect(text).toContain("canvas_check");
   });
 
   it("carries the Web Game platform contract in the system prompt", () => {

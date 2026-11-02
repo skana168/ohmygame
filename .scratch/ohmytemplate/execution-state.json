@@ -69,13 +69,24 @@
       "remaining_validation": "Implementer full public checks retained without repetition; prior 41 full-suite skips, manual browser/Electron, live providers and private cloud remain unverified. Workspace tool gating belongs to ticket04."
     },
     "04": {
-      "status": "retry_pending",
+      "status": "resolved",
       "previous_failure": "provider usage limit; user confirmed availability and requested retry",
       "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-11cc4fcd",
       "previous_branch": "t3/open-non-game-workspaces",
       "previous_head": "e0b044ced482f1b2fc4ec32df177a728a32bb3e3",
       "recovery_patch": "/tmp/ohmytemplate-recovery-04/working.patch",
-      "previous_task_suffix": "aeb7f471-df7f-4a23-8348-4abcf9a6235d"
+      "previous_task_suffix": "aeb7f471-df7f-4a23-8348-4abcf9a6235d",
+      "merged": true,
+      "implementation_branch": "t3/open-non-game-workspaces-1",
+      "implementation_sha": "f0a99325f2e342a1e6692aa0877ada369cd44b1d",
+      "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-8f4cbf6a",
+      "merge_sha": "366f0dab6b62e8684bf47b98e168d0d10f143606",
+      "merge_result": "Adjacent import conflict resolved retaining accountServices and workspace policy; 15 suites / 392 tests and typecheck passed",
+      "remaining_validation": "Electron creation/multi-board/edit/reopen mandatory overall; browser title editing unverified; inherited browser flow retained.",
+      "unblocked_tickets": [
+        "05",
+        "07"
+      ]
     },
     "06": {
       "status": "retry_pending",
@@ -87,13 +98,20 @@
       "previous_task_suffix": "16af3cc2-facc-4ae7-92fc-61e19ea0a3cc"
     },
     "09": {
-      "status": "retry_pending",
+      "status": "resolved",
       "previous_failure": "provider usage limit; user confirmed availability and requested retry",
       "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-7294aa34",
       "previous_branch": "t3/user-configured-providers",
       "previous_head": "f004a0eb88b368e628f2a06b034bf9e1fef0c995",
       "recovery_patch": "/tmp/ohmytemplate-recovery-09/working.patch",
-      "previous_task_suffix": "ee67ddc5-7c65-4fa1-b2fd-7d64486f070d"
+      "previous_task_suffix": "ee67ddc5-7c65-4fa1-b2fd-7d64486f070d",
+      "merged": true,
+      "implementation_branch": "t3/run-configured-providers",
+      "implementation_sha": "6f0addc43173d6ff532020720911b11855f51dba",
+      "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-9f32fe5f",
+      "merge_sha": "7fe9d5e008ec8436d2b5a2e28de72a4175380e8e",
+      "merge_result": "conflict-free; no integration edits; 21 affected suites, 482 tests passed; Bun 1.4.2 typecheck, lint and git diff --check passed",
+      "remaining_validation": "Prior full-suite/build/Node/browser evidence is inherited, not rerun. Real language/paid media and live recovery, private Supabase/cloud, Electron, other platforms and packaging remain manual; publishing/community and full composition remain tickets 08/10."
     }
   },
   "notes": [
@@ -102,6 +120,8 @@
     "Planning stash retained as backup; .codegraph stays untracked."
   ],
   "next_ready_queue": [
-    "08"
+    "08",
+    "05",
+    "07"
   ]
 }

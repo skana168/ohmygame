@@ -1,4 +1,5 @@
 import { publishingEnabled } from "../shared/application-services.js";
+import { canvasPolicy } from "../shared/workspace-policy.js";
 import type { GameTuningState } from "../shared/game-tuning.js";
 import { isAccountRuntimeId, isAgentRuntimeId, type ApprovalDecision, type AgentAccountProfileStatus } from "../shared/agent-runtimes.js";
 import {
@@ -1281,7 +1282,7 @@ export function ProjectShell({
       key={conversation?.id}
       projectId={project?.id}
       conversationId={conversation?.id}
-      supportsDesign={project?.type !== "asset-canvas"}
+      supportsDesign={!!project && canvasPolicy(project).gameDesign}
       conversationReady={Boolean(conversation) && state.connection === "open"}
       running={currentConversationBusy}
       stopping={state.agent.status === "cancelling" || sendingInitialPrompt}

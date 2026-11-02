@@ -25,6 +25,15 @@ Execution details are recorded in [execution-state.json](execution-state.json).
   04, 06, 08 and 09 are newly unblocked; root retains scheduling ownership.
   See its report for preserved validation limits and the ticket04 gating boundary.
 
+- [Ticket 09](issues/09-run-with-user-configured-providers.md) is resolved:
+  optional account services merged at `7fe9d5e008ec8436d2b5a2e28de72a4175380e8e`;
+  482 tests in 21 affected suites, typecheck, lint and diff checks passed freshly.
+  Default account behavior and deterministic cancellation/paid-task recovery remain.
+  See its report for inherited UI evidence and live-provider/Electron/platform gaps.
+  Tickets 04/06 and the ticket 08 queue retain their prior state.
+
+- [Ticket 04](issues/04-open-non-game-workspaces.md) resolved at `366f0dab`; 392 merged-root tests and typecheck passed. Generic tools/canvas retain independent account configuration. Tickets05/07 ready; Electron overall validation and browser title editing remain unverified.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction

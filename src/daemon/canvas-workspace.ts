@@ -1,3 +1,4 @@
+import { canvasPolicy } from "../shared/workspace-policy.js";
 import { audioSettings } from "../shared/audio.js";
 import { CANVAS_TABLE_SCHEMA, createCanvasTable, isCanvasTable, canvasTablePath, type CanvasTable, type CanvasTableDetail } from "../shared/canvas-table.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -33,13 +34,12 @@ const validId = (id: string) => { if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) throw 
 const revision = (value: unknown) => createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
 const CANVAS_INSTRUCTIONS = `# Canvas workspace
 
-Canvas files are the source of truth in both Design and Asset Canvas. Use normal read, edit, and write tools to create and change boards, nodes, documents, and references.
+Canvas files are the source of truth for boards, documents, tables, and assets. Use normal read, edit, and write tools to create and change boards, nodes, documents, and references.
 
 - Read README.md and schemas/ before changing a contract. Run canvas_check after editing.
 - index.json lists boards, documents, optional tables, and the main document. Keep IDs stable; names and titles may change.
 - boards/<id>.json contains nodes and their content. Every node may have a title and a description of its purpose. Document bodies live in documents/<id>.md, referenced by documentId. Table data lives in tables/<id>.json, referenced by tableId; register tables in index.json. Keep row/column IDs stable and match cells to their column types.
 - Give nodes meaningful titles. Descriptions explain their intended role; do not describe unseen image pixels as verified facts.
-- For game work, identify reference mockups and production assets in node titles/descriptions. Record production assets' intended gameplay use in the design document; reference mockups do not fulfill those requirements.
 - editor/<board-id>.json stores positions, zoom, and width/height for text, document, and table nodes only; media and generation nodes size to their content. fitView requests a one-time fit when a remixed board is first opened; the editor clears it after saving the new viewport. New nodes are placed automatically; layout edits are only needed when the user asks to arrange the canvas.
 - assets.json maps asset IDs to names, workspace-relative paths, optional descriptions and generation prompts. Use the same ID for the same asset across boards. References with type "library" resolve through this manifest. libraryAssetId records provenance; local files remain usable without the Library.
 - Read actual image files with read when judging their appearance. A name, description, or generation prompt is not proof of what the image shows.
@@ -47,7 +47,7 @@ Canvas files are the source of truth in both Design and Asset Canvas. Use normal
 - Speech, sound-effect, music, and audio-scene nodes use the shared audio model contract. Audio references use stable AudioN/ImageN IDs with a node or Library source; mention audio as @AudioN. Use up to three short audio clips, one image, or a Speaker ID as separate modes. Subtitles and generation metadata are saved beside the audio. Keep provider-specific credentials out of canvas files; select models by provider/id and only use options advertised by that model's capabilities.
 - To add local media, register its workspace-relative path in assets.json and reference its ID from an asset node or an existing generation node.
 - A file node points at any other project file by its project-relative path (data.path), such as a source file, font, archive or editor project; with directory: true it points at a folder whose structure matters, such as an asset pack. Files and folders imported on the canvas live under assets/files/. Read or use the files themselves; update the path if you move them.
-- Do not trigger generation merely by editing a prompt or adding a reference. A game-creation request includes its needed media unless the user narrows the scope. Use generate_canvas_media with the saved boardId and nodeId for generation; it uses the node settings and shared generation history.
+- Do not trigger generation merely by editing a prompt or adding a reference. Use generate_canvas_media with the saved boardId and nodeId for generation; it uses the node settings and shared generation history.
 - Removing a node or board keeps its documents, tables, and assets. Remove references to a deleted node from the same board.
 - An editor-context block identifies the current board and selected nodes. Read the referenced files before editing, and preserve other user changes.
 `;
@@ -339,7 +339,7 @@ export class CanvasStore {
   }
   async createDocument(id: string, title: string) {
     const project = this.#project(id), workspace = project.workspacePath;
-    return withCanvasLock(workspace, () => writeCanvasDocument(workspace, createCanvasDocument(title.trim() || "Untitled document"), project.type !== "asset-canvas"));
+    return withCanvasLock(workspace, () => writeCanvasDocument(workspace, createCanvasDocument(title.trim() || "Untitled document"), canvasPolicy(project).gameDesign));
   }
   async save(id: string, document: CanvasMarkdownDocument, expected: string, documentId?: string) {
     const workspace = this.#project(id).workspacePath;
@@ -348,7 +348,7 @@ export class CanvasStore {
       if (!current) throw new CanvasError("Document not found", 404);
       if (current.revision !== expected) throw new CanvasError("The document changed. Review the latest version before saving.", 409);
       if (current.document.id !== document.id) throw new CanvasError("The document ID must stay unchanged");
-      return writeCanvasDocument(workspace, document, this.#project(id).type !== "asset-canvas");
+      return writeCanvasDocument(workspace, document, canvasPolicy(this.#project(id)).gameDesign);
     });
   }
   async table(id: string, tableId: string): Promise<CanvasTableDetail> {
@@ -369,7 +369,7 @@ export class CanvasStore {
     });
   }
   async setMainDocument(id: string, documentId: string) {
-    if (this.#project(id).type === "asset-canvas") throw new CanvasError("Main game design documents require a game project", 409);
+    if (!canvasPolicy(this.#project(id)).gameDesign) throw new CanvasError("Main game design documents require the game module", 409);
     const workspace = this.#project(id).workspacePath;
     await withCanvasLock(workspace, async () => {
       if (!await readCanvasDocument(workspace, documentId)) throw new CanvasError("Document not found", 404);
@@ -404,7 +404,7 @@ export class CanvasStore {
     });
   }
   async changeBoards(id: string, action: { type: "create"; name: string } | { type: "rename" | "delete" | "move"; boardId: string; name?: string; direction?: number }) {
-    if (this.#project(id).type === "asset-canvas") throw new CanvasError("Asset Canvas uses one default board", 409);
+    if (canvasPolicy(this.#project(id)).singleBoard) throw new CanvasError("Asset Canvas uses one default board", 409);
     const workspace = this.#project(id).workspacePath;
     return withCanvasLock(workspace, async () => {
       const index = await ensureCanvasIndex(workspace);
@@ -436,7 +436,7 @@ export class CanvasStore {
       if (!detail) throw new CanvasError("Document not found", 404);
       const label = asset.name.replace(/[[\]\n]/g, "");
       const link = asset.path.split("/").map(encodeURIComponent).join("/");
-      const saved = await writeCanvasDocument(workspace, { ...detail.document, markdown: `${detail.document.markdown.trimEnd()}\n\n![${label}](../../${link})\n` }, this.#project(id).type !== "asset-canvas");
+      const saved = await writeCanvasDocument(workspace, { ...detail.document, markdown: `${detail.document.markdown.trimEnd()}\n\n![${label}](../../${link})\n` }, canvasPolicy(this.#project(id)).gameDesign);
       if (asset.libraryAssetId && this.library.get(asset.libraryAssetId)) await this.library.save(asset.libraryAssetId);
       return saved;
     });

@@ -1,6 +1,6 @@
 # Ticket 09 implementation report
 
-Status: implemented; ticket remains claimed pending merger review.
+Status: resolved after merger verification; historical implementation evidence follows.
 
 - Branch: `t3/user-configured-providers`.
 - Worktree: `/Users/yoyun/.t3/worktrees/ohmygame/t3-7294aa34`.
@@ -169,3 +169,52 @@ Acceptance remains subject to merger review; no claim of live paid validation.
   were added; the remaining manual gaps above still apply.
 - Latest integration ref before final reporting: `5be4b4ed355f2a6b43c21cb2dab8d54aa29de6c1`.
   Merge result is recorded in the final handoff. Ticket remains claimed for merger.
+
+## Merger verification (2026-11-02)
+
+- Integration branch/root: `refactor/ohmytemplate-integration`, `/Users/yoyun/ohmygame`.
+- Accepted branch: `t3/run-configured-providers`; implementation SHA `6f0addc43173d6ff532020720911b11855f51dba`;
+  implementation worktree `/Users/yoyun/.t3/worktrees/ohmygame/t3-9f32fe5f` (clean).
+- Merge SHA: `7fe9d5e008ec8436d2b5a2e28de72a4175380e8e`. `git merge --no-ff 6f0addc43173d6ff532020720911b11855f51dba`
+  completed without conflicts; merged tracked tree equals the implementation tree.
+  No integration source changes were necessary.
+- Reviewed source diff: optional cloud client prevents account service construction
+  and catalog requests; cloud session/quota/job/result and managed model settings
+  endpoints return 404 when absent. Shared source composition disables Supabase
+  construction/session synchronization and product login UI. Renderer and daemon
+  source selection must agree; an embedded daemon-only override does not configure
+  an independently built renderer. Default `accountServicesEnabled = true` remains.
+- User provider authentication, setup, discovery, selection, model capabilities,
+  language-session persistence and image/audio/video/3D fixtures remain available
+  without game/story tools. Existing cancellation/journal/workflow tests were not
+  removed; dual-mode cancellation/restart fixture proves one simulated paid POST.
+- Ticket 09 is resolved. No real paid requests were demanded or executed.
+
+Fresh commands run on the merged root, with
+`PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH` for each Bun command:
+
+```sh
+bun --version # 1.4.2
+bun run typecheck
+bun run lint
+bun run test -- test/app.test.ts test/cloud-models.test.ts test/custom-media-models.test.ts test/onboarding.test.ts test/onboarding-renderer.test.tsx test/provider-balance-settings.test.tsx test/provider-model-settings.test.ts test/provider-auth-ui.test.tsx test/provider-detail-ui.test.tsx test/provider-error-diagnostics.test.ts test/provider-model-discovery.test.ts test/custom-providers.test.ts test/provider-removal.test.ts test/provider-images.test.ts test/provider-videos.test.ts test/model3d-workflows.test.ts test/model3d-journal.test.ts test/tools.test.ts test/agent-tools.test.ts test/agent-runtime-session.test.ts test/application-identity.test.ts
+git diff --check
+```
+
+Results: typecheck and lint exited 0; tests **21 files passed, 482 tests passed**,
+no skips, reported duration **23.90s** (start 20:56:38). The passing run emitted
+`ECONNREFUSED` diagnostics for localhost port 3000; these were not test failures
+or evidence of contacting a private service. Diff whitespace check passed.
+
+Full suite, pinned preparation, changelog, renderer builds, Node runtime startup
+and browser smoke were **not rerun** by the merger. Earlier broad-check and
+English/Chinese browser/screenshot evidence above is inherited, not fresh root
+verification. No new browser/Electron validation is claimed. Remaining gaps:
+real language-provider sessions and paid media/cancellation/recovery, credential
+access, real Supabase/hosted cloud contracts, native Electron UI, Windows/Linux
+and packaging/signing. These limits do not replace the deterministic acceptance
+criteria. Publishing/community service extraction remains ticket 08; complete
+resource/build composition remains ticket 10.
+
+Only ticket 09 tracker state is updated. Tickets 04/06 and the queued ticket 08,
+`.codegraph/`, all worktrees, and application defaults remain untouched.

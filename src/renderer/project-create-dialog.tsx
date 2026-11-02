@@ -100,7 +100,7 @@ export function ProjectCreateDialog({
   const offersPluginTypes = referenced.every((plugin) => !plugin.projectTypes?.length);
   const pluginTypes = offersPluginTypes ? installedPluginTypes.types ?? [] : [];
   const offered = (value: string | undefined): value is string =>
-    Boolean(value) && (types.some((option) => option.value === value) || pluginTypes.some((option) => option.id === value));
+    Boolean(value) && ((value === "workspace" && !referenced.some((plugin) => plugin.projectTypes?.length)) || types.some((option) => option.value === value) || pluginTypes.some((option) => option.id === value));
   const [chosenType, setChosenType] = useState<string>();
   const preferred = firstMessage?.type ?? initialType;
   const type: string = offered(chosenType) ? chosenType
@@ -186,7 +186,7 @@ export function ProjectCreateDialog({
       if (!types.length) throw new Error(t("createDialog.incompatiblePlugins"));
       const input = {
         ...(name.trim() ? { name: name.trim() } : {}),
-        ...(isAppProjectType(type) ? { type } : { projectType: type }),
+        ...(type === "workspace" ? { type: "general" as const, workspaceManifest: { version: 1 as const, modules: [] } } : isAppProjectType(type) ? { type } : { projectType: type }),
         ...(workspacePath ? { workspacePath } : {}),
       };
       if (typePluginConsent) await consentToPlugin(typePluginConsent.id, typePluginConsent.capabilities);
@@ -256,7 +256,7 @@ export function ProjectCreateDialog({
         ) : null}
         <Field label={t("common.name")}>
           {(props) => <Input {...props} value={name} maxLength={120} disabled={creating}
-            placeholder={firstMessage ? t("createDialog.namedFromPrompt") : defaultProjectName(kind)}
+            placeholder={firstMessage ? t("createDialog.namedFromPrompt") : type === "workspace" ? t("createDialog.untitledWorkspace") : defaultProjectName(kind)}
             onChange={(event) => setName(event.target.value)} />}
         </Field>
         <Field label={t("createDialog.type")}>
@@ -269,7 +269,7 @@ export function ProjectCreateDialog({
               }
               setChosenType(value);
             }}
-            options={projectTypeOptions(types.map((option) => option.value), pluginTypes)} />}
+            options={projectTypeOptions(types.map((option) => option.value), pluginTypes, referenced.some((plugin) => plugin.projectTypes?.length) ? [] : [{ value: "workspace", label: t("createDialog.workspace"), description: t("createDialog.workspaceDescription") }])} />}
         </Field>
         {typePluginConsent?.capabilities.length ? (
           <div className="new-project-consent">

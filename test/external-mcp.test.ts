@@ -1,3 +1,4 @@
+import { OHMYGAME_WORKSPACE_MODULES } from "../src/shared/workspace-manifest.js";
 import { createExampleToolContribution } from "../src/daemon/example-tools.js";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
@@ -415,6 +416,7 @@ it.each([{}, { game: false }, { story: false }, { game: false, story: false }])(
     piAgentDirectory: path.join(dataDirectory, "pi-agent"),
     accessToken: "app-token",
     businessTools,
+    workspaceModules: [...OHMYGAME_WORKSPACE_MODULES, ...["example", "test-business"].map((id) => ({ id, configSchema: { type: "object" } }))],
     toolContributions: (project) => [createExampleToolContribution(project), { id: "test-business", tools: [defineTool({
       name: "business_echo", label: "Echo", description: "Echo in a workspace",
       parameters: Type.Object({ value: Type.String() }),
@@ -501,7 +503,7 @@ it.each([{}, { game: false }, { story: false }, { game: false, story: false }])(
     "business_echo",
     ...(businessTools.game === false ? [] : ["game_use"]),
   ]);
-  const project = (await app.inject({ method: "POST", url: "/projects", headers: { authorization: "Bearer app-token" }, payload: { name: "Contributions" } })).json() as ProjectState;
+  const project = (await app.inject({ method: "POST", url: "/projects", headers: { authorization: "Bearer app-token" }, payload: { name: "Contributions", workspaceManifest: { version: 1, modules: ["game", "example", "test-business"].map((id) => ({ id, config: {} })) } } })).json() as ProjectState;
   await post({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "open_project", arguments: { project: project.id } } }, { "mcp-session-id": session });
   const echoed = await post({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "business_echo", arguments: { value: "hello" } } }, { "mcp-session-id": session });
   expect(echoed.json()).toMatchObject({ result: { content: [{ text: `${project.id}: hello` }] } });
@@ -509,6 +511,17 @@ it.each([{}, { game: false }, { story: false }, { game: false, story: false }])(
   expect(example.json()).toMatchObject({ result: { content: [{ text: "hello" }] } });
   for (const name of [...(businessTools.game === false ? ["game_use"] : []), ...(businessTools.story === false ? ["playable_check", "playable_add_node"] : [])]) {
     const rejected = await post({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name, arguments: {} } }, { "mcp-session-id": session });
+    expect(rejected.json()).toMatchObject({ result: { isError: true } });
+  }
+
+  const notes = (await app.inject({ method: "POST", url: "/projects", headers: { authorization: "Bearer app-token" }, payload: { type: "general", workspaceManifest: { version: 1, modules: [] } } })).json();
+  await post({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "open_project", arguments: { project: notes.id } } }, { "mcp-session-id": session });
+  const selected = await post({ jsonrpc: "2.0", id: 8, method: "tools/list" }, { "mcp-session-id": session });
+  const selectedNames = selected.json().result.tools.map((tool: { name: string }) => tool.name);
+  expect(selectedNames).toContain("canvas_check");
+  for (const name of ["game_use", "playable_check", "example_echo", "business_echo"]) {
+    expect(selectedNames).not.toContain(name);
+    const rejected = await post({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name, arguments: {} } }, { "mcp-session-id": session });
     expect(rejected.json()).toMatchObject({ result: { isError: true } });
   }
 

@@ -242,11 +242,11 @@ export class ProjectManager {
     const metadata: ProjectMetadata = {
       version: 1,
       id,
-      name: name?.trim() || defaultProjectName(type),
+      name: name?.trim() || (type === "general" && intendedManifest && !intendedManifest.modules.some((entry) => entry.id === "game") ? "Untitled workspace" : defaultProjectName(type)),
       nameSource: name?.trim() ? "manual" : "default",
       type,
       ...(pluginType ? { pluginType } : {}),
-      ...(type === "general" ? { webPreviewEnabled: pluginType ? pluginType.preview === "web" : true } : {}),
+      ...(type === "general" ? { webPreviewEnabled: pluginType ? pluginType.preview === "web" : !intendedManifest || intendedManifest.modules.some((entry) => entry.id === "game") } : {}),
       updatedAt: new Date().toISOString(),
       ...(hasExternalWorkspace ? { workspacePath } : {}),
     };

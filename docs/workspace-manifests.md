@@ -26,8 +26,14 @@ cannot import code or install modules. IDs should match the corresponding tool
 contribution owners. The default OhMyGame descriptors are `game` and
 `interactive-story`; the latter requires `game`. Both currently accept only an
 empty configuration object. Core capabilities do not need a module entry.
-Tool catalog gating and module-dependent renderer policy are separate boundaries;
-a manifest alone does not implement those policies.
+Module selection controls host-contributed tools in Pi, supported coding-agent
+bridges, and bound external MCP sessions. Host `businessTools` flags remain an
+upper bound: a manifest cannot enable a tool disabled by the application. Source
+contribution IDs identify their owning modules; select those IDs to expose their
+tools. Before binding a workspace, external MCP advertises the application catalog;
+after `open_project`, `tools/list` reflects that workspace. Direct calls to tools
+outside the selection fail. Invalid declarations disable business tools while
+retaining files and diagnostics.
 
 Fresh workspaces, including example and plugin project creation, receive a
 manifest. An explicit declaration takes precedence over fresh-workspace defaults.
@@ -53,3 +59,28 @@ The loader does not repair or rewrite the manifest, canvas, assets, or instructi
 Restore the required application module or explicitly repair `workspace.json`, then
 restart the daemon. No module-selection update endpoint is introduced here;
 project rename and other metadata updates leave the declaration unchanged.
+
+## Non-game workspaces
+
+Choose **Workspace** in the new-project dialog to create a general-purpose
+workspace with `{"version":1,"modules":[]}`. It opens with Chat, Canvas, Code and
+Assets, without game design navigation. General Game remains a separate choice
+with its existing game defaults. The API equivalent is `POST /projects` with
+`type: "general"` and the empty declaration. A fresh non-game workspace starts
+with Web preview disabled; preview and publishing implementations remain part of
+the OhMyGame application.
+
+Non-game canvases support multiple boards, ordinary Markdown documents, typed
+tables, semantic references, assets and editor layouts in the existing `canvas/`
+structure. No document is automatically selected as a main game design document,
+and the main-game-document action is unavailable. Agent guidance treats documents
+as references rather than requiring game design, gameplay or production art.
+Game-module workspaces retain game design guidance and main-document behavior;
+Asset Canvas retains its single-board policy. Historical workspaces keep the
+same inferred policies. Schema validation, revision conflicts and renderer draft
+preservation use the same paths in every workspace.
+
+Existing root and canvas `AGENTS.md` files are preserved. A previously authored
+instruction can still contain domain-specific guidance; selecting modules does
+not rewrite user instructions. Restart to load deliberate manifest repairs or
+changes; the creation API does not replace an existing declaration.

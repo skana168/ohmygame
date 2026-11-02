@@ -139,7 +139,8 @@ Files in `<dataDirectory>/external-mcp/`:
   across updates, so a client keeps working after an update without being
   added again. Earlier versions connected clients from Settings and left a
   `clients.json`; it is no longer read, and those entries keep working.
-- It answers `initialize` and `tools/list` from `tools.json`. Clients start
+- Before connecting, it answers `initialize` and `tools/list` from `tools.json`.
+  After binding a workspace, it reads the selected catalog from the daemon. Clients start
   every configured MCP server when a session opens, in any folder, so the app
   must not start just because a client did.
 - The first tool call starts OhMyGame if `endpoint.json` is missing or its
@@ -193,8 +194,10 @@ and answers with JSON; nothing is streamed, so `GET` returns 405.
 
 ## Public tools
 
-Every session lists the same tools, whichever project it uses. A tool the
-bound project does not have returns an error that says why.
+Before binding, sessions advertise the application catalog. Once bound by roots
+or `open_project`, `tools/list` follows the workspace manifest and runtime
+availability. A direct call to an unavailable tool returns an error that says
+why. See [workspace manifests](workspace-manifests.md).
 
 | Tool                                                                        | Notes                                                                       |
 | --------------------------------------------------------------------------- | --------------------------------------------------------------------------- |

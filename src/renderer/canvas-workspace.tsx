@@ -1,3 +1,4 @@
+import { canvasPolicy } from "../shared/workspace-policy.js";
 import { workspaceVersion } from "./workspace-version.js";
 import { useCanvasTables } from "./use-canvas-tables.js";
 import { Equal } from "typebox/value";
@@ -44,7 +45,8 @@ export function CanvasWorkspace({ project, documents, headerActionsTarget = null
   onProjectUpdated?: (project: ProjectState) => void;
 }) {
   const [writeVersion] = useState(() => workspaceVersion(project.id));
-  const singleBoard = project.type === "asset-canvas";
+  const policy = canvasPolicy(project);
+  const singleBoard = policy.singleBoard;
   const own = useCanvasDocuments(project.id, !documents);
   const docs = documents ?? own, workspace = docs.workspace;
   const tableStorage = useCanvasTables(project.id, workspace);
@@ -127,7 +129,7 @@ export function CanvasWorkspace({ project, documents, headerActionsTarget = null
     generate: (id, model, reasoningLevel, referenceSource) => {
       void docsRef.current.generate(id, model, reasoningLevel, referenceSource, () => boardSave.current?.() ?? Promise.resolve());
     }, applyGeneration: docs.applyGeneration,
-    setMain: singleBoard ? undefined : (id) => { void run(() => docsRef.current.setMain(id)); },
+    setMain: !policy.gameDesign ? undefined : (id) => { void run(() => docsRef.current.setMain(id)); },
     insertImage: (id, assetId) => { void run(() => docsRef.current.insertImage(id, assetId)); },
     pickImage: (id) => {
       setInsertion({ documentId: id });
@@ -160,7 +162,7 @@ export function CanvasWorkspace({ project, documents, headerActionsTarget = null
       onChange={(id) => void run(async () => { await flush(); setActiveId(id); setBoardStatus("loading"); })} />
   </div>;
   const settingsButton = <ProjectMediaModelSettings key={project.id} project={project} onSaved={(updated) => onProjectUpdated?.(updated)} />;
-  return <CanvasAssetProvider assets={assetPaths}><section className="viewer-pane design-workspace" aria-label={singleBoard ? t("canvas.assetCanvasWorkspace") : t("canvas.designWorkspace")}>
+  return <CanvasAssetProvider assets={assetPaths}><section className="viewer-pane design-workspace" aria-label={singleBoard ? t("canvas.assetCanvasWorkspace") : policy.gameDesign ? t("canvas.designWorkspace") : t("canvas.workspace")}>
     {singleBoard && !headerActionsTarget ? <header className="pane-header viewer-header interactive-story-header">
       <div className="viewer-navigation" />
       <div className="viewer-controls-slot" />

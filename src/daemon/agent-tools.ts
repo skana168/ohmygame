@@ -1,3 +1,4 @@
+import { workspaceHasModule } from "../shared/workspace-policy.js";
 import { createGameToolContribution, createStoryToolContribution, type BusinessToolSelection } from "./business-tools.js";
 import { composeToolContributions, type ToolContribution } from "./tool-contributions.js";
 import { readFile, realpath } from "node:fs/promises";
@@ -517,7 +518,7 @@ export function createAgentTools(
     }, input.prompt, "music", signal),
   }), defineTool({
     name: PI_TOOL_NAMES["generate-audio"], label: "Generate Audio",
-    description: "Create game scene audio combining dialogue, sound effects, ambience and music. Use Seed Audio with a text prompt or a Speaker ID. Duration is a target, not an exact cut. Save audio and metadata companions to the project.",
+    description: "Create scene audio combining dialogue, sound effects, ambience and music. Use Seed Audio with a text prompt or a Speaker ID. Duration is a target, not an exact cut. Save audio and metadata companions to the project.",
     parameters: Type.Object({ ...audioToolSettings, prompt: Type.String({ minLength: 1, maxLength: 2744 }), model: Type.Optional(mediaModelParameter()), durationSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 120 })) }),
     execute: async (_toolCallId, input, signal) => saveGeneratedAudio("generate-audio", { ...audioSettings(input), prompt: input.prompt, model: input.model, durationSeconds: input.durationSeconds }, input.prompt, "audio", signal),
   })];
@@ -547,7 +548,7 @@ export function createAgentTools(
   }), defineTool({
     name: "generate_canvas_media",
     label: "Generate Canvas Media",
-    description: "Generate a saved media node using its current prompt, configured model and references. Use it only for a node whose generation model is available. A game-creation request includes its needed media unless the user narrows the scope; editing a prompt or reference alone does not request generation. Saves output into the project, updates the node and shares the canvas generation history. Edit ordinary canvas files before calling this tool. If the node is already generating, this waits for that run; if its current output came from the same settings, this returns it without generating again unless regenerate is true.",
+    description: "Generate a saved media node using its current prompt, configured model and references. Use it only for a node whose generation model is available. Editing a prompt or reference alone does not request generation. Saves output into the project, updates the node and shares the canvas generation history. Edit ordinary canvas files before calling this tool. If the node is already generating, this waits for that run; if its current output came from the same settings, this returns it without generating again unless regenerate is true.",
     parameters: Type.Object({
       boardId: Type.String({ minLength: 1, maxLength: 100 }),
       nodeId: Type.String({ minLength: 1, maxLength: 120 }),
@@ -586,10 +587,10 @@ export function createAgentTools(
   // Keep the existing catalog order; core contributes on either side of story tools.
   return composeToolContributions([
     { id: "core", tools: coreTools },
-    ...(businessTools.story === false ? [] : [createStoryToolContribution(project)]),
+    ...(businessTools.story === false || !workspaceHasModule(project, "interactive-story") ? [] : [createStoryToolContribution(project)]),
     { id: "core", tools: canvasTools },
-    ...(businessTools.game === false ? [] : [createGameToolContribution(project, playtest)]),
-    ...contributions,
+    ...(businessTools.game === false || !workspaceHasModule(project, "game") ? [] : [createGameToolContribution(project, playtest)]),
+    ...contributions.filter((contribution) => contribution.id === "core" || workspaceHasModule(project, contribution.id) || !project.workspaceManifest && !project.workspaceDiagnostics?.length),
   ]);
 }
 
