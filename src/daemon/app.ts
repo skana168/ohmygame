@@ -1,3 +1,5 @@
+import { applicationComposition, applicationCompositions, type ApplicationCompositionId } from "../shared/application-composition.js";
+import { createExampleToolContribution } from "./example-tools.js";
 import { accountServicesEnabled, publishingEnabled, communityEnabled } from "../shared/application-services.js";
 import { OHMYGAME_WORKSPACE_MODULES, type WorkspaceModuleDescriptor } from "../shared/workspace-manifest.js";
 import { readWorkspaceManifest, validateWorkspaceManifest } from "./workspace-manifest.js";
@@ -168,6 +170,7 @@ import {
 } from "./playable-thumbnails.js";
 
 export interface AppOptions {
+  composition?: ApplicationCompositionId;
   /** Optional OhMyGame account cloud integration; user providers remain available. */
   accountServices?: boolean;
   /** Optional game deployment operations; local builds and archives remain available. */
@@ -606,6 +609,17 @@ const NEEDS_UPGRADE = "This story was made before stories played as their own we
 const CHECKPOINT_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export function createApp(options: AppOptions = {}) {
+  const composition = options.composition ? applicationCompositions[options.composition] : applicationComposition;
+  options = {
+    workspaceModules: composition.modules,
+    businessTools: { game: composition.game, story: composition.story },
+    accountServices: composition.accountServices,
+    publishing: composition.publishing,
+    community: composition.community,
+    toolContributions: composition.modules.some((module) => module.id === "example")
+      ? (project) => [createExampleToolContribution(project)] : undefined,
+    ...options,
+  };
   const gameHostEnabled = options.businessTools?.game !== false &&
     (options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES).some((module) => module.id === "game");
   const storyHostEnabled = options.businessTools?.story !== false &&
@@ -1793,6 +1807,10 @@ export function createApp(options: AppOptions = {}) {
   app.post<{ Body: CreateProjectRequest }>("/projects", { schema: createProjectSchema }, async (request, reply) => {
     try {
       let creationManifest = request.body?.workspaceManifest;
+      if (!creationManifest && !request.body?.workspacePath && composition.defaultManifest) {
+        creationManifest = composition.defaultManifest;
+        request.body = { ...request.body, workspaceManifest: creationManifest };
+      }
       if (request.body?.workspaceManifest !== undefined) {
         try { validateWorkspaceManifest(request.body.workspaceManifest, options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES); }
         catch (cause) { throw new ProjectWorkspaceError((cause as Error).message); }
@@ -1865,7 +1883,7 @@ export function createApp(options: AppOptions = {}) {
         }
         return reply.code(201).send(projectResponse(project));
       }
-      const type = request.body?.type ?? "web-game";
+      const type = request.body?.type ?? composition.defaultProjectType;
       if (type === "interactive-story" && !storyCapabilityEnabled({ type, workspaceManifest: creationManifest }, storyHostEnabled))
         return reply.code(409).send({ error: storyUnavailable });
       const project = await projects.create(request.body?.name, type, request.body?.workspacePath, undefined, request.body?.workspaceManifest);
@@ -1951,7 +1969,7 @@ export function createApp(options: AppOptions = {}) {
     });
   });
 
-  app.get("/examples", async () => examples.list().filter((example) => example.type !== "interactive-story" || storyHostEnabled));
+  app.get("/examples", async () => examples.list().filter((example) => gameHostEnabled && (example.type !== "interactive-story" || storyHostEnabled)));
 
   // Core project types and those installed plugins contribute.
   app.get<{ Querystring: { locale?: string } }>("/project-types", async (request) =>

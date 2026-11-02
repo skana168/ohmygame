@@ -1013,3 +1013,25 @@ unsigned local macOS directory without notarization or hosted release credential
 shipping signed installers and setting up update feeds remain release tasks.
 Identity configuration does not replace product-specific artwork, domain tools,
 plugin identifiers or hosted-service configuration.
+
+## Source application composition
+
+`src/shared/application-selection.ts` selects `ohmygame` (the default) or
+`non-game` before building. Rebuild the host and renderer together after changing
+it. The definitions in `src/shared/application-composition.ts` select workspace
+module metadata, project creation defaults, business tool availability, and
+account, publishing and community service defaults. The non-game composition
+registers the example note module and its tools, uses general workspaces, and
+retains user-configured model/media providers, canvas, files and plugins.
+Existing embedded daemon options can further configure individual services.
+
+`prepare:examples` and the story-resource build skip their game implementations
+and resources for the non-game selection. Renderer entry pages for the native
+game host and recorder are included only for the game composition. Core plugin
+preparation remains required for either selection.
+
+The current composition boundary is not yet a standalone non-game source build:
+core consumers still import optional game implementations, and the host TypeScript
+build includes those sources. Do not remove game sources or describe this as the
+independent template export. Complete source extraction and deleted-source
+build/start verification are prerequisites for that export.
