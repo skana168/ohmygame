@@ -17,3 +17,8 @@ Status: ready-for-agent
 - [ ] Update existing architecture/setup guidance and both UI locales without unrelated directory or formatting cleanup.
 
 **Context:** This is the contract/cleanup step after additive module extraction, not permission to replace the preceding slices with one broad rewrite. Application identity is independently delivered by ticket 11, then combined during template export. Follow the [parent specification](../spec.md), [glossary](../../../GLOSSARY.md), and [accepted ADR](../../../docs/adr/0001-extract-a-reusable-workbench.md).
+
+## Comments
+
+Ticket 07 merged and resolved; all blocking tickets are resolved. Ready for root scheduling.
+The ticket 07 merger has not claimed or started this ticket.

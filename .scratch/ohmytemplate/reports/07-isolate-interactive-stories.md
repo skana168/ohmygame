@@ -1,6 +1,6 @@
 # 07: Optional interactive stories implementation
 
-Status: claimed; implementation ready for merger review.
+Status: resolved; implementation merged and verified.
 
 ## Recovery and integration
 
@@ -37,3 +37,14 @@ Unavailable stories retain graph, sources, instructions, schemas and runtime. Ar
 Browser development used isolated `/tmp/story07-manual-data` and `/tmp/story07-manual-pi`, without provider credentials. Completed onboarding without a model, created an Interactive Story, selected Story, added a Blank Scene, opened the Scene editor and clicked Play; a local story runtime iframe started. Reloaded the application and confirmed the saved Node 1 Scene remained on the story graph. Snapshot automation timed out twice (`Preview automation snapshot timed out after 15000ms`), so no screenshot or visual rendering claim is supplied. DOM observations establish editor controls and runtime iframe startup, not full visual/audio playback quality.
 
 Outstanding: full visual/browser playback interaction and detailed save/reload editing walkthrough; Electron desktop playtesting/window lifecycle; Windows/Linux platform runs and Windows installer cases; real model/media provider generation; private-cloud publishing contract/staging verification (private repository unavailable). Public fixture tests cover module-disabled host/workspace/source registry cases, preservation, renderer fallback, generic canvas access, enabled story/runtime behavior and shared tool selection. Full bundle/resource exclusion is explicitly deferred to ticket 10.
+
+## Merger validation
+
+- Conflict-free merge: `046168bfa471edf95b2ef7d6389793e620f5c162`; implementation `38cc1b6942116268bc0bd5c11056d1d2c32b0973`. No production integration fixes.
+- Fresh Bun 1.4.2 affected run: 52 suites / 678 tests passed, including all playable/story suites, daemon app, shared agent tools/external MCP, general tools, renderer creation/layout/fallback, preview and canvas API. Existing happy-dom iframe connection diagnostics appeared in the passing run.
+- Fresh `bun run typecheck` and `bun run test:node-runtime` passed (Node 24.20.0). Node check establishes authenticated startup, legacy story upgrade, served preview page/runtime/editor bridge, archive export/import, MCP/extensions and independent application restart/shutdown; it does not execute visual browser playback.
+- Supplemental regression `02d5ad63102bf6fc695079ba0a202dd13ae515b4`: existing preset test now reopens a saved story without workspace.json after daemon shutdown. Effective story capability, entire codebase equality, available web runtime definition, validation endpoint and byte-identical graph/Scene files passed. Final app suite: 123 tests passed; typecheck passed again.
+- Full public suite, renderer build, preparation and changelog results above are inherited implementer evidence, not rerun by merger. No new browser or Electron session was run. Original browser runtime-start/reload evidence and all manual/platform/provider/private-cloud limitations above remain explicit.
+- Ticket 07 resolved on host/tool/renderer/deterministic-runtime/persistence evidence. Ticket 10 is ready for root scheduling; no composition implementation or resource-exclusion claim is made here.
+- Fresh `bun run lint` and `git diff --check` passed.
+- `.codegraph/`, existing worktrees and recovery patches retained. No push, PR or cleanup.

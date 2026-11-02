@@ -40,6 +40,8 @@ Execution details are recorded in [execution-state.json](execution-state.json).
 
 - [Ticket 05](issues/05-register-custom-canvas-nodes.md) resolved after conflict-free merge `4eda859f`; source node contracts/renderers and persisted companion tool verified. Fresh 246 affected tests, typecheck and 65-test byte-preservation regression passed (`bc205e80`). Original browser evidence retained; screenshot and Electron gaps remain in the report. Ticket07 unchanged; ticket10 awaits07.
 
+- [Ticket 07](issues/07-isolate-interactive-stories.md) resolved at `046168bfa471edf95b2ef7d6389793e620f5c162`; 678 affected tests, typecheck and Node runtime passed. Legacy daemon-reopen/codebase/byte-preservation regression `02d5ad63102bf6fc695079ba0a202dd13ae515b4` passed (123 final app tests). Browser iframe start/reload is inherited; visual playback/Electron/platform/provider/private-cloud gaps remain explicit in the report. Ticket10 is ready for root scheduling and remains unclaimed.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction
