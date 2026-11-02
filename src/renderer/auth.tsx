@@ -1,3 +1,4 @@
+import { applicationStorageKey } from "./application-identity.js";
 import { createClient, type User } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SignInDialog, type SignInProvider } from "./sign-in-dialog.js";
@@ -33,7 +34,7 @@ export const localDebug = isLocalDebugEnabled(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
 );
-const LOCAL_SESSION_KEY = "ohmygame-local-debug-session";
+const LOCAL_SESSION_KEY = applicationStorageKey("ohmygame-local-debug-session");
 
 interface AuthClient {
   auth: Pick<ReturnType<typeof createClient>["auth"], "exchangeCodeForSession" | "getSession" | "onAuthStateChange" | "signInWithOAuth" | "signOut">;
@@ -331,7 +332,7 @@ export function createSupabaseClient(
   const url = configuredUrl?.trim();
   const key = configuredKey?.trim();
   if (!url || !key) return undefined;
-  return createClient(url, key, { auth: { flowType: "pkce" } });
+  return createClient(url, key, { auth: { flowType: "pkce", ...(applicationStorageKey("ohmygame") === "ohmygame" ? {} : { storageKey: applicationStorageKey("ohmygame:auth") }) } });
 }
 
 function stringValue(value: unknown): string | undefined {

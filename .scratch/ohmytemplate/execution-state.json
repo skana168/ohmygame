@@ -18,28 +18,35 @@
       ]
     },
     "11": {
-      "status": "implementation_complete_merge_pending",
+      "status": "resolved",
       "taskId": "node:delegated-task:command%3Amcp%3Af9ae3f34-c71d-4182-b387-b4a57a9226b2%3Adelegate-task%3A43460ae1-4c20-487f-b99a-76038fadf589",
       "implementation_branch": "t3/configure-application-identity",
       "implementation_sha": "c748f7b8d1c2e706a0d9fd9e8799fda4344585d2",
       "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-3de9a0ab",
-      "remaining_validation": "persisted conversation-history isolation"
+      "remaining_validation": "Installer/signing/platform/native-window/live-provider/private-cloud checks remain manual; required local persisted-history proof passed.",
+      "merged": true,
+      "merge_sha": "75d14f6fe6c6b27d7ba12a32b1cf38d1180f0178",
+      "regression_sha": "4007afd40168fed9690acf6a62dc368bd6baa4de",
+      "merge_result": "Conflict-free; 143 focused tests passed; final history/title case passed; typecheck, lint and diff checks passed.",
+      "tracker_sha": "4ad52459"
     },
     "02": {
-      "status": "retry_pending",
+      "status": "running",
       "previous_failure": "provider usage limit; user requested continuation",
       "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-71035238",
       "previous_branch": "t3/add-gated-story-tools",
       "recovery_patch": "/tmp/ohmytemplate-recovery-02/working.patch",
-      "previous_task_suffix": "e6194020-b4df-4e03-801d-28c777fb857d"
+      "previous_task_suffix": "e6194020-b4df-4e03-801d-28c777fb857d",
+      "taskId": "node:delegated-task:command%3Amcp%3Af9ae3f34-c71d-4182-b387-b4a57a9226b2%3Adelegate-task%3A33480d87-489c-4d4c-a071-88e4efb29fd8"
     },
     "03": {
-      "status": "retry_pending",
+      "status": "running",
       "previous_failure": "provider usage limit; user requested continuation",
       "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-e1c4f6e9",
       "previous_branch": "t3/version-workspace-manifest",
       "recovery_patch": "/tmp/ohmytemplate-recovery-03/working.patch",
-      "previous_task_suffix": "7c5e8d26-b62b-4fb2-ac89-a864a5de4dd4"
+      "previous_task_suffix": "7c5e8d26-b62b-4fb2-ac89-a864a5de4dd4",
+      "taskId": "node:delegated-task:command%3Amcp%3Af9ae3f34-c71d-4182-b387-b4a57a9226b2%3Adelegate-task%3A2e249b1f-f6a7-4e7c-8b9a-988a151da03d"
     }
   },
   "notes": [

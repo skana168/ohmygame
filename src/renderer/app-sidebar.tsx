@@ -1,3 +1,4 @@
+import { applicationName, applicationStorageKey } from "./application-identity.js";
 import { cloneElement, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import {
   ArrowDownToLine,
@@ -46,9 +47,9 @@ const DEFAULT_WIDTH = 232;
 const RECENT_LIMIT = 8;
 // Home shows the recent projects too, so the pages' sidebar keeps a few and links to the rest.
 const SIDEBAR_RECENT = 5;
-const WIDTH_KEY = "ohmygame-sidebar-width";
-const COLLAPSED_KEY = "ohmygame-sidebar-collapsed";
-const RECENT_OPEN_KEY = "ohmygame-sidebar-recent-open";
+const WIDTH_KEY = applicationStorageKey("ohmygame-sidebar-width");
+const COLLAPSED_KEY = applicationStorageKey("ohmygame-sidebar-collapsed");
+const RECENT_OPEN_KEY = applicationStorageKey("ohmygame-sidebar-recent-open");
 
 // Every page renders its own frame, so the sidebar's width, collapsed state
 // and folded recent projects live here and survive moving between pages.
@@ -327,7 +328,7 @@ export function AppSidebar({ active, onNavigate }: { active?: SidebarActive; onN
         <div className="sidebar-head">
           <button type="button" className="sidebar-brand" aria-label={t("sidebar.brandHome")} onClick={() => onNavigate("home")}>
             {/* Collapsed, the logo stands alone above the project icons, at their size as in a project's rail. */}
-            <BrandLogo size={collapsed ? 32 : 22} /><span>OhMyGame</span>
+            <BrandLogo size={collapsed ? 32 : 22} /><span>{applicationName}</span>
           </button>
           {mac || collapsed ? null : toggleButton}
         </div>

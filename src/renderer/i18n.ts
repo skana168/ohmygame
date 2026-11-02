@@ -1,3 +1,4 @@
+import { applicationName, applicationPackageName } from "./application-identity.js";
 import i18next, { type ParseKeys } from "i18next";
 import { createElement, Fragment, type ReactNode } from "react";
 import en from "./locales/en.js";
@@ -13,7 +14,7 @@ declare module "i18next" {
   }
 }
 
-const LANGUAGE_STORAGE_KEY = "ohmygame:language";
+const LANGUAGE_STORAGE_KEY = `${applicationPackageName}:language`;
 
 export function readLanguagePreference(): LanguagePreference {
   try {
@@ -56,7 +57,10 @@ export const language = resolveLanguage(
   systemLanguages(),
 );
 
+i18next.use({ type: "postProcessor", name: "applicationIdentity", process: (value: string) => value.replaceAll("OhMyGame", applicationName) });
+
 void i18next.init({
+  postProcess: ["applicationIdentity"],
   lng: language,
   fallbackLng: "en",
   resources: { en: { translation: en }, "zh-CN": { translation: zhCN } },
@@ -82,7 +86,7 @@ export function tNodes(
     i18next.getResource(language, "translation", key) ??
       i18next.getResource("en", "translation", key) ??
       key,
-  );
+  ).replaceAll("OhMyGame", applicationName);
   return createElement(
     Fragment,
     null,

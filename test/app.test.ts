@@ -1,13 +1,16 @@
+import identity from "../application-identity.cjs";
 import { mp3Fixture } from "./audio-fixtures.js";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { NativeCodingSession } from "../src/daemon/agent-runtimes/native-session.js";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/daemon/app.js";
 import type { CodingSession } from "../src/daemon/agent.js";
 import { CHECKPOINT_ENTRY, TURN_END_ENTRY } from "../src/daemon/checkpoint-extension.js";
-import { ConversationManager } from "../src/daemon/conversations.js";
+import { ConversationManager, sessionDirectory } from "../src/daemon/conversations.js";
 import { writePlayableFixtureWorkspace } from "./playable-fixture.js";
 import { MODEL_3D_MODELS } from "../src/shared/generation-config.js";
 
@@ -21,6 +24,89 @@ async function saveProjectAsset(app: Awaited<ReturnType<typeof createApp>>, proj
 }
 
 describe("daemon", () => {
+  it("keeps independently configured applications' projects, conversations and provider credentials separate across restart", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "application-isolation-"));
+    const base = identity.loadIdentity();
+    const firstDirectory = identity.dataDirectory({ ...base, name: "Notes", packageName: "notes", desktopId: "org.example.notes", dataDirectory: "notes" }, directory, {});
+    const secondDirectory = identity.dataDirectory({ ...base, name: "Boards", packageName: "boards", desktopId: "org.example.boards", dataDirectory: "boards" }, directory, {});
+    // Reuse the native-session scripted adapter boundary: real session persistence,
+    // deterministic agent output, and no live provider or CLI process.
+    const createSession: NonNullable<Parameters<typeof createApp>[0]>["createSession"] = async (project, conversation) => {
+      // Match the existing persisted-session fixture format while preserving the
+      // newly created conversation ID (production uses ConversationManager.open).
+      await writeFile(conversation.sessionPath, JSON.stringify({ type: "session", version: 3, id: conversation.summary.id, timestamp: new Date(0).toISOString(), cwd: project.workspacePath }) + "\n");
+      return new NativeCodingSession({
+        runtime: "claude-code-cli",
+        model: "sonnet",
+        sessionManager: SessionManager.open(conversation.sessionPath, sessionDirectory(project), project.workspacePath),
+        toolNames: [],
+        requestApproval: async () => "deny",
+        createDriver: () => ({
+          runTurn: async (_input, sink) => {
+            sink.textDone("answer", "Notes private answer");
+            return { status: "completed" };
+          },
+          interrupt: async () => {},
+          dispose: () => {},
+        }),
+      });
+    };
+    const first = createApp({ dataDirectory: firstDirectory, createSession });
+    const second = createApp({ dataDirectory: secondDirectory });
+    let reopened: ReturnType<typeof createApp> | undefined;
+    let otherRestarted: ReturnType<typeof createApp> | undefined;
+    try {
+      const created = await first.inject({ method: "POST", url: "/projects", payload: { name: "Private notes", type: "general" } });
+      expect(created.statusCode).toBe(201);
+      const project = created.json();
+      const conversation = await first.inject({ method: "POST", url: `/projects/${project.id}/conversations` });
+      expect(conversation.statusCode).toBe(201);
+      const conversationUrl = `/projects/${project.id}/conversations/${conversation.json().id}`;
+      expect((await first.inject({ method: "POST", url: `${conversationUrl}/turns`, payload: { prompt: "Notes private request" } })).statusCode).toBe(202);
+      const expectedItems = [
+        expect.objectContaining({ type: "userMessage", text: "Notes private request" }),
+        expect.objectContaining({ type: "agentMessage", text: "Notes private answer", status: "completed" }),
+      ];
+      await vi.waitFor(async () => {
+        const detail = (await first.inject({ method: "GET", url: conversationUrl })).json();
+        expect(detail.agent.status).toBe("idle");
+        expect(detail.turns.flatMap((turn: { items: unknown[] }) => turn.items)).toEqual(expectedItems);
+      });
+      // Give the other identity its own project on the very same workspace:
+      // rejecting a foreign session must not rely solely on a missing project.
+      const otherProject = (await second.inject({ method: "POST", url: "/projects", payload: { name: "Boards", type: "general", workspacePath: project.workspacePath } })).json();
+      const otherConversations = `/projects/${otherProject.id}/conversations`;
+      expect((await second.inject({ method: "GET", url: otherConversations })).json()).toEqual([]);
+      expect((await second.inject({ method: "GET", url: `${otherConversations}/${conversation.json().id}` })).statusCode).toBe(404);
+      expect((await first.inject({ method: "PUT", url: "/settings/models/providers/meshy", payload: { apiKey: "notes-only-key" } })).statusCode).toBe(200);
+      expect((await second.inject({ method: "GET", url: "/projects" })).json()).toEqual([expect.objectContaining({ id: otherProject.id })]);
+      expect((await second.inject({ method: "GET", url: `/projects/${project.id}/conversations` })).statusCode).toBe(404);
+      expect((await second.inject({ method: "GET", url: "/settings/models/providers/meshy" })).json()).toEqual({ configured: false });
+      expect((await first.inject({ method: "GET", url: `/projects/${project.id}/conversations` })).json()).toEqual([expect.objectContaining({ id: conversation.json().id })]);
+      expect((await first.inject({ method: "PATCH", url: conversationUrl, payload: { title: "Private session" } })).statusCode).toBe(200);
+      await first.close();
+      reopened = createApp({ dataDirectory: firstDirectory });
+      const restored = await reopened.inject({ method: "GET", url: conversationUrl });
+      expect(restored.statusCode).toBe(200);
+      expect(restored.json().turns.flatMap((turn: { items: unknown[] }) => turn.items)).toEqual(expectedItems);
+      expect((await reopened.inject({ method: "GET", url: `/projects/${project.id}/conversations` })).json()).toEqual([expect.objectContaining({ id: conversation.json().id, title: "Private session", messageCount: 2 })]);
+      await second.close();
+      otherRestarted = createApp({ dataDirectory: secondDirectory });
+      expect((await otherRestarted.inject({ method: "GET", url: otherConversations })).json()).toEqual([]);
+      expect((await otherRestarted.inject({ method: "GET", url: `${otherConversations}/${conversation.json().id}` })).statusCode).toBe(404);
+      await otherRestarted.close();
+      expect((await reopened.inject({ method: "GET", url: "/projects" })).json()).toEqual([expect.objectContaining({ id: project.id, name: "Private notes" })]);
+
+      expect((await reopened.inject({ method: "GET", url: "/settings/models/providers/meshy" })).json()).toEqual({ configured: true });
+    } finally {
+      await first.close();
+      await second.close();
+      await reopened?.close();
+      await otherRestarted?.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("exposes project activity without requiring a conversation event subscription", async () => {
     let finish!: () => void;
     const completion = new Promise<void>((resolve) => { finish = resolve; });

@@ -1,10 +1,11 @@
+import { applicationStorageKey } from "./application-identity.js";
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type UIEventHandler } from "react";
 import { House, PanelToggle, type IconComponent } from "./icons.js";
 import { t } from "./i18n.js";
 
 const DEFAULT_AGENT_WIDTH = 430;
 const MIN_AGENT_WIDTH = 320;
-const AGENT_WIDTH_STORAGE_KEY = "ohmygame-agent-width";
+const AGENT_WIDTH_STORAGE_KEY = applicationStorageKey("ohmygame-agent-width");
 
 /** The Plugin Builder's chrome: its assistant on the left, beside the plugin. */
 export function WorkspaceShell({ agentCollapsed, onHome, onExpandAgent, homeLabel = t("sidebar.home"), homeIcon = House, className = "", agent, children }: {

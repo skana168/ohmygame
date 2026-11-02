@@ -1,3 +1,4 @@
+import { applicationStorageKey } from "./application-identity.js";
 // Settings → General: choices that stay on this computer. The desktop app
 // hears the ones it acts on (keeping the computer awake, updating) from here.
 
@@ -29,16 +30,16 @@ const DEFAULTS: GeneralPreferences = {
 };
 
 const KEYS: Record<keyof GeneralPreferences, string> = {
-  openTo: "ohmygame:open-to",
-  sendKey: "ohmygame:send-key",
-  runNotifications: "ohmygame:run-notifications",
-  runSound: "ohmygame:run-sound",
-  keepAwake: "ohmygame:keep-awake",
-  autoUpdate: "ohmygame:auto-update",
+  openTo: applicationStorageKey("ohmygame:open-to"),
+  sendKey: applicationStorageKey("ohmygame:send-key"),
+  runNotifications: applicationStorageKey("ohmygame:run-notifications"),
+  runSound: applicationStorageKey("ohmygame:run-sound"),
+  keepAwake: applicationStorageKey("ohmygame:keep-awake"),
+  autoUpdate: applicationStorageKey("ohmygame:auto-update"),
 };
 
-const LAST_PROJECT_KEY = "ohmygame:last-project";
-export const GENERAL_PREFERENCES_EVENT = "ohmygame:general-preferences";
+const LAST_PROJECT_KEY = applicationStorageKey("ohmygame:last-project");
+export const GENERAL_PREFERENCES_EVENT = applicationStorageKey("ohmygame:general-preferences");
 
 export function readGeneralPreferences(): GeneralPreferences {
   const openTo = readStored(KEYS.openTo);
