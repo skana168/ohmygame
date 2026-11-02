@@ -1,3 +1,5 @@
+import { workspaceHasModule } from "../shared/workspace-policy.js";
+import type { ProjectState } from "../shared/contracts.js";
 import { Clapperboard, Gamepad2, Globe2, Image } from "./icons.js";
 import { PROJECT_TYPE_IDS, type ProjectType } from "../shared/contracts.js";
 import { t } from "./i18n.js";
@@ -34,6 +36,7 @@ export function projectTypeDescription(type: ProjectType): string {
   return PROJECT_TYPE_IDS.includes(type) ? t(`projectTypeDescription.${type}`) : "";
 }
 
-export function projectTypeLabel(type: ProjectType): string {
+export function projectTypeLabel(type: ProjectType, project?: ProjectState): string {
+  if (project && project.type !== "asset-canvas" && !workspaceHasModule(project, "game")) return t("createDialog.workspace");
   return PROJECT_TYPE_IDS.includes(type) ? t(`projectType.${type}`) : type;
 }

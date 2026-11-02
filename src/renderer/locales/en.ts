@@ -1035,6 +1035,9 @@ const en = {
     projectType: "Project type",
   },
   createDialog: {
+    workspace: "Workspace",
+    workspaceDescription: "Files, conversations and a general-purpose canvas",
+    untitledWorkspace: "Untitled workspace",
     incompatiblePlugins: "The referenced plugins need different project types. Choose compatible plugins.",
     pluginsFailed: "Couldn't load plugins, so the project type can't be chosen yet.",
     restartForFolders:
@@ -2673,6 +2676,7 @@ const en = {
     newBoard: "New board",
     boardOptions: "Board options: {{name}}",
     assetCanvasWorkspace: "Asset Canvas workspace",
+    workspace: "Workspace",
     designWorkspace: "Design workspace",
     actionFailed: "Could not complete this action.",
     reconnectFailed: "Could not reconnect. Your canvas is still open.",
@@ -2899,7 +2903,7 @@ const en = {
       existingDocument: "Existing document",
       existingDocumentHint: "Add a document reference",
       table: "Table",
-      tableHint: "Editable game data",
+      tableHint: "Editable data",
       existingTable: "Existing table",
       existingTableHint: "Add a shared table reference",
       sharedTable: "Shared table",

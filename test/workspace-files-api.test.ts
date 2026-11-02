@@ -15,18 +15,18 @@ afterEach(async () => {
   }
 });
 
-async function setup() {
+async function setup(generic = false) {
   const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-workspace-files-"));
   const app = createApp({ dataDirectory: directory });
   fixtures.push({ app, directory });
-  const response = await app.inject({ method: "POST", url: "/projects", payload: { name: "Files" } });
+  const response = await app.inject({ method: "POST", url: "/projects", payload: { name: "Files", ...(generic ? { type: "general", workspaceManifest: { version: 1, modules: [] } } : {}) } });
   const project = response.json<ProjectState>();
   return { app, project, base: `/projects/${project.id}/files` };
 }
 
 describe("project file management", () => {
-  it("creates, renames and deletes files and folders without overwriting other files", async () => {
-    const { app, project, base } = await setup();
+  it.each([false, true])("creates, renames and deletes files and folders without overwriting other files (generic: %s)", async (generic) => {
+    const { app, project, base } = await setup(generic);
     expect((await app.inject({ method: "POST", url: base, payload: { name: "src", kind: "folder" } })).statusCode).toBe(201);
     const payload = { parent: "src", name: "场景.ts", kind: "file" };
     expect((await app.inject({ method: "POST", url: base, payload })).json()).toEqual({ path: "src/场景.ts" });

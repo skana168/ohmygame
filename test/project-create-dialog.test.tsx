@@ -115,6 +115,7 @@ describe("new project dialog", () => {
       "Godot",
       "General Game",
       "Tile Map",
+      "Workspace",
       "More types…",
     ]);
     const dialog = document.querySelector('[role="dialog"]')!.textContent;
@@ -123,6 +124,16 @@ describe("new project dialog", () => {
     expect(dialog).not.toContain("Canvas format");
     expect(dialog).not.toContain("First message");
     expect(button("Create")).toBeDefined();
+  });
+
+  it("creates a non-game Workspace with an explicit persisted module selection", async () => {
+    await act(async () => root.render(<ProjectCreateDialog onClose={() => {}} onCreated={() => {}} />));
+    await act(async () => typeSelect().click());
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) => item.textContent?.startsWith("Workspace"))!;
+    expect(option).toBeDefined();
+    await act(async () => option.click());
+    await act(async () => button("Create").click());
+    expect(createProject).toHaveBeenCalledWith({ type: "general", workspaceManifest: { version: 1, modules: [] } });
   });
 
   it("starts the project with the prompt as its first message, in a type its plugin supports", async () => {

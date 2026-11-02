@@ -156,6 +156,8 @@ export class ExternalMcpLauncher {
       case "ping":
         return {};
       case "tools/list": {
+        // Once bound, cached application schemas can advertise disabled workspace tools.
+        if (this.#connection || this.#projectId) return this.#forward(message, false);
         const catalog = await this.#catalog();
         if (catalog) return { tools: catalog.tools };
         // Never connected from a running app yet: ask it, if it is open.
@@ -261,8 +263,7 @@ export class ExternalMcpLauncher {
         if (
           this.#projectId &&
           connection.projectId !== this.#projectId &&
-          tool &&
-          !PROJECT_INDEPENDENT_TOOLS.has(tool)
+          (message.method === "tools/list" || (tool && !PROJECT_INDEPENDENT_TOOLS.has(tool)))
         ) {
           const restored = (await this.#rpc(
             connection,
@@ -278,7 +279,7 @@ export class ExternalMcpLauncher {
             controller.signal,
           )) as ToolResult;
           // Keep the selection so a later call cannot silently fall back to the cwd project.
-          if (restored.isError) return restored;
+          if (restored.isError) return message.method === "tools/list" ? { tools: [] } : restored;
           connection.projectId = this.#projectId;
         }
         dispatched = true;
