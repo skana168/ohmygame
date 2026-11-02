@@ -1,3 +1,5 @@
+import { EXAMPLE_WORKSPACE_MODULE } from "../src/modules/example/manifest.js";
+import { OHMYGAME_WORKSPACE_MODULES } from "../src/shared/workspace-manifest.js";
 import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -44,6 +46,62 @@ async function waitForJob(store: CanvasStore, projectId: string) {
   return (await store.jobs(projectId))[0]!;
 }
 describe("Markdown design workspace", () => {
+  it("saves and reopens custom data, diagnoses invalid agent edits and preserves missing modules", async () => {
+    const directory = await temp(), library = new AssetLibrary(directory);
+    const projects = new ProjectManager(directory, library, [...OHMYGAME_WORKSPACE_MODULES, EXAMPLE_WORKSPACE_MODULE]);
+    await Promise.all([library.load(), projects.load()]);
+    const tools = new ToolRunner(directory, fakeGenerator);
+    const project = await projects.create("Notes", "general", undefined, undefined, { version: 1, modules: [{ id: "example", config: {} }] });
+    const store = new CanvasStore(projects, library, tools); stores.push(store);
+    const workspace = await store.workspace(project.id), boardId = workspace.boards[0]!.id;
+    const detail = await store.board(project.id, boardId);
+    detail.board.nodes.push({ id: "note", type: "custom", position: { x: 1, y: 2 }, data: { module: "example", kind: "note", value: { text: "Remember", done: false } } });
+    detail.board.nodes.push({ id: "text", type: "text", position: { x: 3, y: 4 }, data: { text: "General", instruction: "" } });
+    detail.board.editorLayout.nodes = { note: { x: 1, y: 2 }, text: { x: 3, y: 4 } };
+    const saved = await store.saveBoard(project.id, detail.board, detail.revision);
+    const restored = new CanvasStore(projects, library, tools); stores.push(restored);
+    expect((await restored.board(project.id, boardId)).board.nodes).toEqual(saved.board.nodes);
+    const invalid = structuredClone(saved.board);
+    if (invalid.nodes[0]!.type === "custom") invalid.nodes[0]!.data.value.done = "invalid";
+    await expect(store.saveBoard(project.id, invalid, saved.revision)).rejects.toThrow("Invalid example/note data");
+    expect((await store.board(project.id, boardId)).revision).toBe(saved.revision);
+    const file = path.join(project.workspacePath, `canvas/boards/${boardId}.json`);
+    const raw = JSON.parse(await readFile(file, "utf8"));
+    raw.nodes[0].data.value.done = "invalid";
+    await writeFile(file, JSON.stringify(raw));
+    expect((await checkCanvasWorkspace(project.workspacePath)).issues).toContainEqual({ file: `canvas/boards/${boardId}.json`, message: expect.stringContaining("Invalid example/note data") });
+    const damaged = await store.board(project.id, boardId);
+    damaged.board.nodes[1]!.title = "Still editable";
+    await store.saveBoard(project.id, damaged.board, damaged.revision);
+    expect((await store.board(project.id, boardId)).board.nodes[0]!.data).toEqual(raw.nodes[0].data);
+    raw.nodes[0].data = { module: "removed", kind: "note", value: { keep: "original" } };
+    await writeFile(file, JSON.stringify(raw));
+    expect((await checkCanvasWorkspace(project.workspacePath)).issues).toContainEqual({ file: `canvas/boards/${boardId}.json`, message: expect.stringContaining("Missing workspace module removed") });
+    const missing = await store.board(project.id, boardId);
+    missing.board.nodes[1]!.title = "Another edit";
+    await store.saveBoard(project.id, missing.board, missing.revision);
+    expect((await store.board(project.id, boardId)).board.nodes[0]!.data).toEqual(raw.nodes[0].data);
+    // Restore the source identity and valid data, as an agent would repair the file.
+    raw.nodes[0].data = { module: "example", kind: "note", value: { text: "Remember", done: true } };
+    await writeFile(file, JSON.stringify(raw));
+    expect((await checkCanvasWorkspace(project.workspacePath)).ok).toBe(true);
+    expect((await restored.board(project.id, boardId)).board.nodes[0]!.data).toEqual(raw.nodes[0].data);
+    project.workspaceManifest!.modules = [];
+    await writeFile(path.join(project.workspacePath, "workspace.json"), JSON.stringify(project.workspaceManifest));
+    expect((await checkCanvasWorkspace(project.workspacePath)).issues).toContainEqual({ file: `canvas/boards/${boardId}.json`, message: expect.stringContaining("Missing workspace module example") });
+    const disabled = await store.board(project.id, boardId);
+    const edited = structuredClone(disabled.board);
+    if (edited.nodes[0]!.type === "custom") edited.nodes[0]!.data.value.text = "Blocked edit";
+    await expect(store.saveBoard(project.id, edited, disabled.revision)).rejects.toThrow("missing workspace module example");
+    disabled.board.nodes[1]!.title = "Unrelated edit while disabled";
+    const preserved = await store.saveBoard(project.id, disabled.board, disabled.revision);
+    expect(preserved.board.nodes[0]!.data).toEqual(raw.nodes[0].data);
+    project.workspaceManifest!.modules = [{ id: "example", config: {} }];
+    await writeFile(path.join(project.workspacePath, "workspace.json"), JSON.stringify(project.workspaceManifest));
+    expect((await checkCanvasWorkspace(project.workspacePath)).ok).toBe(true);
+
+  });
+
   it("logs Canvas preparation failures once and preserves the error when logging fails", async () => {
     const failure = new ImageGenerationError("Provider is disabled", 400);
     const resolve = vi.fn().mockRejectedValueOnce(failure).mockImplementation(async (_tool, input) => input);

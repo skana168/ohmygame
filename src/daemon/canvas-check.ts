@@ -1,3 +1,5 @@
+import { readWorkspaceManifest } from "./workspace-manifest.js";
+import { customCanvasNodeIssue } from "../shared/custom-canvas-nodes.js";
 import { readCanvasTable } from "./canvas-workspace.js";
 import { canvasNodeAssetIds } from "../shared/canvas-assets.js";
 import { resolveAssetCanvasAssetId } from "../shared/asset-canvas.js";
@@ -15,6 +17,7 @@ export async function checkCanvasWorkspace(workspace: string): Promise<CanvasChe
     try { return await operation(); }
     catch (cause) { issues.push({ file, message: cause instanceof Error ? cause.message : String(cause) }); return undefined; }
   };
+  const workspaceManifest = await inspect("workspace.json", () => readWorkspaceManifest(workspace));
   const index = await inspect("canvas/index.json", () => readCanvasIndex(workspace));
   if (!index) {
     if (!issues.length) issues.push({ file: "canvas/index.json", message: "No canvas workspace exists. Create index.json and the files it references." });
@@ -33,6 +36,12 @@ export async function checkCanvasWorkspace(workspace: string): Promise<CanvasChe
   for (const entry of index.boards) {
     const file = `canvas/boards/${entry.id}.json`, inspected = await inspect(file, () => inspectCanvasBoard(workspace, entry.id)), detail = inspected?.detail;
     if (!detail) { if (!issues.some((issue) => issue.file === file)) issues.push({ file, message: "Board file is missing" }); continue; }
+    for (const node of detail.board.nodes) if (node.type === "custom") {
+      const issue = workspaceManifest && (!Array.isArray(workspaceManifest.modules) || !workspaceManifest.modules.some((entry) => entry?.id === node.data.module))
+        ? `Missing workspace module ${node.data.module}. Restore it to edit this node; saved data is preserved.`
+        : customCanvasNodeIssue(node.data);
+      if (issue) issues.push({ file, message: `Node ${node.id}: ${issue}` });
+    }
     for (const message of inspected.issues) issues.push({ file: `canvas/editor/${entry.id}.json`, message });
     for (const node of detail.board.nodes) if (node.type === "document" && !documentIds.has(node.data.documentId)) issues.push({ file, message: `Node ${node.id}: unknown document ${node.data.documentId}` });
     for (const node of detail.board.nodes) if (node.type === "table" && !tableIds.has(node.data.tableId)) issues.push({ file, message: `Node ${node.id}: unknown table ${node.data.tableId}` });

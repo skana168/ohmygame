@@ -1,5 +1,6 @@
 // English is the source language. Add every UI string here first.
 const en = {
+  customCanvas: { note: "Example note", done: "Done", missing: "Restore module {{module}}/{{kind}} to edit this node. Saved data is preserved.", invalid: "Invalid {{module}}/{{kind}} data. Fix the saved payload; content is preserved." },
   audioStudio: {
     speechOptions: "Speech options",
     standardVoice: "Standard",

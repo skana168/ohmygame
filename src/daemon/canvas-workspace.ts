@@ -1,4 +1,5 @@
-import { canvasPolicy } from "../shared/workspace-policy.js";
+import { canvasNodeContributions, customCanvasNodeIssue } from "../shared/custom-canvas-nodes.js";
+import { canvasPolicy, workspaceHasModule } from "../shared/workspace-policy.js";
 import { audioSettings } from "../shared/audio.js";
 import { CANVAS_TABLE_SCHEMA, createCanvasTable, isCanvasTable, canvasTablePath, type CanvasTable, type CanvasTableDetail } from "../shared/canvas-table.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -66,9 +67,16 @@ The canvas edits ordinary project files. Documents are Markdown and media files 
 | schemas/ | Exact persisted file contracts |
 | jobs.json | Generation history managed by the application |
 
+Custom nodes use type "custom" with data {module, kind, value}. Validate value against schemas/custom/<module>-<kind>.schema.json. Preserve unknown or unavailable custom-node payloads. Run canvas_check after agent edits.
+
 Read AGENTS.md for editing conventions. Asset paths are relative to the project root; Markdown image links are relative to the document file. Node IDs need only be unique within their board; asset, document and table IDs are shared across the canvas workspace.
 `;
 export async function ensureCanvasContract(workspace: string, replaceReadme = false): Promise<void> {
+  for (const contribution of canvasNodeContributions) {
+    const name = `schemas/custom/${validId(contribution.module)}-${validId(contribution.kind)}.schema.json`;
+    const text = `${JSON.stringify(contribution.dataSchema, null, 2)}\n`;
+    if (await readCanvasFile(workspace, name) !== text) await writeAtomic(workspace, name, text);
+  }
   for (const [name, value] of [["index", CANVAS_INDEX_SCHEMA], ["board", CANVAS_BOARD_SCHEMA], ["layout", CANVAS_LAYOUT_SCHEMA], ["assets", CANVAS_ASSETS_SCHEMA], ["table", CANVAS_TABLE_SCHEMA]] as const) {
     const file = `schemas/${name}.schema.json`, text = `${JSON.stringify(value, null, 2)}\n`;
     if (await readCanvasFile(workspace, file) !== text) await writeAtomic(workspace, file, text);
@@ -196,6 +204,34 @@ async function writeCanvasBoard(workspace: string, board: CanvasBoard): Promise<
   await writeAtomic(workspace, `boards/${validId(board.id)}.json`, text);
   await writeJson(workspace, `editor/${board.id}.json`, editorLayout);
   return (await readCanvasBoard(workspace, board.id))!;
+}
+/** Module tools use the same lock, board revision and atomic persistence as editor saves. */
+export async function updateCustomCanvasNode(
+  project: import("../shared/contracts.js").ProjectState,
+  input: { boardId: string; nodeId: string; revision: string; data: import("../shared/custom-canvas-nodes.js").CustomCanvasNode["data"] },
+  signal?: AbortSignal,
+): Promise<CanvasBoardDetail> {
+  return withCanvasLock(project.workspacePath, async () => {
+    signal?.throwIfAborted();
+    if (!workspaceHasModule(project, input.data.module)) throw new CanvasError(`Missing workspace module ${input.data.module}`);
+    const index = await readCanvasIndex(project.workspacePath);
+    if (!index?.boards.some((entry) => entry.id === input.boardId)) throw new CanvasError("Canvas board not found", 404);
+    const detail = await readCanvasBoard(project.workspacePath, input.boardId);
+    if (!detail || detail.revision !== input.revision) throw new CanvasError("The board changed. Reload the latest board before saving.", 409);
+    const data = input.data;
+    const issue = customCanvasNodeIssue(data);
+    if (issue) throw new CanvasError(issue);
+    const existing = detail.board.nodes.find((node) => node.id === input.nodeId);
+    if (existing && (existing.type !== "custom" || existing.data.module !== data.module || existing.data.kind !== data.kind)) throw new CanvasError("Node ID belongs to a different node");
+    if (existing) existing.data = data;
+    else {
+      const position = { x: 96, y: 96 };
+      detail.board.nodes.push({ id: input.nodeId, type: "custom", position, data });
+      detail.board.editorLayout.nodes[input.nodeId] = position;
+    }
+    signal?.throwIfAborted();
+    return writeCanvasBoard(project.workspacePath, detail.board);
+  });
 }
 export async function canvasReferencesAsset(workspace: string, id: string): Promise<boolean> {
   const index = await readCanvasIndex(workspace);
@@ -390,6 +426,15 @@ export class CanvasStore {
       const current = await this.board(id, board.id);
       if (current.revision !== expected) throw new CanvasError("The board changed. Reload the latest board before saving.", 409);
       if (!isCanvasBoard(board)) throw new CanvasError("Invalid canvas board");
+      for (const node of board.nodes) {
+        if (node.type !== "custom") continue;
+        const previous = current.board.nodes.find((entry) => entry.id === node.id);
+        // Unknown/invalid saved payloads remain movable and survive unrelated edits.
+        if (previous?.type === "custom" && sameJson(previous.data, node.data)) continue;
+        if (!workspaceHasModule(project, node.data.module)) throw new CanvasError(`Node ${node.id}: missing workspace module ${node.data.module}`);
+        const issue = customCanvasNodeIssue(node.data);
+        if (issue) throw new CanvasError(`Node ${node.id}: ${issue}`);
+      }
       const index = (await readCanvasIndex(workspace))!;
       const documents = index.documents;
       const existingTables = new Set(current.board.nodes.flatMap((node) => node.type === "table" ? [node.data.tableId] : []));

@@ -499,6 +499,7 @@ it.each([{}, { game: false }, { story: false }, { game: false, story: false }])(
     "canvas_check",
     "canvas_initialize",
     "generate_canvas_media",
+    "example_note",
     "example_echo",
     "business_echo",
     ...(businessTools.game === false ? [] : ["game_use"]),
@@ -509,6 +510,13 @@ it.each([{}, { game: false }, { story: false }, { game: false, story: false }])(
   expect(echoed.json()).toMatchObject({ result: { content: [{ text: `${project.id}: hello` }] } });
   const example = await post({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "example_echo", arguments: { message: "hello" } } }, { "mcp-session-id": session });
   expect(example.json()).toMatchObject({ result: { content: [{ text: "hello" }] } });
+  const workspace = (await app.inject({ url: `/projects/${project.id}/canvas/workspace`, headers: { authorization: "Bearer app-token" } })).json();
+  const board = (await app.inject({ url: `/projects/${project.id}/canvas/boards/${workspace.boards[0].id}`, headers: { authorization: "Bearer app-token" } })).json();
+  const note = await post({ jsonrpc: "2.0", id: 50, method: "tools/call", params: { name: "example_note", arguments: { boardId: board.board.id, nodeId: "mcp-note", revision: board.revision, text: "From external MCP", done: false } } }, { "mcp-session-id": session });
+  expect(note.json()).toMatchObject({ result: { content: [{ text: "Saved note mcp-note in board " + board.board.id + "." }] } });
+  const persistedNote = (await app.inject({ url: `/projects/${project.id}/canvas/boards/${board.board.id}`, headers: { authorization: "Bearer app-token" } })).json();
+  expect(persistedNote.board.nodes).toContainEqual(expect.objectContaining({ id: "mcp-note", data: { module: "example", kind: "note", value: { text: "From external MCP", done: false } } }));
+
   for (const name of [...(businessTools.game === false ? ["game_use"] : []), ...(businessTools.story === false ? ["playable_check", "playable_add_node"] : [])]) {
     const rejected = await post({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name, arguments: {} } }, { "mcp-session-id": session });
     expect(rejected.json()).toMatchObject({ result: { isError: true } });
@@ -519,7 +527,7 @@ it.each([{}, { game: false }, { story: false }, { game: false, story: false }])(
   const selected = await post({ jsonrpc: "2.0", id: 8, method: "tools/list" }, { "mcp-session-id": session });
   const selectedNames = selected.json().result.tools.map((tool: { name: string }) => tool.name);
   expect(selectedNames).toContain("canvas_check");
-  for (const name of ["game_use", "playable_check", "example_echo", "business_echo"]) {
+  for (const name of ["game_use", "playable_check", "example_note", "example_echo", "business_echo"]) {
     expect(selectedNames).not.toContain(name);
     const rejected = await post({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name, arguments: {} } }, { "mcp-session-id": session });
     expect(rejected.json()).toMatchObject({ result: { isError: true } });

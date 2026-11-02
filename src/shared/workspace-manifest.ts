@@ -13,6 +13,7 @@ export interface WorkspaceModuleDescriptor {
   requires?: readonly string[];
   conflicts?: readonly string[];
   agentInstructions?: string;
+  canvasNodes?: readonly { kind: string; dataSchema: object }[];
 }
 
 export const WORKSPACE_MANIFEST_SCHEMA = {

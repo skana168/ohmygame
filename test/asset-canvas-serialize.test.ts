@@ -1,3 +1,7 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { CustomCanvasNodeRenderer } from "../src/renderer/custom-canvas-node.js";
+import type { ProjectState } from "../src/shared/contracts.js";
 import { describe, expect, it } from "vitest";
 import { createAssetCanvasDocument, isAssetCanvasDocument, validateAssetCanvasDocument, withoutContentNodeSizes } from "../src/shared/asset-canvas.js";
 import { canvasHistoryKey, model3DViewLabels, toAssetCanvasNode } from "../src/renderer/asset-canvas-workspace.js";
@@ -8,6 +12,23 @@ import { buildModel3DToolRequest } from "../src/shared/generation-config.js";
 import { MODEL3D_CONNECTION_ID } from "../src/shared/model3d-operations.js";
 
 describe("Asset Canvas node serialization", () => {
+  it("renders registered nodes, preserves payloads during serialization and restores disabled modules", () => {
+    const value = { text: "Release notes", done: true };
+    const data = { module: "example", kind: "note", value, customRuntime: { project: { type: "general", workspaceManifest: { version: 1, modules: [{ id: "example", config: {} }] } } as ProjectState, onChange: () => {} } };
+    const render = () => renderToStaticMarkup(createElement(CustomCanvasNodeRenderer, { data }));
+    expect(render()).toContain("Release notes</textarea>");
+    expect(render()).toContain('checked=""');
+    expect(toAssetCanvasNode({ id: "note", type: "custom", position: { x: 5, y: 6 }, data })).toEqual({ id: "note", type: "custom", position: { x: 5, y: 6 }, data: { module: "example", kind: "note", value } });
+    data.customRuntime.project.workspaceManifest!.modules = [];
+    expect(render()).toContain("Restore module example/note");
+    expect(render()).not.toContain("textarea");
+    data.customRuntime.project.workspaceManifest!.modules = [{ id: "example", config: {} }];
+    expect(render()).toContain("Release notes</textarea>");
+    data.value = { text: "Preserve me", done: "bad" } as unknown as typeof value;
+    expect(render()).toContain("Invalid example/note data");
+    expect(toAssetCanvasNode({ id: "note", type: "custom", position: { x: 5, y: 6 }, data }).data).toMatchObject({ value: { text: "Preserve me", done: "bad" } });
+  });
+
   it("keeps resize history and serialization while rejecting invalid node dimensions", () => {
     const canvas = createAssetCanvasDocument();
     const node = toAssetCanvasNode({ id: "notes", type: "text", position: { x: 0, y: 0 }, width: 600, height: 400, data: { text: "Notes" } });
