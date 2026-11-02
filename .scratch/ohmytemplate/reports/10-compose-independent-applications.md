@@ -129,3 +129,23 @@ node editing/full restart and creation beyond the newly exercised browser dialog
 visual playback and unchanged baseline fractional native resize failure; live
 providers/paid calls/private cloud, other platforms and release packaging.
 The successful capability smoke does not establish those results.
+
+## Final progress checkpoint
+
+- Final full suite:352 files passed,3 skipped; **4340 tests passed,41 skipped**,
+  69.08s. Log:`/tmp/ohmytemplate-10-final-full.log`.
+- Final typecheck, lint, default renderer build, new-file formatting and whitespace
+  checks passed. Node startup and Electron evidence above remain applicable:
+  no host behavior changed after those checks; the later changes were onboarding
+  copy, Vite entry selection/type-reference ordering, docs and renderer tests.
+- Progress commits:`6c90ad80` (composition defaults) and `5506aa59` (preparation,
+  selected build entry pages, bilingual onboarding and evidence).
+- `git merge refactor/ohmytemplate-integration` reported Already up to date against
+  `25d8819889a0ca79356d37344821821c68eb0c24`; integration is an ancestor. No
+  source changed in this synchronization, so no affected-check rerun was needed.
+- Ticket remains **claimed/incomplete**, with every acceptance checkbox untouched.
+  No other ticket or execution-state file was authored. No push/PR/watch,
+  additional checkout/worktree, subagent or destructive cleanup was performed.
+- This is a resumable progress checkpoint, **not completed ticket10 delivery**.
+  Source dependency extraction and successful unavailable-game-source build/start
+  remain mandatory before merger can resolve the ticket.
