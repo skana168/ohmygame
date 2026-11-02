@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import identity from "./application-identity.cjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
@@ -11,16 +12,20 @@ const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.met
   version: string;
 };
 // Release builds upload hidden source maps to Sentry and delete them, so packages never ship them.
+const application = identity.loadIdentity();
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
 
 export default defineConfig({
   base: "./",
   define: {
+    __APP_NAME__: JSON.stringify(application.name),
+    __APP_PACKAGE_NAME__: JSON.stringify(application.packageName),
     __APP_VERSION__: JSON.stringify(packageJson.version),
     __APP_CHANGELOG__: JSON.stringify(parseChangelog(readFileSync(new URL("./CHANGELOG.md", import.meta.url), "utf8"))),
   },
   plugins: [
     react(),
+    { name: "application-title", transformIndexHtml: (html) => html.replace(/<title>.*?<\/title>/, `<title>${application.name}</title>`) },
     sentryAuthToken
       ? sentryVitePlugin({
           org: "whitetower-hk-limited",
@@ -28,7 +33,7 @@ export default defineConfig({
           authToken: sentryAuthToken,
           telemetry: false,
           // Matches the release @sentry/electron reports by default.
-          release: { name: `${packageJson.name}@${packageJson.version}`, inject: false },
+          release: { name: `${application.packageName}@${packageJson.version}`, inject: false },
           sourcemaps: { filesToDeleteAfterUpload: ["dist/renderer/**/*.map"] },
         })
       : undefined,

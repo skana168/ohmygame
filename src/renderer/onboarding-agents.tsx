@@ -1,3 +1,4 @@
+import { applicationName } from "./application-identity.js";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { AgentModel } from "../shared/contracts.js";
 import {
@@ -320,7 +321,7 @@ export function OnboardingAgents({
       <div className="onboarding-agent-options">
         {tile({
           id: "pi",
-          name: "OhMyGame",
+          name: applicationName,
           icon: { src: brandMark, tone: "brand" },
           status: piReady ? (
             <>

@@ -1,3 +1,4 @@
+import { applicationStorageKey } from "./application-identity.js";
 import type { AgentModelRef, AgentReasoningLevel } from "../shared/contracts.js";
 import { parseReasoningLevel } from "../shared/reasoning.js";
 
@@ -6,7 +7,7 @@ export interface PluginBuilderInput {
   model?: AgentModelRef;
   reasoningLevel?: AgentReasoningLevel;
 }
-const PREFIX = "ohmygame.plugin-builder.input.v1:";
+const PREFIX = applicationStorageKey("ohmygame.plugin-builder.input.v1:");
 export function readPluginBuilderInput(id: string, storage?: Pick<Storage, "getItem">): PluginBuilderInput {
   try {
     const value = JSON.parse(storage?.getItem(PREFIX + id) ?? "null");

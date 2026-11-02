@@ -1,3 +1,4 @@
+import { applicationName } from "./application-identity.js";
 import { useState } from "react";
 import { ChevronRight, RefreshCw } from "./icons.js";
 import { isAgentRuntimeId } from "../shared/agent-runtimes.js";
@@ -84,11 +85,11 @@ function AgentList({ onOpen }: { onOpen: (id: string) => void }) {
         <SettingsRow
           className="settings-agent-row"
           icon={<BrandMark />}
-          title={<>OhMyGame{settled && !defaultAgent ? <Badge tone="outline">{t("agents.default")}</Badge> : null}</>}
+          title={<>{applicationName}{settled && !defaultAgent ? <Badge tone="outline">{t("agents.default")}</Badge> : null}</>}
           description={noModels ? t("agents.ohmygameNoModels") : startsOn ? t("settings.agents.ohmygameModel", { model: startsOn.name }) : t("settings.agents.ohmygameSummary")}
           onClick={() => onOpen(OHMYGAME_AGENT)}
         >
-          <IconButton size="sm" label={t("settings.agents.manage", { name: "OhMyGame" })} onClick={() => onOpen(OHMYGAME_AGENT)}>
+          <IconButton size="sm" label={t("settings.agents.manage", { name: applicationName })} onClick={() => onOpen(OHMYGAME_AGENT)}>
             <ChevronRight size={16} />
           </IconButton>
         </SettingsRow>
@@ -123,7 +124,7 @@ function OhMyGameAgent({ onBack, onOpenSection, onOpenPlugins }: {
   const chevron = <ChevronRight size={16} className="settings-row-chevron" />;
   return (
     <>
-      <SettingsDetailHead mark={<BrandMark size={28} />} title="OhMyGame" description={t("settings.agents.ohmygameDescription")} onBack={onBack} backLabel={t("settings.agents.back")} />
+      <SettingsDetailHead mark={<BrandMark size={28} />} title={applicationName} description={t("settings.agents.ohmygameDescription")} onBack={onBack} backLabel={t("settings.agents.back")} />
       <SettingsGroup
         title={t("settings.agents.models")}
         description={t("settings.agents.modelsHint")}

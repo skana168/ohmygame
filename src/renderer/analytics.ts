@@ -1,7 +1,8 @@
+import { applicationStorageKey } from "./application-identity.js";
 import type { PostHog } from "posthog-js/dist/module.no-external.js";
 import { AnalyticsUrlScrubber } from "./analytics-url.js";
 
-const USAGE_DATA_STORAGE_KEY = "ohmygame:usage-data";
+const USAGE_DATA_STORAGE_KEY = applicationStorageKey("ohmygame:usage-data");
 let configured = false;
 let enabled = storedUsageDataEnabled();
 let client: PostHog | undefined;

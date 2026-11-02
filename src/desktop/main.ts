@@ -1,3 +1,4 @@
+import identity from "../../application-identity.cjs";
 import { randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { createReadStream, mkdirSync, readFileSync } from "node:fs";
@@ -45,6 +46,14 @@ ignoreBrokenStdio();
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(moduleDirectory, "../..");
 loadEnvironmentFiles(repositoryRoot, app.isPackaged ? "production" : "development");
+const application = identity.loadIdentity(repositoryRoot);
+const legacyUserData = app.getPath("userData");
+app.setName(application.name);
+app.setPath("userData", legacyUserData);
+// Set before logs, sessions, or the singleton lock use Electron storage.
+if (application.name !== "OhMyGame" || application.desktopId !== "ai.ohmygame.desktop") {
+  app.setPath("userData", path.join(app.getPath("appData"), application.desktopId));
+}
 const developmentRendererUrl = process.env.OHMYGAME_RENDERER_URL ?? "http://127.0.0.1:43120";
 const useBuiltRenderer = app.isPackaged || process.argv.includes("--built-renderer");
 let daemon: DaemonSupervisor | undefined;
@@ -54,9 +63,9 @@ const mainLog = new RotatingLogFile({ directory: logDirectory, name: "main", red
 const daemonLog = new RotatingLogFile({ directory: logDirectory, name: "daemon", redact: redactLog });
 recordConsole(mainLog);
 recordUncaughtErrors(mainLog);
-mainLog.line(`OhMyGame ${app.getVersion()} starting on ${process.platform} ${process.arch}`);
+mainLog.line(`${application.name} ${app.getVersion()} starting on ${process.platform} ${process.arch}`);
 // Windows shows notifications only for the app ID of the installer's Start menu shortcut, the `appId` in electron-builder.yml.
-if (process.platform === "win32") app.setAppUserModelId("ai.ohmygame.desktop");
+if (process.platform === "win32") app.setAppUserModelId(application.desktopId);
 let mainWindow: BrowserWindow | undefined;
 const playtestWindows = new Map<string, BrowserWindow | Promise<BrowserWindow>>();
 /** A Node that fails to start never reports back; its window gives up after this. */
@@ -709,7 +718,7 @@ app.on("activate", () => {
   if (!daemon || mainWindow || quitting) return;
   openMainWindow().catch((error) => {
     console.error(error);
-    dialog.showErrorBox("OhMyGame could not open a window", error instanceof Error ? error.message : String(error));
+    dialog.showErrorBox(`${application.name} could not open a window`, error instanceof Error ? error.message : String(error));
   });
 });
 app.on("before-quit", (event) => {
@@ -727,7 +736,7 @@ try {
   await app.whenReady();
   nativeTheme.themeSource = "system";
   const rendererOrigin = useBuiltRenderer ? "null" : new URL(developmentRendererUrl).origin;
-  const dataDirectory = process.env.OHMYGAME_DATA_DIR ?? path.join(app.getPath("userData"), "data");
+  const dataDirectory = identity.dataDirectory(application, repositoryRoot, process.env, app.getPath("userData"));
   const systemProxySession = session.fromPartition("ohmygame-system-proxy", { cache: false });
   await systemProxySession.setProxy({ mode: "system" });
   const network = await prepareDesktopNetwork({
@@ -764,7 +773,7 @@ try {
     dataDirectory,
     token: randomBytes(32).toString("base64url"),
     allowedOrigins: [rendererOrigin],
-    piAgentDirectory: process.env.PI_CODING_AGENT_DIR ?? path.join(app.getPath("userData"), "pi-agent"),
+    piAgentDirectory: process.env.PI_CODING_AGENT_DIR ?? ((process.env.OHMYGAME_DATA_DIR || application.dataDirectory !== ".data") ? path.join(dataDirectory, "pi-agent") : path.join(app.getPath("userData"), "pi-agent")),
     bundledPluginsDirectory: app.isPackaged ? path.join(process.resourcesPath, "plugins") : undefined,
     pluginUiDirectory: app.isPackaged ? path.join(process.resourcesPath, "plugin-ui") : undefined,
     preinstalledPluginsDirectory: app.isPackaged
@@ -826,7 +835,7 @@ try {
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   console.error(error);
-  if (app.isReady()) dialog.showErrorBox("OhMyGame could not start", message);
+  if (app.isReady()) dialog.showErrorBox(`${application.name} could not start`, message);
   await stopServices();
   app.exit(1);
 }
