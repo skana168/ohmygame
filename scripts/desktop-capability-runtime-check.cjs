@@ -26,11 +26,9 @@ const deadline = setTimeout(() => {
   app.exit(2);
 }, 120000);
 (async () => {
-  await mkdir(directory, { recursive: true });
   if (nonGame) {
-    const { applicationCompositionId } = await import(
-      pathToFileURL(path.join(root, "dist/shared/application-selection.js"))
-        .href
+    const { applicationCompositionId } = require(
+      path.join(root, "dist/shared/application-selection.js"),
     );
     assert.equal(
       applicationCompositionId,
@@ -38,16 +36,11 @@ const deadline = setTimeout(() => {
       "Non-game smoke requires the selected non-game build",
     );
   }
-  await import(
-    pathToFileURL(
-      path.join(
-        root,
-        coreDesktop && !nonGame
-          ? "dist/desktop/main.js"
-          : "dist/desktop/bootstrap.cjs",
-      ),
-    ).href
-  );
+  // Sentry bootstrap must run synchronously before Electron's ready event.
+  if (coreDesktop && !nonGame)
+    await import(pathToFileURL(path.join(root, "dist/desktop/main.js")).href);
+  else require(path.join(root, "dist/desktop/bootstrap.cjs"));
+  await mkdir(directory, { recursive: true });
   let editor;
   await eventually(() => {
     editor = BrowserWindow.getAllWindows().find((w) =>
