@@ -186,6 +186,9 @@ const zhCN: typeof en = {
     loadingProviders: "正在加载服务商…",
     defaultModel: "默认模型",
     welcome: "欢迎使用 OhMyGame",
+    workspaceWelcomeHint: "描述你想创作的内容，与 AI 一起完成。",
+    workspaceStartPrompt: "描述创作目标",
+    workspaceStartImportHint: "继续处理已有工作区。",
     welcomeHint: "描述一个游戏，看它一步步成形。",
     next: "下一步",
     skipStep: "跳过这一步",
@@ -877,6 +880,7 @@ const zhCN: typeof en = {
   home: {
     title: "今天想做点什么？",
     placeholder: "描述你想做的游戏…",
+    workspacePlaceholder: "描述你想创作的内容……",
     startBlank: "空白项目",
     explore: "探索",
     importFolder: "导入文件夹",
@@ -893,6 +897,11 @@ const zhCN: typeof en = {
     projectPluginsFailed: "无法加载可在项目里开启的插件。",
     browsePlugins: "浏览插件",
     ideas: {
+      workspace: {
+        research: "整理一个包含笔记和来源链接的研究画布",
+        media: "为新项目制作一个媒体灵感画布",
+        plan: "用任务和参考文档规划一个项目",
+      },
       web: {
         dungeon: "做一个像素风地牢 Roguelike，回合制战斗",
         merge: "做一个手机竖屏的休闲合成小游戏",

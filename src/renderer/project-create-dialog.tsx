@@ -1,3 +1,4 @@
+import { applicationComposition } from "../shared/application-composition.js";
 import { useEffect, useRef, useState } from "react";
 import { consentToPlugin, createConversation, createProject, getHomeComposerCapabilities, getProjectLocation, listProjects, setProjectPluginVersion } from "./api.js";
 import { uploadAttachments, type ComposerAttachment } from "./composer-attachments.js";
@@ -62,7 +63,7 @@ export async function pickProjectFolder(): Promise<{ owner: ProjectState } | { p
  * only what the folder needs; the agent asks the rest in the project.
  */
 export function ProjectCreateDialog({
-  initialType = "web-game",
+  initialType = applicationComposition.defaultProjectType,
   initialWorkspacePath,
   firstMessage,
   direct = false,

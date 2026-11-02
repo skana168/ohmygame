@@ -1,3 +1,4 @@
+import { applicationComposition } from "../shared/application-composition.js";
 import { communityEnabled } from "../shared/application-services.js";
 import { useReadyRuntimeGeneration } from "./runtime-connection.js";
 import { FilePlus, Import, RefreshCw } from "./icons.js";
@@ -106,7 +107,7 @@ export function Home({ onNavigate, onCreate, onOpen, inert = false, start, onSta
             <h1>{t("home.title")}</h1>
             <ProjectPromptCreator
               draftKey="home"
-              placeholder={t("home.placeholder")}
+              placeholder={t(applicationComposition.game ? "home.placeholder" : "home.workspacePlaceholder")}
               disabled={!!creating?.firstMessage}
               onSubmit={(firstMessage, clearDraft) => setCreating({ firstMessage, clearDraft })}
               starts={<>

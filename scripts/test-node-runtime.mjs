@@ -13,6 +13,7 @@ assert(
   !process.versions.bun,
   "The application runtime check must execute with Node.js",
 );
+const nonGame = process.argv.includes("--non-game");
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-node-runtime-"));
 let daemon;
@@ -35,11 +36,12 @@ try {
     const body = await response.json();
     if (route === "/projects") assert.deepEqual(body, []);
   }
-  await checkStoryWeb(daemon.runtime);
+  if (nonGame) await checkNonGame(daemon.runtime);
+  else await checkStoryWeb(daemon.runtime);
   const headers = { authorization: `Bearer ${daemon.runtime.token}`, "content-type": "application/json" };
   const projects = await fetch(`${daemon.runtime.url}/projects`, { headers }).then(response => response.json());
-  const story = projects.find(project => project.type === "interactive-story");
-  assert(story, "The story fixture must exist before checking project archives");
+  const story = projects.find(project => project.type === (nonGame ? "general" : "interactive-story"));
+  assert(story, "The selected composition fixture must exist before checking project archives");
   const exported = await fetch(`${daemon.runtime.url}/projects/${story.id}/export`, {
     method: "POST", headers: { authorization: headers.authorization }, signal: AbortSignal.timeout(10_000),
   });
@@ -76,8 +78,38 @@ try {
   await rm(directory, { recursive: true, force: true });
 }
 console.log(
-  `Node.js ${process.versions.node}: daemon startup, authenticated API, story creation, upgrade and preview, project export/import, native MCP runtime, extension hosts, configured independent application restart and graceful shutdown passed`,
+  `Node.js ${process.versions.node}: daemon startup, authenticated API, ${nonGame ? "non-game defaults and custom canvas persistence" : "story creation, upgrade and preview"}, project export/import, native MCP runtime, extension hosts, configured independent application restart and graceful shutdown passed`,
 );
+
+// Same authenticated built daemon and persisted canvas API as application consumers.
+async function checkNonGame(runtime) {
+  const headers = { authorization: `Bearer ${runtime.token}`, "content-type": "application/json" };
+  const request = async (route, method = "GET", body) => {
+    const response = await fetch(runtime.url + route, { method, headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(10_000) });
+    assert(response.ok, `${method} ${route}: ${await response.clone().text()}`);
+    return response.json();
+  };
+  const project = await request("/projects", "POST", { name: "Non-game runtime notes" });
+  assert.equal(project.type, "general");
+  assert.equal(project.gameCapability, false);
+  assert.equal(project.storyCapability, false);
+  assert.deepEqual(project.workspaceManifest.modules, [{ id: "example", config: {} }]);
+  assert.deepEqual((await request("/project-types")).map(type => type.id), ["general"]);
+  for (const route of ["/cloud/session", "/community/games"]) {
+    assert.equal((await fetch(runtime.url + route, { headers })).status, 404);
+  }
+  const base = `/projects/${project.id}/canvas`;
+  const workspace = await request(`${base}/workspace`);
+  const boardRoute = `${base}/boards/${workspace.boards[0].id}`;
+  const detail = await request(boardRoute);
+  detail.board.nodes.push({ id: "runtime-note", type: "custom", position: { x: 20, y: 30 },
+    data: { module: "example", kind: "note", value: { text: "Persisted non-game note", done: false } } });
+  detail.board.editorLayout.nodes["runtime-note"] = { x: 20, y: 30 };
+  await request(boardRoute, "PUT", detail);
+  assert((await request(boardRoute)).board.nodes.some(node => node.id === "runtime-note" && node.data.value.text === "Persisted non-game note"));
+  assert.equal((await request(`${base}/workspace`)).mainDocumentId, undefined);
+}
 
 // The built host runs plugins' native code, and its heap limit holds on Node.
 async function checkExtensionHosts(folder) {
