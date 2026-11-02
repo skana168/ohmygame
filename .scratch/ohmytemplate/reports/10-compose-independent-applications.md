@@ -149,3 +149,137 @@ The successful capability smoke does not establish those results.
 - This is a resumable progress checkpoint, **not completed ticket10 delivery**.
   Source dependency extraction and successful unavailable-game-source build/start
   remain mandatory before merger can resolve the ticket.
+
+## Dependency extraction continuation (current implementation worktree)
+
+Status remains **claimed/incomplete**. No acceptance checkbox is checked. This
+continuation does not deliver the independent application assembly criterion.
+
+Worktree: `/Users/yoyun/.t3/worktrees/ohmygame/t3-d9b8f7ee`.
+Branch: `t3/extract-nongame-dependencies`.
+Confirmed `25d88198` is an ancestor. Merged the requested progress commit
+`fcc9ee96f84cadcf10241ded75b3b6525d3c7b91` with merge commit `29777c47`.
+Read AGENTS, CONTRIBUTING, specification, glossary, accepted ADR, prior report,
+TDD/tests/mocking and git-commit instructions. Used the already-approved public
+API/tool/build/startup seams. No subagents, new checkout/worktree, push, PR,
+watch, other ticket or execution-state edits.
+
+### Implemented and committed slices
+
+- `26170ce1`: core `agent-tools.ts` now accepts bound tool contributions without
+  importing game/story implementations. `ohmygame-agent-tools.ts` owns the
+  actual game/story implementation references and preserves shipped ordering,
+  selection and invocation behavior. `business-tools.ts` no longer imports
+  playable implementations. Existing game consumers explicitly use the game
+  assembler; the existing example tool/persistence test uses the core factory.
+- `0d82d730`: reusable `PreviewManager` accepts a story editing bridge from app
+  assembly. Preview directory/script inspection moved out of `projects.ts` to
+  neutral `preview-workspace.ts`, with compatibility re-exports. This removes
+  the transitive preview -> projects -> story-template dependency. The actual
+  application still supplies the original story bridge.
+- `350125d8`: non-game Home placeholder and Ideas use neutral bilingual workspace
+  copy. Non-game project navigation omits the game web-build/publish action.
+  Later follow-up also prevents automatic selection of shipped game starters.
+
+Each first graph/UI regression was observed failing before its implementation.
+Core tool graph red/green logs: `/tmp/ohmytemplate-10-core-tools-{red,green}.log`.
+Preview graph: `/tmp/ohmytemplate-10-preview-{red,green}.log`.
+UI: `/tmp/ohmytemplate-10-neutral-ui-{red,green}.log`; export action additionally
+`/tmp/ohmytemplate-10-neutral-shell-red.log`; starter selection
+`/tmp/ohmytemplate-10-starter-{red,green}.log`.
+
+### Retained executable checks, with their limits
+
+`node scripts/check-application-sources.mjs --core` rejects resolved business
+implementation imports across the complete core agent-tool and reusable-preview
+graphs. It passes:49 and16 source inputs respectively. Shared persisted data and
+protocol contracts remain available. Rejection covers story/game/playable/
+playtest implementation files, publish implementations, account implementation
+files and story resources as specified in the executable. No substitute game
+implementations or source stripping were added.
+
+Without `--core`, the same executable audits the actual daemon server, desktop
+main and renderer main. **All three fail.** It reports required edges beyond the
+original four: agent -> game-design-context; app -> game/story/publish/account
+implementations; projects/examples/project-archive -> playable-codebase;
+server -> playtest-driver; desktop -> driver/recorder/player; renderer -> auth,
+quota, game/story editing/player/recording/publishing/community components.
+Log: `/tmp/ohmytemplate-10-full-source-graph.log`. This is an executable graph
+diagnostic, not a passing host typecheck/build/startup acceptance test.
+
+Extended the existing Node runtime runner with `--non-game`, retaining the real
+built authenticated daemon, archives, native MCP, extension hosts and independent
+identity restart, and checking non-game defaults/custom canvas persistence in
+place of the game story fixture. It rejects a default game build. It also fails
+before readiness in the selected clean non-game build, as described below. Its
+post-start non-game assertions have not all run successfully yet.
+
+### Both-composition checks and clean-build startup failure
+
+Bun1.4.2 with the requested PATH; Node24.20.0. Frozen install passed, lockfile
+unchanged. Pinned plugin preparation and changelog check passed. Default
+composition typecheck, lint, renderer build and Node runtime passed. Default full
+suite:352 files passed,3 skipped;4345 tests passed,41 skipped (71.53s), log
+`/tmp/ohmytemplate-10-extraction-full.log`. Focused tool/app regression:230 passed;
+preview/projects:59 passed; story/tuning:34 passed; neutral renderer suites:59
+passed. After the final starter follow-up, its21-test suite, typecheck, lint and
+renderer build passed. The unchanged default Node runtime runner was rerun after
+adding the alternate mode and passed. Formatting of new files and diff checks
+passed. Private cloud tests retain their expected skips.
+
+Disposable full source fixture (ordinary copy, not a checkout/worktree):
+`/var/folders/cd/4754c7cd73g1twx1yj5hgql40000gn/T/ohmytemplate-10-extraction-fjh8fe6l`.
+It selects non-game and links the installed node_modules; all implementation
+source files remain present. Its host/renderer build passed and story resources
+were skipped. Its selected full suite **failed**:28 files failed,324 passed,3
+skipped;122 tests failed,4223 passed,41 skipped. Log:
+`/tmp/ohmytemplate-10-selected-full.log`. These failures remain unresolved; many
+existing tests assume default game composition. No tests were deleted, disabled,
+or weakened to conceal this result. Selected graph audit also fails, log
+`/tmp/ohmytemplate-10-selected-source-graph.log`.
+
+Most critically, its compiled standalone daemon cannot start even with business
+source files still present: eager `playable-presets` import tries to read omitted
+`dist/daemon/assets/story-templates/blank/scene` and throws ENOENT before health or
+authentication. Both direct startup and the retained `--non-game` runtime command
+reproduce it. Logs:`/tmp/ohmytemplate-10-selected-startup-failed.log` and
+`/tmp/ohmytemplate-10-selected-node-runtime.log`. Excluded story resources were
+not copied back to manufacture a startup pass. Source development works with its
+source resources present after mandatory core plugin preparation.
+
+**Exactly which excluded modules were unavailable for a successful full host and
+renderer build plus authenticated startup? None: no such successful run exists.**
+Only the two extracted core graph builds pass with strict resolver rejection.
+There is no passing full source-exclusion acceptance, and ticket10 cannot be
+resolved. Selected host typechecking still includes business sources.
+
+### Actual runtime exercise and remaining gaps
+
+Default Electron43.3.0 capability smoke passed after extraction: real managed
+authenticated daemon, non-game reusable iframe/control/IPC rejection, enabled game
+native windows, agent driver ownership/cleanup, two-board canvas, title/Markdown
+editing, autosave/reload and save/quit cleanup. Log:
+`/tmp/ohmytemplate-10-extraction-desktop.log`; persisted smoke data:
+`/tmp/ohmytemplate-10-extraction-desktop`. This is the default source composition
+with API-created capability fixtures. It is not selected non-game Electron
+startup; that remains blocked by the compiled daemon failure above.
+
+Actual selected non-game source browser development completed provider-free
+onboarding and created `Extraction browser workspace` through the real dialog.
+The workspace displayed Canvas/Code/Assets without game/publish/export navigation.
+An API-created example custom node rendered; typing in its real textarea
+persisted the edit (confirmed through the public board API), and browser reload
+rendered `Browser persisted example note`. Neutral Ideas were visible. An old
+stored game starter was also observed; the follow-up adds a regression and
+prevents automatic game starter selection, but that copied browser's existing
+stored mention was not claimed cleared by this run. Snapshot capture twice timed
+out, so this is DOM/interaction evidence, not screenshot visual QA. The owned
+browser tab and development processes were stopped; fixture/data remain.
+
+Remaining work is substantive: source-selected host/renderer/desktop provider and
+route/component assembly; business policy extraction from projects/examples/
+archives/agent guidance; selected TypeScript build roots; passing full unavailable
+source/resource build and authenticated startup; resolving selected-suite
+failures; selected Electron/custom-node restart and visual QA. Live paid providers,
+private hosted services, other platforms and release packaging remain unverified.
+Exporter12 and initializer13 were not implemented. No completion is claimed.

@@ -485,9 +485,9 @@ describe("Home prompt box", () => {
 it("offers workspace ideas in the non-game composition", async () => {
   const game = applicationComposition.game;
   applicationComposition.game = false;
-  capabilities = { plugins: [], skills: [] };
   try {
     await render();
+    expect(pluginButton().getAttribute("aria-label")).not.toContain("Game Studio");
     await act(async () => ideasButton().click());
     expect(document.body.textContent).toContain("Organize a research board with notes and source links");
     expect(document.body.textContent).not.toContain("platformer");

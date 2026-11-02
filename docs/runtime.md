@@ -1035,3 +1035,24 @@ core consumers still import optional game implementations, and the host TypeScri
 build includes those sources. Do not remove game sources or describe this as the
 independent template export. Complete source extraction and deleted-source
 build/start verification are prerequisites for that export.
+
+The core agent tool factory (`daemon/agent-tools.ts`) accepts bound contributions;
+`daemon/ohmygame-agent-tools.ts` owns the shipped game/story catalog and its
+implementation imports. Reusable previews accept the optional story editor
+bridge from application assembly. Preview workspace inspection lives separately
+from project creation so serving a generic page does not load story templates.
+
+Run `node scripts/check-application-sources.mjs --core` to check these two extracted
+entry points with business implementation resolution rejected. Run the command
+without `--core` to audit the complete daemon, desktop and renderer entry points.
+It currently fails and prints the remaining required business edges. This is a
+source graph diagnostic, not host TypeScript, renderer build or authenticated
+startup acceptance; all three are still required with excluded sources absent.
+In particular, a selected non-game host build can succeed yet fail at startup
+because eager story preset imports require omitted template resources.
+
+After selecting and building non-game, `node scripts/test-node-runtime.mjs --non-game`
+checks the same authenticated standalone daemon, workspace defaults, custom-node
+persistence, project archives, native MCP, extension hosts and independent-identity
+restart. It rejects a game build. This mode currently fails before readiness in a
+clean non-game build because the required story template import is still present.

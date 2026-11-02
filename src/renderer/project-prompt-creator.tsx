@@ -87,7 +87,7 @@ export function ProjectPromptCreator({ draftKey, placeholder, disabled: creating
   const [starterChosen, setStarterChosen] = useState(false);
   const [savedType, setSavedType] = useState(loadType);
   const allStarters = capabilities.plugins
-    .filter((plugin) => STARTERS.includes(plugin.name))
+    .filter((plugin) => applicationComposition.game && STARTERS.includes(plugin.name))
     .sort((left, right) => STARTERS.indexOf(left.name) - STARTERS.indexOf(right.name));
   const pickable = allStarters;
   const { types: loadedPluginTypes, failed: pluginTypesFailed, retry: retryPluginTypes, storyAvailable } = usePluginProjectTypes();
@@ -175,6 +175,10 @@ export function ProjectPromptCreator({ draftKey, placeholder, disabled: creating
 
   useEffect(() => {
     // A lead saved by the old composer that is not a starter belongs in the text.
+    if (!applicationComposition.game && selectedPlugin && STARTERS.includes(selectedPlugin.name)) {
+      setSelectedPlugin(undefined);
+      return;
+    }
     if (capabilitiesLoaded && selectedPlugin && !selectedStarter) {
       setPrompt(formatPluginInvocation(selectedPlugin, prompt));
       setSelectedPlugin(undefined);
