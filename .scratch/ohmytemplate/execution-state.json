@@ -18,8 +18,28 @@
       ]
     },
     "11": {
-      "status": "running",
-      "taskId": "node:delegated-task:command%3Amcp%3Af9ae3f34-c71d-4182-b387-b4a57a9226b2%3Adelegate-task%3A43460ae1-4c20-487f-b99a-76038fadf589"
+      "status": "implementation_complete_merge_pending",
+      "taskId": "node:delegated-task:command%3Amcp%3Af9ae3f34-c71d-4182-b387-b4a57a9226b2%3Adelegate-task%3A43460ae1-4c20-487f-b99a-76038fadf589",
+      "implementation_branch": "t3/configure-application-identity",
+      "implementation_sha": "c748f7b8d1c2e706a0d9fd9e8799fda4344585d2",
+      "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-3de9a0ab",
+      "remaining_validation": "persisted conversation-history isolation"
+    },
+    "02": {
+      "status": "retry_pending",
+      "previous_failure": "provider usage limit; user requested continuation",
+      "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-71035238",
+      "previous_branch": "t3/add-gated-story-tools",
+      "recovery_patch": "/tmp/ohmytemplate-recovery-02/working.patch",
+      "previous_task_suffix": "e6194020-b4df-4e03-801d-28c777fb857d"
+    },
+    "03": {
+      "status": "retry_pending",
+      "previous_failure": "provider usage limit; user requested continuation",
+      "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-e1c4f6e9",
+      "previous_branch": "t3/version-workspace-manifest",
+      "recovery_patch": "/tmp/ohmytemplate-recovery-03/working.patch",
+      "previous_task_suffix": "7c5e8d26-b62b-4fb2-ac89-a864a5de4dd4"
     }
   },
   "notes": [
