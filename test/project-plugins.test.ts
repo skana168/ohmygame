@@ -252,7 +252,8 @@ describe("project plugins", () => {
   });
 
   it("starts the bundled Godot's MCP server in a General project that turns Godot on, with its setting", async () => {
-    const services = new PluginServices({ directory: await temporary(), bundled: BUNDLED });
+    let gameEnabled = true;
+    const services = new PluginServices({ directory: await temporary(), bundled: BUNDLED, gameEnabled: () => gameEnabled });
     try {
       await services.ready();
       const entry = services.index.get("ohmygame/godot")!;
@@ -274,6 +275,22 @@ describe("project plugins", () => {
       }]);
       await services.values.update(entry, { godotPath: "/opt/Godot" });
       expect(await server()).toMatchObject([{ env: { OHMYGAME_GODOT_SETTING: "/opt/Godot" } }]);
+      expect((await services.skills(folder)).length).toBeGreaterThan(0);
+      const commands = await services.commands(folder);
+      expect(commands.length).toBeGreaterThan(0);
+      gameEnabled = false;
+      expect(await services.skills(folder)).toEqual([]);
+      expect(await services.mcpServers(folder)).toEqual({});
+      expect(await services.agentTools(folder)).toEqual([]);
+      expect(await services.commands(folder)).toEqual([]);
+      expect(await services.panels(folder)).toEqual([]);
+      expect(await services.projectCommand(folder, commands[0]!.id)).toBeUndefined();
+      const command = entry.manifest.contributes!.commands![0]!;
+      await expect(services.runCommand(entry, command, { folder })).rejects.toThrow(/game capability/i);
+      await expect(services.callTool(entry, "status", { folder })).rejects.toThrow(/game capability/i);
+      gameEnabled = true;
+      expect(Object.keys(await services.mcpServers(folder))).toEqual([GODOT_PLUGIN_MCP_SERVER_ID]);
+
     } finally {
       await services.close();
     }

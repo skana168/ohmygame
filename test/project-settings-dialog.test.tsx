@@ -50,6 +50,16 @@ describe("ProjectSettingsDialog", () => {
     },
   );
 
+  it("labels reusable preview settings without playtest controls in a non-game workspace", () => {
+    const html = renderToStaticMarkup(createElement(ProjectSettingsDialog, {
+      project: { id: "notes", name: "Notes", type: "general", updatedAt: "", workspacePath: "/tmp/notes", preview: { status: "waiting" }, gameCapability: false, webPreviewEnabled: true },
+      onClose: () => {}, onSaved: () => {},
+    }));
+    expect(html).toContain("Preview defaults");
+    expect(html).not.toContain("Playtest defaults");
+    expect(html).toContain("Default route");
+  });
+
   it("keeps the project identity in the form and restores the browser-preview action", () => {
     const html = renderToStaticMarkup(
       createElement(ProjectSettingsDialog, {

@@ -1478,6 +1478,7 @@ const zhCN: typeof en = {
     scriptArguments: "脚本参数",
     argumentsPlaceholder: '自动，或 ["--port", "{port}"]',
     argumentsHint: "JSON 数组；[] 表示不传额外参数。",
+    previewDefaults: "预览默认设置",
     playtestDefaults: "试玩默认设置",
     defaultRoute: "默认路由",
     deviceField: "设备",

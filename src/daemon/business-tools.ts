@@ -11,6 +11,7 @@ import type {
 import type { ToolContribution } from "./tool-contributions.js";
 import {
   buildsWebPreview,
+  gameCapabilityEnabled,
   supportsWebPreview,
 } from "../shared/project-runtime.js";
 import { createGameUseTool } from "./playtest-tools.js";
@@ -18,10 +19,17 @@ import { addPlayableNode } from "./playable-add-node.js";
 import { validatePlayableProject } from "./playable-project.js";
 import { PLAYABLE_PRESET_IDS, PLAYABLE_PRESETS } from "./playable-presets.js";
 
-/** Host composition only; omitted modules retain OhMyGame's existing defaults. */
+/** Host selection; workspace declarations further restrict game availability. */
 export interface BusinessToolSelection {
   game?: boolean;
   story?: boolean;
+}
+
+/** Preserve the shipped adapter's project and environment constraints. */
+export function gameRuntimeAvailable(project: ProjectState, driver?: GameRuntimeAdapter): boolean {
+  return !!driver?.available &&
+    (driver.capabilities.projectTypes.includes(project.type) || buildsWebPreview(project)) &&
+    (project.type !== "general" || supportsWebPreview(project));
 }
 
 export function createGameToolContribution(
@@ -34,10 +42,8 @@ export function createGameToolContribution(
   return {
     id: "game",
     tools:
-      playtest?.driver.available &&
-      (playtest.driver.capabilities.projectTypes.includes(project.type) ||
-        buildsWebPreview(project)) &&
-      (project.type !== "general" || supportsWebPreview(project))
+      gameCapabilityEnabled(project) &&
+      playtest && gameRuntimeAvailable(project, playtest.driver)
         ? [
             createGameUseTool(playtest.driver, playtest.resolveOpenTarget, {
               bridge: project.type === "interactive-story" ? "reset" : "full",

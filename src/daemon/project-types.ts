@@ -94,7 +94,7 @@ export async function availableProjectTypes(
     if (seen.has(entry.id)) continue;
     seen.add(entry.id);
     const newest = services.index.get(entry.id)!;
-    if (services.grants.plugin(newest.id)?.enabled === false) continue;
+    if (services.grants.plugin(newest.id)?.enabled === false || !services.allowed(newest)) continue;
     const hasCreate = Boolean(newest.manifest.entrypoints?.native);
     for (const type of newest.manifest.contributes?.projectTypes ?? [])
       types.push({

@@ -1497,6 +1497,7 @@ const en = {
     scriptArguments: "Script arguments",
     argumentsPlaceholder: 'Automatic, or ["--port", "{port}"]',
     argumentsHint: "JSON array; [] disables extra arguments.",
+    previewDefaults: "Preview defaults",
     playtestDefaults: "Playtest defaults",
     defaultRoute: "Default route",
     deviceField: "Device",

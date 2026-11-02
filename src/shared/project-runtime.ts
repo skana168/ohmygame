@@ -102,3 +102,13 @@ export function webPreviewSettingsChanged(
       JSON.stringify(after.previewArguments)
   );
 }
+
+/** Game ownership is separate from the reusable Web preview process. Missing
+ * declarations retain legacy OhMyGame behavior; invalid workspaces fail closed. */
+export function gameCapabilityEnabled(
+  project: Pick<ProjectState, "workspaceManifest" | "workspaceDiagnostics" | "gameCapability">,
+  hostEnabled = true,
+): boolean {
+  return hostEnabled && project.gameCapability !== false && !project.workspaceDiagnostics?.length &&
+    (!project.workspaceManifest || project.workspaceManifest.modules.some((module) => module.id === "game"));
+}

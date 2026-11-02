@@ -214,6 +214,19 @@ describe("coding workspace", () => {
     expect(runnable).not.toContain("Publishing requires a Web build");
   });
 
+  it("retains a reusable preview without game play, recording, or tuning controls", () => {
+    const html = renderToStaticMarkup(createElement(CodingWorkspace, {
+      project: { ...previewProject, type: "general", gameCapability: false, webPreviewEnabled: true, workspaceManifest: { version: 1, modules: [] } },
+      publishing: false, workspaceRevision: 0, onPublish: async () => false, onClosePublish: () => {},
+      onRestart: async () => {}, onStop: async () => {}, onAskAgent: () => {},
+    }));
+    expect(html).toContain("<iframe");
+    expect(html).not.toContain("preview-play-button");
+    expect(html).not.toContain("preview-tuning-button");
+    expect(html).not.toContain("game-record-button");
+    expect(html).toContain('aria-label="Reload preview"');
+  });
+
   it("keeps the preview panel mounted while the workspace is rendered", () => {
     const html = renderToStaticMarkup(
       createElement(CodingWorkspace, {

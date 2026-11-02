@@ -98,7 +98,9 @@ const gameRecorder = new GameRecorder({
     if (gameRecordings.has(id) || gameRecordingStarts.has(id)) publishGameRecording({ projectId: id, status: "saving" });
   },
 });
-const agentPlaytests = new ElectronPlaytestDriver((state) => {
+// Construct the game driver only after an authorized agent actually uses it.
+let agentPlaytests: ElectronPlaytestDriver | undefined;
+const agentPlaytestDriver = () => agentPlaytests ??= new ElectronPlaytestDriver((state) => {
   mainWindow?.webContents.send("ohmygame:agent-playtest-state", state);
 }, undefined, gameRecorder);
 const webGamePlayers = new WebGamePlayerWindows((state) => {
@@ -194,7 +196,7 @@ async function stopServices(): Promise<void> {
   updateChecks?.stop();
   agentNotifications.stop();
   webGamePlayers.close();
-  agentPlaytests.close();
+  agentPlaytests?.close();
   gameRecorder.close();
   await Promise.all([daemon?.stop(), oauth.cancel()]);
   await clearExternalMcpApp?.().catch(() => undefined);
@@ -430,20 +432,21 @@ handle("ohmygame:finish-node-thumbnail", (event, captured: unknown, error: unkno
 });
 handle("ohmygame:agent-playtest-state", (event): PlaytestWatchState => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Invalid Agent playtest source");
-  return agentPlaytests.watchState();
+  return agentPlaytests?.watchState() ?? { visible: false, activeSessions: 0 };
 });
 handle("ohmygame:set-agent-playtest-visible", (event, visible: unknown): PlaytestWatchState => {
   if (!mainWindow || event.sender !== mainWindow.webContents || typeof visible !== "boolean") {
     throw new Error("Invalid Agent playtest visibility");
   }
-  return agentPlaytests.setVisible(visible);
+  return agentPlaytests?.setVisible(visible) ?? { visible: false, activeSessions: 0 };
 });
 handle("ohmygame:web-game-player-state", (event, projectId: unknown) => {
   requirePlayerSource(event.sender, projectId);
   return webGamePlayers.state(projectId);
 });
-handle("ohmygame:attach-web-game-preview", (event, projectId: unknown, attachment: unknown, url: unknown, layout: unknown) => {
+handle("ohmygame:attach-web-game-preview", async (event, projectId: unknown, attachment: unknown, url: unknown, layout: unknown) => {
   requirePlayerSource(event.sender, projectId);
+  await requireGameCapability(projectId);
   if (!validRouteId(attachment) || typeof url !== "string" || url.length > 4_000) throw new Error("Invalid game preview target");
   return webGamePlayers.attach(projectId, attachment, mainWindow!, url, requirePreviewLayout(layout), () => resolvePlayerTarget(projectId));
 });
@@ -461,8 +464,9 @@ handle("ohmygame:capture-web-game-preview", (event, projectId: unknown) => {
   requirePlayerSource(event.sender, projectId);
   return webGamePlayers.capture(projectId);
 });
-handle("ohmygame:open-web-game-player", (event, projectId: unknown, request: unknown) => {
+handle("ohmygame:open-web-game-player", async (event, projectId: unknown, request: unknown) => {
   requirePlayerSource(event.sender, projectId);
+  await requireGameCapability(projectId);
   const input = request as Partial<WebGamePlayerRequest> | null;
   if (!input || typeof input.path !== "string" || input.path.length > 2_000 || !isValidPlaytestViewport(input.viewport)) {
     throw new Error("Invalid game player target");
@@ -500,6 +504,7 @@ handle("ohmygame:restart-runtime", (event) => {
 });
 
 async function startGameRecording(projectId: string): Promise<void> {
+  await requireGameCapability(projectId);
   // The button and the shortcut can both ask before the first has started.
   if (gameRecordingStarts.has(projectId)) return;
   gameRecordingStarts.add(projectId);
@@ -562,6 +567,15 @@ function requirePreviewLayout(value: unknown): WebGamePreviewLayout {
   return layout as WebGamePreviewLayout;
 }
 
+async function requireGameCapability(projectId: string): Promise<void> {
+  if (!daemon) throw new Error("The game service is unavailable.");
+  const response = await fetch(`${daemon.runtime.url}/projects/${encodeURIComponent(projectId)}/game-capability`, {
+    headers: { authorization: `Bearer ${daemon.runtime.token}` },
+  });
+  const result = await response.json() as { enabled?: boolean };
+  if (!response.ok || result.enabled !== true) throw new Error("The game capability is disabled or unavailable for this workspace.");
+}
+
 async function resolvePlayerTarget(projectId: string): Promise<WebGamePlayerTarget> {
   if (!daemon) throw new Error("The game service is unavailable.");
   const headers = { authorization: `Bearer ${daemon.runtime.token}` };
@@ -570,7 +584,7 @@ async function resolvePlayerTarget(projectId: string): Promise<WebGamePlayerTarg
   const project = await current.json() as { error?: string; message?: string };
   if (!current.ok) throw new Error(project.message ?? project.error ?? "The project could not be loaded.");
   const version = current.headers.get("x-workspace-version") ?? "0";
-  const response = await fetch(`${projectUrl}/preview?reuse=1`, {
+  const response = await fetch(`${projectUrl}/game/preview`, {
     method: "POST", headers: { ...headers, "x-workspace-version": version },
   });
   const result = await response.json() as { url?: string; title?: string; error?: string; message?: string };
@@ -581,6 +595,7 @@ async function resolvePlayerTarget(projectId: string): Promise<WebGamePlayerTarg
 handle("ohmygame:open-playtest", async (event, projectId: unknown, viewport: unknown) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Invalid playtest source");
   if (!validRouteId(projectId) || !isValidPlaytestViewport(viewport) || !daemon) throw new Error("Invalid playtest target");
+  await requireGameCapability(projectId);
   const size = fitPlaytestContentSize(viewport);
   const aspectRatio = viewport.width / viewport.height;
   const current = playtestWindows.get(projectId);
@@ -801,12 +816,24 @@ try {
     healthTimeoutMs: 60_000,
     log: daemonLog,
     logDirectory,
-    handlePlaytestRequest: (request, signal) => agentPlaytests.request(request, signal),
+    handlePlaytestRequest: async (request, signal) => {
+      if (request.operation === "open") {
+        if (!validRouteId(request.projectId)) throw new Error("A game workspace is required for playtesting.");
+        await requireGameCapability(request.projectId);
+        signal?.throwIfAborted();
+        return agentPlaytestDriver().request(request, signal);
+      }
+      if (!agentPlaytests) {
+        if (request.operation === "closeAll") return { operation: "closeAll" };
+        throw new Error("The game playtest session is unavailable.");
+      }
+      return agentPlaytests.request(request, signal);
+    },
     onState: (state) => {
       mainLog.line(runtimeStateLine(state));
       if (state.status !== "ready") {
         webGamePlayers.close();
-        agentPlaytests.close();
+        agentPlaytests?.close();
         gameRecorder.close();
       }
       for (const window of BrowserWindow.getAllWindows()) {
@@ -951,7 +978,11 @@ async function scheduleNodeThumbnail(projectId: string, nodeId: string, viewport
   batch.requests += 1;
   const signal = batch.controller.signal;
   return nodeThumbnailCaptures.run(
-    () => captureNodeThumbnail(projectId, nodeId, viewport, signal, batch.snapshot), signal,
+    async () => {
+      await requireGameCapability(projectId);
+      signal.throwIfAborted();
+      return captureNodeThumbnail(projectId, nodeId, viewport, signal, batch.snapshot);
+    }, signal,
   ).catch((cause: unknown): NodeThumbnailResult => signal.aborted
     ? CANCELLED_THUMBNAIL
     : { captured: false, error: cause instanceof Error ? cause.message : String(cause) }).then((result) => {

@@ -555,6 +555,49 @@ describe("daemon", () => {
     await rm(workspacePath, { recursive: true, force: true });
   });
 
+  it.each(["workspace", "host", "unavailable"])("guards game entry points while retaining reusable web preview: %s", async (disabled) => {
+    const app = createApp({
+      dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-game-capability-")),
+      ...(disabled === "host" ? { businessTools: { game: false } } : {}),
+      ...(disabled === "unavailable" ? { workspaceModules: [] } : {}),
+    });
+    apps.push(app);
+    const created = await app.inject({ method: "POST", url: "/projects", payload: {
+      name: "Web notes", type: "general",
+      workspaceManifest: { version: 1, modules: disabled === "host" ? [{ id: "game", config: {} }] : [] },
+    } });
+    expect(created.statusCode, created.body).toBe(201);
+    const project = created.json();
+    const base = `/projects/${project.id}`;
+    expect((await app.inject({ method: "GET", url: `${base}/game-capability` })).json()).toEqual({ enabled: false });
+    for (const [method, suffix, payload] of [
+      ["POST", "/game/preview", undefined], ["GET", "/tuning", undefined],
+      ["PUT", "/tuning/draft", { values: {} }], ["POST", "/tuning/save", undefined],
+    ] as const) {
+      const response = await app.inject({ method, url: base + suffix, payload });
+      expect(response.statusCode, response.body).toBe(409);
+      expect(response.json().error).toMatch(/game capability/i);
+    }
+    if (disabled === "host" || disabled === "unavailable") {
+      const types = (await app.inject({ method: "GET", url: "/project-types" })).json();
+      expect(types.some((type: { id: string }) => type.id === "ohmygame/godot:godot-game")).toBe(false);
+    }
+    const godot = (await app.inject({ method: "GET", url: "/plugin-store/plugins" })).json();
+    // Direct plugin selection must not force an engine into a non-game workspace.
+    const version = godot.find((entry: { id: string }) => entry.id === "ohmygame/godot")?.version;
+    expect(version).toBeDefined();
+    const engine = await app.inject({ method: "PUT", url: `${base}/plugins/ohmygame/godot`, payload: { version } });
+    expect(engine.statusCode, engine.body).toBe(409);
+    await writeFile(path.join(project.workspacePath, "index.html"), "<html><body>Reusable preview</body></html>");
+    expect((await app.inject({ method: "PUT", url: `${base}/settings/run`, payload: { previewMode: "static", startupDirectory: ".", startupScript: "dev", previewPath: "/", previewViewport: "fit", webPreviewEnabled: true } })).statusCode).toBe(200);
+    const started = await app.inject({ method: "POST", url: `${base}/preview?reuse=1` });
+    expect(started.statusCode, started.body).toBe(200);
+    const url = started.json().url;
+    expect(await (await fetch(url)).text()).toContain("Reusable preview");
+    expect((await app.inject({ method: "DELETE", url: `${base}/preview` })).statusCode).toBe(200);
+    await expect(fetch(url, { signal: AbortSignal.timeout(200) })).rejects.toThrow();
+  });
+
   it.each([false, true])("respects General Web preview policy when browser output is generated: %s", async (webPreviewEnabled) => {
     const app = createApp({
       dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-general-auto-preview-")),
@@ -1660,6 +1703,37 @@ describe("daemon", () => {
 
     const files = (await app.inject({ method: "GET", url: `/projects/${project.id}/files` })).json() as { path: string }[];
     expect(files.some((file) => file.path.startsWith(".ohmygame"))).toBe(false);
+  });
+
+  it("retains host game restrictions in project update events", async () => {
+    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-game-events-")), businessTools: { game: false } });
+    apps.push(app);
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    const project = (await app.inject({ method: "POST", url: "/projects", payload: { type: "general" } })).json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3_000);
+    try {
+      const response = await fetch(`${address}/projects/${project.id}/events`, { signal: controller.signal });
+      const reader = response.body!.getReader();
+      await reader.read();
+      for (const [method, url, payload] of [
+        ["PATCH", `/projects/${project.id}`, { name: "Renamed notes" }],
+        ["PUT", `/projects/${project.id}/settings/run`, { startupDirectory: ".", startupScript: "dev", previewPath: "/", previewViewport: "fit", webPreviewEnabled: false }],
+      ] as const) {
+        const updated = await app.inject({ method, url, payload });
+        expect(updated.statusCode, updated.body).toBe(200);
+        let text = "";
+        while (!text.includes('"gameCapability":false')) {
+          const chunk = await reader.read();
+          text += new TextDecoder().decode(chunk.value);
+          if (text.includes('"project.renamed"') || text.includes('"project.updated"')) break;
+        }
+        expect(text).toContain('"gameCapability":false');
+      }
+    } finally {
+      clearTimeout(timeout);
+      controller.abort();
+    }
   });
 
   it("opens an idle event stream immediately", async () => {

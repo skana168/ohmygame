@@ -1,6 +1,6 @@
 import { OHMYGAME_WORKSPACE_MODULES, type WorkspaceModuleDescriptor } from "../shared/workspace-manifest.js";
 import { readWorkspaceManifest, validateWorkspaceManifest } from "./workspace-manifest.js";
-import type { BusinessToolSelection } from "./business-tools.js";
+import { gameRuntimeAvailable, type BusinessToolSelection } from "./business-tools.js";
 import { composeToolContributions, type ToolContribution } from "./tool-contributions.js";
 import { CodexImageProvider } from "./agent-runtimes/codex-image-provider.js";
 import { inspectPreviewConfiguration } from "./preview-configuration.js";
@@ -35,7 +35,7 @@ import { AgentNoticeLog } from "./agent-notices.js";
 import { diagnosticSection, registerDiagnosticsRoutes } from "./diagnostics.js";
 import { AGENT_REASONING_LEVELS, IMAGE_ASPECT_RATIOS, IMAGE_MAX_REFERENCE_IMAGES, IMAGE_OUTPUT_COUNTS, IMAGE_RESOLUTIONS, IMAGE_SIZES, PROJECT_TYPE_IDS, PREVIEW_VIEWPORTS, TOOL_IDS, VIDEO_ASPECT_RATIOS, VIDEO_RESOLUTIONS, type AgentContextUsage, type AgentModelRef, type AgentReasoningLevel, type AnswerQuestionnaireRequest, type AssetCanvasTextGenerationRequest, type ConversationAgentSettings, type ConversationCapabilities, type ConversationDetail, type CreateConversationRequest, type CreateProjectRequest, type MediaModelDefaults, type ProjectAppearance, type ProjectRunSettings, type ProjectState, type PromptImage, type PromptRequest, type PublishProjectRequest, type RenameConversationRequest, type ReviseLastPromptRequest, type RunToolRequest, type RunVideoToolRequest, type RuntimeEvent, type SetConversationModelRequest, type SetConversationReasoningRequest, type UpdateAgentDefaultsRequest } from "../shared/contracts.js";
 import { findAgentModel, preferredAgentModel } from "../shared/agent-models.js";
-import { appWidePluginSuits, buildsWebPreview, isWebRuntimeProjectType, PLUGIN_PROJECT_KINDS, pluginAppliesTo, supportsWebPreview, webPreviewSettingsChanged } from "../shared/project-runtime.js";
+import { gameCapabilityEnabled, appWidePluginSuits, buildsWebPreview, isWebRuntimeProjectType, PLUGIN_PROJECT_KINDS, pluginAppliesTo, supportsWebPreview, webPreviewSettingsChanged } from "../shared/project-runtime.js";
 import { groupThreadItems } from "../shared/turns.js";
 import { RuntimeEventBus } from "../shared/events.js";
 import { EXAMPLE_ID_PATTERN } from "../shared/examples.js";
@@ -599,6 +599,10 @@ const NEEDS_UPGRADE = "This story was made before stories played as their own we
 const CHECKPOINT_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export function createApp(options: AppOptions = {}) {
+  const gameHostEnabled = options.businessTools?.game !== false &&
+    (options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES).some((module) => module.id === "game");
+  const gameEnabled = (project: ProjectState) => gameCapabilityEnabled(project, gameHostEnabled);
+  const projectResponse = (project: ProjectState) => ({ ...project, gameCapability: gameEnabled(project) });
   const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const dataDirectory = options.dataDirectory ?? path.join(repositoryRoot, ".data");
   const piAgentDirectory = options.piAgentDirectory ?? process.env.PI_CODING_AGENT_DIR ?? path.join(dataDirectory, "pi-agent");
@@ -629,7 +633,10 @@ export function createApp(options: AppOptions = {}) {
     publish: (project, state) => events.publish(project.id, "preview.tuning", state),
   });
   const previews = new PreviewManager(events, {
-    tuning: gameTuning,
+    tuning: {
+      refresh: async (project) => { if (gameEnabled(project)) await gameTuning.refresh(project); },
+      setConnected: (project, connected) => { if (gameEnabled(project)) gameTuning.setConnected(project, connected); },
+    },
     webBuild: (project, signal, log) => buildWebPreview({ folder: project.workspacePath, services: pluginServices, signal, onProgress: log }),
   });
   const checkpoints = new CheckpointStore();
@@ -706,7 +713,7 @@ export function createApp(options: AppOptions = {}) {
     );
   };
   const publishProjectRenamed = (project: ProjectState) => {
-    events.publish(project.id, "project.renamed", { project: { ...project } });
+    events.publish(project.id, "project.renamed", { project: projectResponse(project) });
   };
   const projectNaming = new ProjectNaming(projects, options.generateProjectName ?? (async (prompt, model, signal) => {
     if (!model) return undefined;
@@ -822,6 +829,10 @@ export function createApp(options: AppOptions = {}) {
     directory: path.join(dataDirectory, "plugin-store"),
     bundled: bundledPlugins,
     bundledOff: BUNDLED_PLUGINS_OFF,
+    gameEnabled: (folder) => {
+      const project = folder ? projects.list().find((project) => project.workspacePath === folder) : undefined;
+      return project ? gameEnabled(project) : gameHostEnabled;
+    },
     onBundledError: (err) => app.log.warn({ err }, "Could not index the bundled plugins"),
   });
   // Indexing the bundled plugins starts now; every use of the plugin services waits for it.
@@ -870,8 +881,8 @@ export function createApp(options: AppOptions = {}) {
   const projectAgentTools = (project: ProjectState, conversation: StoredConversation) => {
     const playtestKey = `${project.id}:${conversation.summary.id}`;
     let playtest = agentPlaytests.get(playtestKey);
-    if (!playtest && options.businessTools?.game !== false && options.playtestDriver) {
-      playtest = new OwnedPlaytestDriver(options.playtestDriver);
+    if (!playtest && gameEnabled(project) && options.playtestDriver && gameRuntimeAvailable(project, options.playtestDriver)) {
+      playtest = new OwnedPlaytestDriver(options.playtestDriver, project.id);
       agentPlaytests.set(playtestKey, playtest);
     }
     return [...createAgentTools(
@@ -889,18 +900,19 @@ export function createApp(options: AppOptions = {}) {
       webSearch.enabled() ? (input, signal) => webSearch.search(conversation.summary.id, input, signal) : undefined,
       canvasStore,
       options.toolContributions?.(project),
-      options.businessTools,
+      { ...options.businessTools, game: gameHostEnabled },
     )];
   };
   const conversationAgentTools = async (project: ProjectState, conversation: StoredConversation) => composeToolContributions([
     { id: "application", tools: projectAgentTools(project, conversation) },
     { id: "plugins", tools: await pluginServices.agentTools(project.workspacePath) },
   ]);
-  const playtestTarget = async (project: ProjectState): Promise<GameUseOpenTarget> => {
+  const playtestTarget = async (project: ProjectState, manual = false): Promise<GameUseOpenTarget> => {
+    if (!gameEnabled(project)) throw new Error("The game capability is disabled for this workspace.");
     // A story plays its own page, which one made before web stories has once the editor upgrades it.
     if (project.type === "interactive-story" && !await isWebStory(project.workspacePath))
       throw new Error(NEEDS_UPGRADE);
-    return { runtime: "web", url: previewPageUrl(await previews.ensureStarted(project, false), "playtest") };
+    return { runtime: "web", url: previewPageUrl(await previews.ensureStarted(project, manual), "playtest") };
   };
   /** OhMyGame's tools for agents outside the app; playtest windows belong to their MCP session. */
   const externalMcp = new ExternalMcpService({
@@ -909,14 +921,14 @@ export function createApp(options: AppOptions = {}) {
     tools: (project, sessionId) => {
       const playtestKey = `${project.id}:external:${sessionId}`;
       let playtest = agentPlaytests.get(playtestKey);
-      if (!playtest && options.businessTools?.game !== false && options.playtestDriver) {
-        playtest = new OwnedPlaytestDriver(options.playtestDriver);
+      if (!playtest && gameEnabled(project) && options.playtestDriver && gameRuntimeAvailable(project, options.playtestDriver)) {
+        playtest = new OwnedPlaytestDriver(options.playtestDriver, project.id);
         agentPlaytests.set(playtestKey, playtest);
       }
       return createAgentTools(
         project, tools, projects, undefined, undefined,
         playtest ? { driver: playtest, resolveOpenTarget: () => playtestTarget(project) } : undefined,
-        undefined, canvasStore, options.toolContributions?.(project), options.businessTools,
+        undefined, canvasStore, options.toolContributions?.(project), { ...options.businessTools, game: gameHostEnabled },
       );
     },
     // An outside agent's call isn't part of an OhMyGame turn, so it is a change of its own.
@@ -933,8 +945,8 @@ export function createApp(options: AppOptions = {}) {
       // full game_use input is listed; a story's own game_use accepts a subset.
       const placeholder: ProjectState = { id: "", name: "", type: "interactive-story", updatedAt: "", workspacePath: "", preview: { status: "stopped" } };
       return [
-        ...createAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore, options.toolContributions?.(placeholder), options.businessTools),
-        ...(options.businessTools?.game === false ? [] : [createGameUseTool(options.playtestDriver ?? UNAVAILABLE_GAME_RUNTIME, () => playtestTarget(placeholder))]),
+        ...createAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore, options.toolContributions?.(placeholder), { ...options.businessTools, game: gameHostEnabled }),
+        ...(!gameHostEnabled ? [] : [createGameUseTool(options.playtestDriver ?? UNAVAILABLE_GAME_RUNTIME, () => playtestTarget(placeholder))]),
       ];
     },
     release: async (projectId, sessionId) => {
@@ -1404,7 +1416,7 @@ export function createApp(options: AppOptions = {}) {
     // Each plugin's newest version that suits the project is the one to turn on.
     const offered = new Map<string, PluginIndexEntry>();
     for (const entry of pluginServices.index.entries())
-      if (!offered.has(entry.id) && !appliesByItself(pluginServices.index, entry.id) && (pluginAppliesTo(entry.manifest.appliesTo, projectType) || projectTypePlugin(projectType) === entry.id))
+      if (pluginServices.allowed(entry, project.workspacePath) && !offered.has(entry.id) && !appliesByItself(pluginServices.index, entry.id) && (pluginAppliesTo(entry.manifest.appliesTo, projectType) || projectTypePlugin(projectType) === entry.id))
         offered.set(entry.id, entry);
     const ids = [...new Set([...states.map((state) => state.id), ...offered.keys()])];
     const items = ids.map((id): ProjectPluginItem => {
@@ -1432,7 +1444,7 @@ export function createApp(options: AppOptions = {}) {
     return [...new Set(pluginServices.index.entries().map((entry) => entry.id))].flatMap((id): ProjectPluginChoice[] => {
       const entry = pluginServices.index.get(id);
       const grant = pluginServices.grants.plugin(id);
-      if (!entry || grant?.enabled === false || isAppWidePlugin(entry.manifest)) return [];
+      if (!entry || !pluginServices.allowed(entry) || grant?.enabled === false || isAppWidePlugin(entry.manifest)) return [];
       const requested = capabilityGrants(entry.manifest);
       return [{
         id,
@@ -1455,6 +1467,9 @@ export function createApp(options: AppOptions = {}) {
     if (agents.isProjectBusy(project.id)) return reply.code(409).send({ error: "Wait for the agent to finish first" });
     try {
       await pluginServices.ready();
+      const entry = pluginServices.index.get(`${request.params.publisher}/${request.params.name}`, request.body.version ?? undefined);
+      if (request.body.version && entry && !pluginServices.allowed(entry, project.workspacePath))
+        return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
       // A project made before plugins could be per project gets its `ohmygame.json` now.
       const initialType = (CORE_PROJECT_TYPES as readonly string[]).includes(project.type) ? project.type : "general";
       await pluginServices.setProjectPlugin(project.workspacePath, `${request.params.publisher}/${request.params.name}`, request.body.version, initialType);
@@ -1774,7 +1789,7 @@ export function createApp(options: AppOptions = {}) {
           name: request.body.name,
           workspacePath: request.body.workspacePath,
         });
-        return reply.code(201).send(project);
+        return reply.code(201).send(projectResponse(project));
       }
       if (request.body?.viewport && request.body.type !== "interactive-story") {
         return reply.code(400).send({ error: "A viewport requires an Interactive Story project" });
@@ -1782,7 +1797,7 @@ export function createApp(options: AppOptions = {}) {
       // A registered workspace is reopened unchanged; connecting it to a plugin is
       // an explicit step in its connection panel.
       const existing = request.body?.workspacePath ? await projects.findByWorkspace(request.body.workspacePath) : undefined;
-      if (existing) return reply.code(200).send(existing);
+      if (existing) return reply.code(200).send(projectResponse(existing));
       // An app kind that a plugin's type took over, as Godot, starts as that type while its plugin is on.
       const aliased = request.body?.type && !request.body.projectType && Object.hasOwn(PLUGIN_PROJECT_KINDS, request.body.type)
         ? (await availableProjectTypes(pluginServices)).find((type) => type.plugin && type.id === PLUGIN_PROJECT_KINDS[request.body!.type as keyof typeof PLUGIN_PROJECT_KINDS])
@@ -1792,6 +1807,10 @@ export function createApp(options: AppOptions = {}) {
         if (request.body.viewport) return reply.code(400).send({ error: "A plugin project type defines its own viewport" });
         const selected = (await availableProjectTypes(pluginServices)).find((type) => type.id === projectType);
         if (!selected?.plugin) return reply.code(400).send({ error: `${projectType} is not an installed plugin project type` });
+        const entry = pluginServices.index.get(selected.plugin.id, selected.plugin.version)!;
+        if (!gameCapabilityEnabled({ workspaceManifest: request.body.workspaceManifest }, gameHostEnabled) &&
+            ((entry.manifest.categories as readonly string[] | undefined)?.includes("engine")))
+          return reply.code(409).send({ error: "The game capability is required for this engine project type." });
         // A chosen folder that already holds files is taken on as it is; an empty one starts from the type.
         const adopting = request.body.workspacePath ? (await readdir(request.body.workspacePath).catch(() => [])).some((item) => item !== ".DS_Store") : false;
         if (adopting) {
@@ -1814,7 +1833,7 @@ export function createApp(options: AppOptions = {}) {
             throw new ExampleError(cause instanceof Error ? cause.message : String(cause), 400);
           }
         }
-        return reply.code(201).send(project);
+        return reply.code(201).send(projectResponse(project));
       }
       const type = request.body?.type ?? "web-game";
       const project = await projects.create(request.body?.name, type, request.body?.workspacePath, undefined, request.body?.workspaceManifest);
@@ -1829,7 +1848,7 @@ export function createApp(options: AppOptions = {}) {
           throw cause;
         }
       }
-      return reply.code(201).send(project);
+      return reply.code(201).send(projectResponse(project));
     } catch (cause) {
       if (cause instanceof ProjectWorkspaceError || cause instanceof NodeCodebaseError) {
         return reply.code(400).send({ error: cause.message });
@@ -1839,7 +1858,7 @@ export function createApp(options: AppOptions = {}) {
     }
   });
 
-  app.get("/projects", async () => projects.list());
+  app.get("/projects", async () => projects.list().map(projectResponse));
 
   const projectActivity = () => ({
     activity: agents.projectActivity(),
@@ -1907,6 +1926,7 @@ export function createApp(options: AppOptions = {}) {
     availableProjectTypes(pluginServices, request.query.locale === "zh-CN" ? "zh-CN" : "en"));
 
   app.post<{ Params: { exampleId: string } }>("/examples/:exampleId/play", async (request, reply) => {
+    if (!gameHostEnabled) return reply.code(409).send({ error: "The game capability is disabled for this application." });
     try {
       return { url: await examples.playUrl(request.params.exampleId) };
     } catch (cause) {
@@ -2182,7 +2202,7 @@ export function createApp(options: AppOptions = {}) {
       try {
         const project = await projects.rename(request.params.projectId, request.body.name);
         publishProjectRenamed(project);
-        return project;
+        return projectResponse(project);
       } catch (cause) {
         return reply.code((cause as Error).message.startsWith("Project not found") ? 404 : 400).send({ error: cause instanceof Error ? cause.message : String(cause) });
       }
@@ -2199,8 +2219,8 @@ export function createApp(options: AppOptions = {}) {
       if (running && supportsWebPreview(project) && project.preview.status !== "waiting") void previews.start(project, false, false).catch(() => {});
     }
     void previews.automatic(project).catch(() => {});
-    events.publish(project.id, "project.updated", { project: structuredClone(project) });
-    return project;
+    events.publish(project.id, "project.updated", { project: structuredClone(projectResponse(project)) });
+    return projectResponse(project);
   };
 
   app.put<{ Params: { projectId: string }; Body: { startupDirectory: string } }>(
@@ -2257,7 +2277,7 @@ export function createApp(options: AppOptions = {}) {
           return reply.code(400).send({ error: `The selected ${usage === "3d" ? "3D" : usage} model is not available` });
         }
       }
-      return projects.setMediaModelDefaults(project.id, request.body);
+      return projectResponse(await projects.setMediaModelDefaults(project.id, request.body));
     },
   );
 
@@ -2272,7 +2292,7 @@ export function createApp(options: AppOptions = {}) {
     if (!upload) return reply.code(400).send({ error: "Choose a project archive to import." });
     try {
       const imported = await importProjectArchive(projects, upload, { name: request.query.name });
-      return reply.code(201).send(projects.get(imported.id) ?? imported);
+      return reply.code(201).send(projectResponse(projects.get(imported.id) ?? imported));
     } catch (cause) {
       if (cause instanceof ProjectArchiveError) return reply.code(cause.statusCode).send({ error: cause.message });
       if (cause instanceof ProjectWorkspaceError) return reply.code(400).send({ error: cause.message });
@@ -2282,7 +2302,7 @@ export function createApp(options: AppOptions = {}) {
 
   app.post<{ Params: { projectId: string } }>("/projects/:projectId/duplicate", async (request, reply) => {
     try {
-      return reply.code(201).send(await projects.duplicate(request.params.projectId));
+      return reply.code(201).send(projectResponse(await projects.duplicate(request.params.projectId)));
     } catch (cause) {
       return reply.code((cause as Error).message.startsWith("Project not found") ? 404 : 400).send({ error: cause instanceof Error ? cause.message : String(cause) });
     }
@@ -2323,7 +2343,7 @@ export function createApp(options: AppOptions = {}) {
 
   app.get<{ Params: { projectId: string } }>("/projects/:projectId", async (request, reply) => {
     const project = projects.get(request.params.projectId);
-    return project ?? reply.code(404).send({ error: "Project not found" });
+    return project ? projectResponse(project) : reply.code(404).send({ error: "Project not found" });
   });
 
   /** The project's own cover; an Interactive Story without one shows a Scene's thumbnail. */
@@ -2384,7 +2404,7 @@ export function createApp(options: AppOptions = {}) {
       if (!projects.get(request.params.projectId)) return reply.code(404).send({ error: "Project not found" });
       const project = await projects.setAppearance(request.params.projectId, request.body);
       publishProjectRenamed(project);
-      return project;
+      return projectResponse(project);
     },
   );
 
@@ -2404,14 +2424,14 @@ export function createApp(options: AppOptions = {}) {
     if (request.body.length > MAX_PROJECT_LOGO_BYTES) return reply.code(413).send({ error: "Project logo is too large" });
     const project = await projects.setLogo(request.params.projectId, request.body);
     publishProjectRenamed(project);
-    return project;
+    return projectResponse(project);
   });
 
   app.delete<{ Params: { projectId: string } }>("/projects/:projectId/logo", async (request, reply) => {
     if (!projects.get(request.params.projectId)) return reply.code(404).send({ error: "Project not found" });
     const project = await projects.setLogo(request.params.projectId, undefined);
     publishProjectRenamed(project);
-    return project;
+    return projectResponse(project);
   });
 
   app.get<{ Params: { projectId: string } }>("/projects/:projectId/git/changes", async (request, reply) => {
@@ -3234,6 +3254,24 @@ export function createApp(options: AppOptions = {}) {
     },
   );
 
+  app.get<{ Params: { projectId: string } }>("/projects/:projectId/game-capability", async (request, reply) => {
+    const project = projects.get(request.params.projectId);
+    if (!project) return reply.code(404).send({ error: "Project not found" });
+    return { enabled: gameEnabled(project) };
+  });
+  // Desktop players and playtest windows must authorize before creating a window.
+  app.post<{ Params: { projectId: string } }>("/projects/:projectId/game/preview", async (request, reply) => {
+    const project = projects.get(request.params.projectId);
+    if (!project) return reply.code(404).send({ error: "Project not found" });
+    if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
+    try {
+      const target = await playtestTarget(project, true);
+      return { url: target.runtime === "web" ? target.url : undefined, title: project.name };
+    } catch (cause) {
+      return reply.code(409).send({ error: cause instanceof Error ? cause.message : String(cause) });
+    }
+  });
+
   app.post<{ Params: { projectId: string }; Body: ProjectRunSettings }>("/projects/:projectId/preview/inspect", { schema: runSettingsSchema }, async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });
@@ -3271,6 +3309,7 @@ export function createApp(options: AppOptions = {}) {
   app.get<{ Params: { projectId: string } }>("/projects/:projectId/tuning", async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });
+    if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
     return gameTuning.state(project);
   });
   // Changes reach the game at once and stay drafts until saved; null goes back to what is saved. A value of
@@ -3281,12 +3320,14 @@ export function createApp(options: AppOptions = {}) {
     async (request, reply) => {
       const project = projects.get(request.params.projectId);
       if (!project) return reply.code(404).send({ error: "Project not found" });
+      if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
       return gameTuning.setDraft(project, request.body.values);
     },
   );
   app.post<{ Params: { projectId: string } }>("/projects/:projectId/tuning/save", async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });
+    if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
     try {
       // Its own undoable change, kept with the changes plugins make outside a turn.
       const { change } = await gameTuning.save(project, (operation) => pluginWrites.run(project, { plugin: "ohmygame/tuning", action: "tuning:save", title: "Save tuning values", inPlace: true }, operation));
@@ -3374,7 +3415,7 @@ export function createApp(options: AppOptions = {}) {
       }
       for (const mention of mentions) {
         const entry = appWideMentionEntry(mention);
-        if (entry && !appWidePluginSuits(entry.manifest.appliesTo, project)) return reply.code(409).send({ error: "A referenced plugin requires a different project type" });
+        if (entry && (!pluginServices.allowed(entry, project.workspacePath) || !appWidePluginSuits(entry.manifest.appliesTo, project))) return reply.code(409).send({ error: "A referenced plugin requires a different project type" });
       }
       // A plugin type can hold prompts back until its project is set up, such as signed in and bound.
       if (project.pluginType) {

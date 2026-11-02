@@ -915,6 +915,11 @@ export async function ensureProjectPreview(projectId: string): Promise<{ url: st
   return request(`/projects/${encodeURIComponent(projectId)}/preview?reuse=1`, { method: "POST" });
 }
 
+/** Game players use a guarded entry point; reusable previews use ensureProjectPreview. */
+export async function ensureGamePreview(projectId: string): Promise<{ url: string; title: string }> {
+  return request(`/projects/${encodeURIComponent(projectId)}/game/preview`, { method: "POST" });
+}
+
 /** Whether an Interactive Story plays as its own page, or must be upgraded first. */
 export async function getStoryUpgrade(projectId: string): Promise<StoryUpgradeStatus> {
   return request(`/projects/${projectId}/interactive-story/upgrade`);
