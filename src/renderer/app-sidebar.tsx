@@ -1,4 +1,4 @@
-import { accountServicesEnabled } from "../shared/application-services.js";
+import { accountServicesEnabled, communityEnabled } from "../shared/application-services.js";
 import { applicationName, applicationStorageKey } from "./application-identity.js";
 import { cloneElement, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import {
@@ -338,7 +338,7 @@ export function AppSidebar({ active, onNavigate }: { active?: SidebarActive; onN
           <SidebarItem icon={<Search size={18} />} label={t("sidebar.search")} shortcut={shortcutKeys("k")} onClick={openCommandMenu} />
         </div>
         <div className="sidebar-group">
-          {SECTIONS.map((item) => (
+          {SECTIONS.filter((item) => communityEnabled || item.page !== "community").map((item) => (
             <SidebarItem key={item.page} icon={item.icon} label={item.label()} active={active === item.page}
               onClick={() => onNavigate(item.page)} />
           ))}
@@ -610,7 +610,7 @@ function AccountMenu({ active, avatarSize, onNavigate }: { active: boolean; avat
     settings,
     { label: t("sidebar.account"), icon: <UserRound size={16} />, onSelect: () => openSettings("account") },
     // The games you published, to edit or unpublish.
-    { label: t("community.myGames"), icon: <Globe2 size={16} />, onSelect: () => { window.location.hash = communityProfileHash(signedIn.id); } },
+    ...(communityEnabled ? [{ label: t("community.myGames"), icon: <Globe2 size={16} />, onSelect: () => { window.location.hash = communityProfileHash(signedIn.id); } }] : []),
     "separator",
     about,
   ] : [

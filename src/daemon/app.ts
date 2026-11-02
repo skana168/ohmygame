@@ -1,4 +1,4 @@
-import { accountServicesEnabled } from "../shared/application-services.js";
+import { accountServicesEnabled, publishingEnabled, communityEnabled } from "../shared/application-services.js";
 import { OHMYGAME_WORKSPACE_MODULES, type WorkspaceModuleDescriptor } from "../shared/workspace-manifest.js";
 import { readWorkspaceManifest, validateWorkspaceManifest } from "./workspace-manifest.js";
 import type { BusinessToolSelection } from "./business-tools.js";
@@ -170,6 +170,8 @@ import {
 export interface AppOptions {
   /** Optional OhMyGame account cloud integration; user providers remain available. */
   accountServices?: boolean;
+  publishing?: boolean;
+  community?: boolean;
   /** Source-registered modules available to workspace declarations. */
   workspaceModules?: readonly WorkspaceModuleDescriptor[];
   /** Select source-registered business tools; both modules are enabled by default. */
@@ -619,13 +621,15 @@ export function createApp(options: AppOptions = {}) {
   const building = new Set<string>();
   const artifacts = new ArtifactBuilder();
   const examples = new ExampleStore(options.examplesDirectory);
-  const localPublisher = options.localDebug ? new LocalPublisher() : undefined;
+  const allowPublishing = options.publishing ?? publishingEnabled;
+  const allowCommunity = options.community ?? communityEnabled;
+  const localPublisher = (allowPublishing || allowCommunity) && options.localDebug ? new LocalPublisher() : undefined;
   const cloudModels = (options.accountServices ?? accountServicesEnabled) === false ? undefined : new CloudModelsClient(options.cloudApiUrl ?? options.publishApiUrl ?? process.env.CLOUD_API_URL ?? process.env.PUBLISH_API_URL ?? "http://127.0.0.1:43130", options.cloudFetch);
-  const publisher = localPublisher ?? new RemotePublisher({
+  const publisher = (allowPublishing || allowCommunity) ? localPublisher ?? new RemotePublisher({
     apiUrl: options.publishApiUrl ?? process.env.CLOUD_API_URL ?? process.env.PUBLISH_API_URL ?? "http://127.0.0.1:43130",
     fetch: options.publishFetch,
     visitorTokenFile: path.join(dataDirectory, "community-visitor.json"),
-  });
+  }) : undefined;
   // The plugin services are made below; a build only runs once the app is up.
   const gameTuning = new GameTuning({
     push: (project, values) => previews.setTuning(project, values),
@@ -2326,7 +2330,7 @@ export function createApp(options: AppOptions = {}) {
     });
   });
 
-  registerCommunityRoutes(app, publisher, projects);
+  if (allowCommunity && publisher) registerCommunityRoutes(app, publisher, projects);
 
   registerLibraryRoutes(app, { projects, library });
 
@@ -3732,6 +3736,7 @@ export function createApp(options: AppOptions = {}) {
     "/projects/:projectId/publish",
     { schema: publishProjectSchema },
     async (request, reply) => {
+      if (!allowPublishing || !publisher) return reply.code(404).send({ error: "Game publishing is unavailable" });
       const project = projects.get(request.params.projectId);
       if (!project) return reply.code(404).send({ error: "Project not found" });
       if (project.pluginType?.preview === "native") return reply.code(409).send({ error: "This project runs outside OhMyGame. Follow its plugin's publishing workflow." });

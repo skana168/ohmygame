@@ -7,6 +7,7 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { NativeCodingSession } from "../src/daemon/agent-runtimes/native-session.js";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ProjectManager } from "../src/daemon/projects.js";
 import { createApp } from "../src/daemon/app.js";
 import type { CodingSession } from "../src/daemon/agent.js";
 import { CHECKPOINT_ENTRY, TURN_END_ENTRY } from "../src/daemon/checkpoint-extension.js";
@@ -24,6 +25,37 @@ async function saveProjectAsset(app: Awaited<ReturnType<typeof createApp>>, proj
 }
 
 describe("daemon", () => {
+  it("rejects disabled publishing and community while local project routes remain available", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "optional-publishing-"));
+    const app = createApp({ dataDirectory: directory, accountServices: false, publishing: false, community: false });
+    apps.push(app);
+    expect((await app.inject({ method: "GET", url: "/community/games" })).statusCode).toBe(404);
+    expect((await app.inject({ method: "POST", url: "/projects/missing/publish", payload: { accessToken: "token", title: "Game" } })).json()).toEqual({ error: "Game publishing is unavailable" });
+    expect((await app.inject({ method: "GET", url: "/projects" })).statusCode).toBe(200);
+  });
+
+  it("retains saved deployment metadata across startup with publishing disabled", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "saved-publication-"));
+    const projects = new ProjectManager(directory);
+    await projects.load();
+    const project = await projects.create("Published workspace", "web-game");
+    const publication = { gameId: "game-1", deploymentId: "deployment-1", playUrl: "https://play.example/game-1", publishedAt: "2026-10-05T03:00:00.000Z", title: "Saved title" };
+    await projects.setPublication(project.id, publication);
+    const app = createApp({ dataDirectory: directory, publishing: false, community: false });
+    apps.push(app);
+    expect((await app.inject({ method: "GET", url: `/projects/${project.id}` })).json().publication).toEqual(publication);
+    const denied = await app.inject({ method: "POST", url: `/projects/${project.id}/publish`, payload: { accessToken: "token", title: "Replacement" } });
+    expect(denied.statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: `/projects/${project.id}` })).json().publication).toEqual(publication);
+  });
+
+  it.each([true, false])("selects community routes independently of publishing (%s)", async (community) => {
+    const directory = await mkdtemp(path.join(tmpdir(), "optional-community-"));
+    const app = createApp({ dataDirectory: directory, publishing: false, community, localDebug: true });
+    apps.push(app);
+    expect((await app.inject({ method: "GET", url: "/community/games" })).statusCode).toBe(community ? 200 : 404);
+  });
+
   it.each([true, false])("keeps independently configured applications' projects, conversations and provider credentials separate across restart (account services: %s)", async (accountServices) => {
     const directory = await mkdtemp(path.join(tmpdir(), "application-isolation-"));
     const base = identity.loadIdentity();

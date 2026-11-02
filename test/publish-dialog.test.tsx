@@ -18,6 +18,10 @@ const project: ProjectState = {
 };
 
 describe("publication feedback", () => {
+  it("does not expose a publish dialog when the application disables publishing", () => {
+    expect(renderToStaticMarkup(<PublishDialog available={false} project={project} publishing={false} onClose={() => undefined} onPublish={async () => false} />)).toBe("");
+  });
+
   it("shows success with the returned title, game link, and next actions", () => {
     const html = renderToStaticMarkup(<PublicationDetails publication={publication} name={project.name} justPublished onClose={() => undefined} onUpdate={() => undefined} />);
     expect(html).toContain("Published successfully");

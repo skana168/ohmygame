@@ -1,3 +1,4 @@
+import { communityEnabled } from "../shared/application-services.js";
 import type { ProjectType } from "../shared/contracts.js";
 import { PLUGIN_CONTRIBUTIONS, type PluginContribution } from "../shared/plugins.js";
 import { isProjectType } from "../shared/project-runtime.js";
@@ -39,7 +40,8 @@ export type AppRoute =
   | { page: "thumbnail"; projectId: string; nodeId: string }
   | { page: "project"; projectId: string; conversationId?: string; view?: "design" };
 
-export function parseAppRoute(hash: string): AppRoute {
+export function parseAppRoute(hash: string, capabilities = { community: communityEnabled }): AppRoute {
+  if (!capabilities.community && /^#\/community(?:\/|$)/.test(hash)) return { page: "home" };
   if (hash === "#/" || hash === "") return { page: "home" };
   const builderMatch = /^#\/plugins\/builder\/([0-9a-f-]{36})$/.exec(hash);
   if (builderMatch?.[1]) return { page: "plugin-builder", sessionId: builderMatch[1] };

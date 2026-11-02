@@ -434,7 +434,7 @@ describe("project archive export", () => {
 describe("project archive import", () => {
   it.each(["fit", "mobile", "mobile-landscape"])("imports an exported project as a new project with the %s preset", async (previewViewport) => {
     const source = createApp({ dataDirectory: await temporaryDirectory() });
-    const target = createApp({ dataDirectory: await temporaryDirectory() });
+    const target = createApp({ dataDirectory: await temporaryDirectory(), publishing: false, community: false, accountServices: false });
     apps.push(source, target);
     const original = (
       await source.inject({
