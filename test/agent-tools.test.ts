@@ -1,9 +1,11 @@
+import { defineTool } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import { indexPluginPackage } from "../src/daemon/plugin-index.js";
 import { TEST_GLB } from "./model3d-fixture.js";
-import { mkdir, mkdtemp, readFile, readdir, realpath, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { activePiToolNames, createAgentTools, planningPiToolNames, projectPiToolNames } from "../src/daemon/agent-tools.js";
 import { AssetLibrary } from "../src/daemon/asset-library.js";
 import type { ImageGenerator } from "../src/daemon/openai-image.js";
@@ -14,9 +16,34 @@ import type { VideoGenerator } from "../src/daemon/video-generation.js";
 import { WEB_GAME_USE_CAPABILITIES, type GameRuntimeAdapter } from "../src/shared/playtest.js";
 import { createNodeCodebase, createPlayableStarterCodebase } from "../src/daemon/playable-codebase.js";
 
+const contributionDirectories: string[] = [];
+afterEach(async () => {
+  await Promise.all(contributionDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
 const TEST_VIDEO_MODEL = { provider: "openrouter", id: "example/video-model" } as const;
 
 describe("agent tools", () => {
+  it("discovers and invokes source contributions alongside the default tools", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-contributions-"));
+    contributionDirectories.push(directory);
+    const projects = new ProjectManager(directory);
+    await projects.load();
+    const project = await projects.create("Contributions");
+    const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
+    const contribution = { id: "test-business", tools: [defineTool({
+      name: "business_echo", label: "Echo", description: "Echo a value",
+      parameters: Type.Object({ value: Type.String() }),
+      execute: async (_id, input) => ({ content: [{ type: "text" as const, text: `${project.id}: ${input.value}` }], details: {} }),
+    })] };
+    const tools = createAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, undefined, [contribution]);
+    expect(projectPiToolNames("normal", [], tools.map((tool) => tool.name))).toContain("business_echo");
+    expect(projectPiToolNames("planning", [], tools.map((tool) => tool.name))).not.toContain("business_echo");
+    const echo = tools.find((tool) => tool.name === "business_echo")!;
+    expect(await echo.execute("echo", { value: "hello" }, undefined, undefined, {} as never)).toMatchObject({ content: [{ text: `${project.id}: hello` }] });
+    expect(() => createAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, undefined, [contribution, contribution])).toThrow(/Duplicate tool.*business_echo.*test-business/);
+  });
+
   it("maps enabled product tools to Pi tool names", () => {
     expect(planningPiToolNames()).toEqual(["read", "grep", "find", "ls", "web_search", "questionnaire", "update_plan"]);
     expect(activePiToolNames([])).toEqual(["read", "write", "edit", "bash", "web_search", "update_plan", "install_plugin"]);

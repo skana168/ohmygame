@@ -1,3 +1,4 @@
+import { composeToolContributions } from "../tool-contributions.js";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Check, Errors } from "typebox/value";
 import type { NativeToolResult } from "./native-session.js";
@@ -40,7 +41,7 @@ export class ToolBridge {
 
   constructor(tools: readonly ToolDefinition[]) {
     this.#tools = new Map(
-      tools
+      composeToolContributions([{ id: "agent", tools }])
         .filter((tool) => !AGENT_OWN_TOOLS.has(tool.name))
         .map((tool) => [tool.name, tool]),
     );

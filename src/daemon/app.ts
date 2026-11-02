@@ -1,3 +1,4 @@
+import { composeToolContributions, type ToolContribution } from "./tool-contributions.js";
 import { CodexImageProvider } from "./agent-runtimes/codex-image-provider.js";
 import { inspectPreviewConfiguration } from "./preview-configuration.js";
 import { CheckpointConflictError, CheckpointStore } from "./checkpoints.js";
@@ -163,6 +164,8 @@ import {
 } from "./playable-thumbnails.js";
 
 export interface AppOptions {
+  /** Source-registered tools. Also called with a schema-only placeholder for the external catalog. */
+  toolContributions?: (project: ProjectState) => readonly ToolContribution[];
   cloudApiUrl?: string;
   cloudFetch?: typeof fetch;
   dataDirectory?: string;
@@ -877,8 +880,13 @@ export function createApp(options: AppOptions = {}) {
       playtest ? { driver: playtest, resolveOpenTarget: () => playtestTarget(project) } : undefined,
       webSearch.enabled() ? (input, signal) => webSearch.search(conversation.summary.id, input, signal) : undefined,
       canvasStore,
+      options.toolContributions?.(project),
     )];
   };
+  const conversationAgentTools = async (project: ProjectState, conversation: StoredConversation) => composeToolContributions([
+    { id: "application", tools: projectAgentTools(project, conversation) },
+    { id: "plugins", tools: await pluginServices.agentTools(project.workspacePath) },
+  ]);
   const playtestTarget = async (project: ProjectState): Promise<GameUseOpenTarget> => {
     // A story plays its own page, which one made before web stories has once the editor upgrades it.
     if (project.type === "interactive-story" && !await isWebStory(project.workspacePath))
@@ -899,7 +907,7 @@ export function createApp(options: AppOptions = {}) {
       return createAgentTools(
         project, tools, projects, undefined, undefined,
         playtest ? { driver: playtest, resolveOpenTarget: () => playtestTarget(project) } : undefined,
-        undefined, canvasStore,
+        undefined, canvasStore, options.toolContributions?.(project),
       );
     },
     // An outside agent's call isn't part of an OhMyGame turn, so it is a change of its own.
@@ -916,7 +924,7 @@ export function createApp(options: AppOptions = {}) {
       // full game_use input is listed; a story's own game_use accepts a subset.
       const placeholder: ProjectState = { id: "", name: "", type: "interactive-story", updatedAt: "", workspacePath: "", preview: { status: "stopped" } };
       return [
-        ...createAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore),
+        ...createAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore, options.toolContributions?.(placeholder)),
         createGameUseTool(options.playtestDriver ?? UNAVAILABLE_GAME_RUNTIME, () => playtestTarget(placeholder)),
       ];
     },
@@ -969,7 +977,7 @@ export function createApp(options: AppOptions = {}) {
       ...(model?.contextWindow ? { contextWindow: model.contextWindow } : {}),
       workspacePath: project.workspacePath,
       sessionManager: conversations.open(project, conversation),
-      tools: [...projectAgentTools(project, conversation), ...await pluginServices.agentTools(project.workspacePath)],
+      tools: await conversationAgentTools(project, conversation),
       saveGeneratedImage: (fileName, bytes, prompt) => projects.addGeneratedAsset(project.id, fileName, bytes, { prompt }),
       pluginMcp: { config: effectiveMcp, host: pluginMcpHost, agentDir: piAgentDirectory, guard: projectMcpGuard(project, effectiveMcp) },
       skillDirectories: [...pluginSkillFolders(pluginSkills), ...ownSkills],
@@ -1006,7 +1014,7 @@ export function createApp(options: AppOptions = {}) {
       return createPiSession(
         project,
         conversations.open(project, conversation),
-        [...projectAgentTools(project, conversation), ...await pluginServices.agentTools(project.workspacePath)],
+        await conversationAgentTools(project, conversation),
         modelRuntime,
         model,
         piAgentDirectory,

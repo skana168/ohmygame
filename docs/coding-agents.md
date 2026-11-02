@@ -338,6 +338,23 @@ Removing a private folder cancels a pending lease and waits for an active write.
 Configuration and Skills are removed only after the CLI stops. Unverifiable
 identities and subprocesses that escape their group cannot be reclaimed this way.
 
+Source-registered application tools compose through
+`src/daemon/tool-contributions.ts`: each contribution identifies its module with
+an `id` and supplies workspace-bound Pi tool definitions in `tools`.
+`createAgentTools` composes the default core, interactive-story and game tools;
+`createApp({ toolContributions })` adds source contributions for Pi, coding agents
+and external MCP. The callback receives the current project. External MCP also
+calls it with a schema-only placeholder before selecting a project, so construct
+definitions without reading workspace files and defer work to `execute`.
+Duplicate names fail explicitly, including collisions with native plugin tools
+and external MCP's session tools. Definitions keep their schemas and handlers;
+composition adds no execution scheduler or lifecycle. Existing planning limits,
+abort signals and session cleanup still belong to the consumer. External MCP
+excludes conversation-only tools (`questionnaire`, `update_plan`, `install_plugin`
+and `web_search`) and Pi's file/shell tools; other contributions use its existing
+project binding and ToolBridge. This source seam does not select modules or
+promise a game-free build.
+
 OhMyGame's tools are the handlers Pi uses (`createAgentTools`), offered through
 `ToolBridge`. Plugin MCP servers reach the agent through the same `mcp` tool
 Pi uses, run in a model-less session in the daemon, so plugin settings,

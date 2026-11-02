@@ -503,10 +503,17 @@ export class AgentRuntimeService {
       // Plugin servers that cannot start leave the agent without them, as a failed MCP server does in Pi.
       pluginTool = undefined;
     }
-    const bridge = new ToolBridge([
-      ...request.tools,
-      ...(pluginTool ? [pluginTool.tool] : []),
-    ]);
+    let bridge: ToolBridge;
+    try {
+      bridge = new ToolBridge([
+        ...request.tools,
+        ...(pluginTool ? [pluginTool.tool] : []),
+      ]);
+    } catch (error) {
+      await pluginTool?.close().catch(() => {});
+      await folder.remove();
+      throw error;
+    }
     const env = await this.#environment(request.runtime, binary.path, request.profileId);
     // Codex conversations with the same executable, environment and Skills share one app server.
     const codexServer =
