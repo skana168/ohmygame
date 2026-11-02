@@ -34,6 +34,8 @@ Execution details are recorded in [execution-state.json](execution-state.json).
 
 - [Ticket 04](issues/04-open-non-game-workspaces.md) resolved at `366f0dab`; 392 merged-root tests and typecheck passed. Generic tools/canvas retain independent account configuration. Tickets05/07 ready; Electron overall validation and browser title editing remain unverified.
 
+- [Ticket 06](issues/06-isolate-game-preview-and-engines.md) merged at `7a6dbf98` but remains claimed. Shared workspace policy and reusable preview navigation integrated; browser flow passed. Electron resize timeout reproduces with baseline player, later native smoke and desktop capability flow remain unverified; see report for exact automated evidence.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction

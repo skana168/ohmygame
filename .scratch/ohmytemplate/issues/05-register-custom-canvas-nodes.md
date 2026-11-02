@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 — Create and use a non-game workspace with the shared workbench.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Provide a module contribution interface for node identity, data validation, and compiled renderer components alongside the existing general-purpose nodes.
 - [ ] Extend the minimal non-game module with one demonstrable custom node and a tool that operates on its persisted domain data, using the established tool boundary.

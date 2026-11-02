@@ -1,3 +1,4 @@
+import { workspaceHasModule } from "./workspace-policy.js";
 import {
   PROJECT_TYPE_IDS,
   type ProjectState,
@@ -101,4 +102,13 @@ export function webPreviewSettingsChanged(
     JSON.stringify(before.previewArguments) !==
       JSON.stringify(after.previewArguments)
   );
+}
+
+/** Game ownership is separate from the reusable Web preview process. Missing
+ * declarations retain legacy OhMyGame behavior; invalid workspaces fail closed. */
+export function gameCapabilityEnabled(
+  project: Pick<ProjectState, "type" | "workspaceManifest" | "workspaceDiagnostics" | "gameCapability">,
+  hostEnabled = true,
+): boolean {
+  return hostEnabled && project.gameCapability !== false && workspaceHasModule(project, "game");
 }

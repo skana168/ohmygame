@@ -86,6 +86,21 @@ describe("agent tools", () => {
     expect(await bridge.call("example_echo", { message: "notes" }, "echo")).toMatchObject({ result: { content: [{ text: "notes" }] } });
   });
 
+  it("does not advertise or invoke game_use for a workspace without game selection", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-nongame-tools-"));
+    contributionDirectories.push(directory);
+    const projects = new ProjectManager(directory);
+    await projects.load();
+    const project = await projects.create("Notes", "general", undefined, undefined, { version: 1, modules: [] });
+    project.webPreviewEnabled = true;
+    const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
+    const driver: GameRuntimeAdapter = { available: true, capabilities: WEB_GAME_USE_CAPABILITIES, request: async () => { throw new Error("must not start a driver"); }, close: () => {} };
+    const tools = createAgentTools(project, runner, projects, undefined, undefined, { driver, resolveOpenTarget: async () => ({ runtime: "web", url: "http://localhost/" }) });
+    expect(tools.map((tool) => tool.name)).not.toContain("game_use");
+    expect(await new ToolBridge(tools).call("game_use", { operation: "open" }, "blocked")).toMatchObject({ isError: true });
+    expect(tools.map((tool) => tool.name)).toContain("canvas_check");
+  });
+
   it("runs the shipped example through Pi and the coding-agent bridge without widening planning permissions", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-example-"));
     contributionDirectories.push(directory);

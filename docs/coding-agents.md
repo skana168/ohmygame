@@ -361,10 +361,10 @@ when the existing runtime and project availability checks pass; `story`
 contributes `playable_add_node` and `playable_check` only for interactive stories.
 Selection applies to Pi, coding-agent bridges and external MCP catalogs and
 invocation. Disabling game tools also avoids creating agent playtest owners.
-Core canvas/media tools, Skills and MCP plugins retain their existing behavior.
-Workspace manifests further restrict these host defaults; see
-[workspace manifests](workspace-manifests.md). This does not remove game dependencies
-from the build. Additional source contributions are
+Core canvas/media tools and general-purpose plugins retain their existing behavior.
+The workspace manifest further restricts game tools, ownership and engine plugin
+contributions; see [workspace manifests](workspace-manifests.md) and [optional game ownership](preview-runtime.md#optional-game-ownership).
+This does not remove game dependencies from the build. Additional source contributions are
 trusted application code and should not re-register a disabled module's tools.
 
 A shipped non-game example is opt-in:

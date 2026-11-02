@@ -1,3 +1,4 @@
+import { gameCapabilityEnabled } from "../shared/project-runtime.js";
 import { previewPageUrl } from "../shared/preview-page.js";
 import {
   previewSettings,
@@ -478,7 +479,7 @@ export function ProjectSettingsDialog({
           className="project-settings-group"
           aria-labelledby="preview-playtest-heading"
         >
-          <h3 id="preview-playtest-heading">{t("projectSettings.playtestDefaults")}</h3>
+          <h3 id="preview-playtest-heading">{t(gameCapabilityEnabled(project) ? "projectSettings.playtestDefaults" : "projectSettings.previewDefaults")}</h3>
           <fieldset
             className="project-settings-section"
             disabled={saving || !webPreviewEnabled}

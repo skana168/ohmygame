@@ -339,7 +339,9 @@ so code changes can hot-update both. See [preview lifecycle](preview-runtime.md)
 for storage, diagnostics, and window details.
 
 The desktop runtime exposes game interaction and verification as the Pi custom
-tool `game_use`. This is an OhMyGame core capability rather than a Plugin:
+tool `game_use`. It belongs to the optional source-registered game capability;
+it is independent of installable Plugins. Host selection and the workspace
+manifest must both enable it; see [optional game ownership](preview-runtime.md#optional-game-ownership).
 
 1. The current Web adapter starts or reuses the project's local Preview and
    accepts only a path, query, or hash on that Preview origin.

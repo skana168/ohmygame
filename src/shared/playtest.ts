@@ -126,7 +126,7 @@ export interface PlaytestWatchState {
 }
 
 export type PlaytestRequest =
-  | { operation: "open"; target: GameUseOpenTarget; viewport: PlaytestViewport }
+  | { operation: "open"; target: GameUseOpenTarget; viewport: PlaytestViewport; projectId?: string }
   | { operation: "inspect"; sessionId: string }
   | { operation: "act"; sessionId: string; actions: PlaytestAction[] }
   | { operation: "capture"; sessionId: string }

@@ -5,7 +5,7 @@ export class OwnedPlaytestDriver implements GameRuntimeAdapter {
   readonly #sessions = new Set<string>();
   readonly #pending = new Set<Promise<PlaytestResult>>();
 
-  constructor(private readonly driver: GameRuntimeAdapter) {}
+  constructor(private readonly driver: GameRuntimeAdapter, private readonly projectId?: string) {}
 
   get available() { return this.driver.available; }
   get capabilities() { return this.driver.capabilities; }
@@ -18,7 +18,8 @@ export class OwnedPlaytestDriver implements GameRuntimeAdapter {
     if (request.operation !== "open" && !this.#sessions.has(request.sessionId)) {
       throw new Error("Game session does not belong to this conversation");
     }
-    const pending = this.driver.request(request, signal);
+    const pending = this.driver.request(request.operation === "open" && this.projectId
+      ? { ...request, projectId: this.projectId } : request, signal);
     this.#pending.add(pending);
     try {
       const result = await pending;

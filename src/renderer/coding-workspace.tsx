@@ -1,3 +1,4 @@
+import { gameCapabilityEnabled } from "../shared/project-runtime.js";
 import { previewPageUrl as isolatedPreviewUrl } from "../shared/preview-page.js";
 import {
   Check,
@@ -156,6 +157,7 @@ export function CodingWorkspace({
   onPickingChange,
   panels,
 }: CodingWorkspaceProps) {
+  const gameEnabled = !!project && gameCapabilityEnabled(project);
   const supportsPreview = supportsWebPreview(project);
   const hasPreview = supportsWebPreview(project);
   const visible = panels?.visible ?? new Set<CodingView>([canvasOpen ? "canvas" : hasPreview ? "preview" : "code"]);
@@ -205,8 +207,8 @@ export function CodingWorkspace({
   const fileRequest = useRef(0);
   const preview = project?.preview;
   const previewBaseUrl = preview?.status === "ready" ? preview.url : undefined;
-  const player = useWebGamePlayer(supportsPreview ? project?.id : undefined, previewBaseUrl, preview?.revision, preview?.pages?.find((page) => page.source === "player")?.path);
-  const nativePreview = typeof window !== "undefined" && window.ohMyGameDesktop?.webGamePlayer?.preview;
+  const player = useWebGamePlayer(gameEnabled && supportsPreview ? project?.id : undefined, previewBaseUrl, preview?.revision, preview?.pages?.find((page) => page.source === "player")?.path);
+  const nativePreview = gameEnabled && typeof window !== "undefined" && window.ohMyGameDesktop?.webGamePlayer?.preview;
   const gameClient = nativePreview ? player.client ?? previewClient : previewClient;
   const previewPageUrl = previewBaseUrl ? isolatedPreviewUrl(new URL(previewPath, previewBaseUrl).toString(), "editor", gameClient) : undefined;
   const currentPreviewUrl = previewBaseUrl ? isolatedPreviewUrl(new URL(actualPreviewPath, previewBaseUrl).toString(), "editor", gameClient) : undefined;
@@ -368,7 +370,7 @@ export function CodingWorkspace({
   }, [picking]);
 
   const canPlay = !player.open && (!project || preview?.status === "waiting" || preview?.status === "starting");
-  const playButton = supportsPreview ? <Button
+  const playButton = gameEnabled && supportsPreview ? <Button
     size="sm"
     variant="ghost"
     className={`preview-play-button${player.open ? " is-active" : ""}`}
@@ -377,7 +379,7 @@ export function CodingWorkspace({
     disabled={player.pending || (player.checking && !player.error) || canPlay}
     onClick={playGame}
   >{player.open ? t("workspace.returnToGame") : t("workspace.play")}</Button> : null;
-  const recordButton = supportsPreview && project ? <GameRecordButton projectId={project.id} gameRunning={player.open || preview?.status === "ready"} /> : null;
+  const recordButton = gameEnabled && supportsPreview && project ? <GameRecordButton projectId={project.id} gameRunning={player.open || preview?.status === "ready"} /> : null;
   const settingsButton = project && project.pluginType?.preview !== "native" && isWebRuntimeProjectType(project.type) ? <button
     className="icon-button pane-header-action"
     type="button"
@@ -402,12 +404,12 @@ export function CodingWorkspace({
           refreshDisabled={!project || preview?.status === "waiting" || preview?.status === "starting"}
           refreshLabel={preview?.status === "ready" ? t("workspace.reloadPreview") : t("workspace.restartPreview")}
           viewport={viewport}
-          agentPlaytestWatch={agentPlaytestWatch}
+          agentPlaytestWatch={gameEnabled ? agentPlaytestWatch : undefined}
           agentPlaytestWatchPending={agentPlaytestWatchPending}
           picking={picking}
           pickDisabled={!project || preview?.status !== "ready" || player.open}
           tuningOpen={tuningOpen}
-          onToggleTuning={buildsWebPreview(project) ? undefined : () => setTuningOpen((open) => !open)}
+          onToggleTuning={!gameEnabled || buildsWebPreview(project) ? undefined : () => setTuningOpen((open) => !open)}
           onOpenSettings={() => setProjectSettingsOpen(true)}
           onNavigate={navigatePreview}
           onRefresh={refreshPreview}
@@ -432,7 +434,7 @@ export function CodingWorkspace({
             />
             </ErrorBoundary>
             {picking ? <span className="preview-pick-hint" role="status">{t("workspace.pickHint")}</span> : null}
-            {tuningOpen && project && !buildsWebPreview(project) ? <GameTuningPanel projectId={project.id} previewReady={preview?.status === "ready"} announced={gameTuning} revision={workspaceRevision} onAskAgent={onAskAgent} onClose={() => setTuningOpen(false)} /> : null}
+            {gameEnabled && tuningOpen && project && !buildsWebPreview(project) ? <GameTuningPanel projectId={project.id} previewReady={preview?.status === "ready"} announced={gameTuning} revision={workspaceRevision} onAskAgent={onAskAgent} onClose={() => setTuningOpen(false)} /> : null}
           </div>
         ) : null}
       </>,
@@ -834,7 +836,7 @@ export function PreviewView({ project, client, onAskAgent, onOpenFile, onLogs, r
   const runtime = useRuntimeConnection();
   const preview = project?.preview;
   const frame = useRef<HTMLElement | null>(null);
-  const native = typeof window !== "undefined" ? window.ohMyGameDesktop?.webGamePlayer?.preview : undefined;
+  const native = project && gameCapabilityEnabled(project) && typeof window !== "undefined" ? window.ohMyGameDesktop?.webGamePlayer?.preview : undefined;
   const captureTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [started, setStarted] = useState(active && !suspended);
   const [cover, setCover] = useState<string>();

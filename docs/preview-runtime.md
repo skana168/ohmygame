@@ -9,6 +9,39 @@ Preview, controls Web preview, Play and Web playtesting. Canvas's separate
 **Default models** button controls generation models. Neither setting selects
 or installs a game engine.
 
+## Optional game ownership
+
+The reusable Web preview process, proxy, editor leases, startup inspection and
+shutdown do not require the `game` workspace module. A General workspace can
+select an empty module list in `workspace.json` and still enable Web preview.
+See [workspace manifests](workspace-manifests.md) for declaration and legacy rules.
+
+Game play, recording, agent playtest visibility and tuning controls additionally
+require the host's game capability and the workspace's `game` selection. Project
+API responses include the effective `gameCapability` boolean; it is response
+metadata, not a persisted setting. Invalid workspace declarations disable game
+entry points without deleting files. Desktop players, hidden story thumbnails,
+and the private agent playtest IPC authorize with the daemon before constructing
+game windows or the agent driver. Each agent open carries its owning workspace ID;
+conversation and external MCP session cleanup retains its existing ownership rules.
+
+`GET /projects/:id/game-capability` reports selection.
+`POST /projects/:id/game/preview` is the guarded human play entry point and starts
+or reuses the Web preview. Game tuning endpoints reject disabled selection with
+409. Ordinary `/preview` startup, inspection, leases, proxying and shutdown remain
+available for independently configured Web previews. Browser players retain their
+synchronous popup-opening behavior; rejected game startup closes the blank popup.
+
+Engine-category plugins and the shipped Game Studio, Web Game Studio and Three.js
+World workflows follow the same host/workspace game selection in Skills, agent
+tools, MCP servers, commands and panels. Existing compatibility, consent, settings
+and enabled-version checks still apply. Direct engine plugin invocation and new
+engine selection are also guarded. Art/helper plugins remain independent. A
+persisted disabled engine declaration is retained so it can work again when the
+game capability is restored. Resource preparation and build/package exclusion are
+separate application composition work; this boundary does not remove engine files
+from the build.
+
 ## Startup configuration
 
 Run settings are saved per project and copied when duplicating it. Startup
