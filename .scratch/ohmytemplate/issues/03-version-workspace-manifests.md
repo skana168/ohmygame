@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Unify tool contributions while preserving existing behavior.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Public workspace creation and loading operations persist and return the intended module selection and configuration using a versioned manifest.
 - [ ] Validate manifest structure and module configuration against the appropriate schemas; reject unsupported versions, invalid configuration, and invalid module combinations with actionable diagnostics.

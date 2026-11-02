@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Unify tool contributions while preserving existing behavior.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Game and story tools are contributed by explicit source-registered business modules rather than unconditional mixed tool assembly.
 - [ ] With those modules enabled, existing tool names, inputs, and behavior remain compatible, including game tool availability checks.
