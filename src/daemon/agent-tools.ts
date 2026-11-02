@@ -1,3 +1,4 @@
+import { createGameToolContribution, createStoryToolContribution, type BusinessToolSelection } from "./business-tools.js";
 import { composeToolContributions, type ToolContribution } from "./tool-contributions.js";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
@@ -5,17 +6,12 @@ import { defineTool, type ToolDefinition as PiToolDefinition } from "@earendil-w
 import { Type } from "typebox";
 import { type Model3DAnimationAction, type PlanMode, type PlanState, type ProjectState, type QuestionnaireResult, type RunToolRequest, type RunVideoToolRequest, type ToolId } from "../shared/contracts.js";
 import { DEFAULT_ANIMATION_ACTION_IDS, DEFAULT_CHARACTER_HEIGHT_METERS, MAX_ANIMATION_ACTIONS } from "../shared/generation-config.js";
-import { buildsWebPreview, supportsWebPreview } from "../shared/project-runtime.js";
 import { isAppWidePlugin } from "../shared/plugin-manifest.js";
 import type { ProjectManager } from "./projects.js";
 import type { ToolRunner } from "./tools.js";
 import { getWorkspaceMedia } from "./workspace.js";
 import type { GameRuntimeAdapter, GameUseOpenTarget } from "../shared/playtest.js";
 import type { WebSearchExecution, WebSearchInput } from "../shared/web-search.js";
-import { createGameUseTool } from "./playtest-tools.js";
-import { addPlayableNode } from "./playable-add-node.js";
-import { validatePlayableProject } from "./playable-project.js";
-import { PLAYABLE_PRESET_IDS, PLAYABLE_PRESETS } from "./playable-presets.js";
 import { checkCanvasWorkspace } from "./canvas-check.js";
 import type { CanvasStore } from "./canvas-workspace.js";
 import { readCanvasAssets } from "./canvas-assets.js";
@@ -105,6 +101,7 @@ export function createAgentTools(
   searchWeb?: SearchWeb,
   canvasStore?: CanvasStore,
   contributions: readonly ToolContribution[] = [],
+  businessTools: BusinessToolSelection = {},
 ): PiToolDefinition[] {
   const saveGeneratedAudio = async (
     toolId: "generate-speech" | "generate-sound-effect" | "generate-music" | "generate-audio",
@@ -589,73 +586,11 @@ export function createAgentTools(
   // Keep the existing catalog order; core contributes on either side of story tools.
   return composeToolContributions([
     { id: "core", tools: coreTools },
-    { id: "interactive-story", tools: createStoryTools(project) },
+    ...(businessTools.story === false ? [] : [createStoryToolContribution(project)]),
     { id: "core", tools: canvasTools },
-    { id: "game", tools: (playtest?.driver.available && (playtest.driver.capabilities.projectTypes.includes(project.type) || buildsWebPreview(project)) && (project.type !== "general" || supportsWebPreview(project))
-    ? [createGameUseTool(playtest.driver, playtest.resolveOpenTarget, { bridge: project.type === "interactive-story" ? "reset" : "full" })]
-    : []) },
+    ...(businessTools.game === false ? [] : [createGameToolContribution(project, playtest)]),
     ...contributions,
   ]);
-}
-
-function createStoryTools(project: ProjectState): PiToolDefinition[] {
-  return (project.type === "interactive-story" ? [defineTool({
-    name: "playable_add_node",
-    label: "Add Node",
-    description: [
-      "Create a Playable Node from a Preset. Presets are starting points, not Node types: the starter source uses the Project Style and is yours to rewrite.",
-      `Presets: ${PLAYABLE_PRESETS.map((preset) => `${preset.id} (${preset.label})`).join(", ")}.`,
-      "The Node is added to graph.json with its starter Signals and placed on the canvas. Connect it with an edge afterwards, then edit the written files.",
-    ].join("\n"),
-    parameters: Type.Object({
-      preset: Type.Union(
-        PLAYABLE_PRESET_IDS.map((id) => Type.Literal(id)),
-        { description: "Preset to start from" },
-      ),
-      id: Type.String({ minLength: 1, maxLength: 60, description: "Node ID, used as the directory name under nodes/" }),
-      title: Type.Optional(Type.String({ minLength: 1, maxLength: 120, description: "Node title; defaults to the next Node N" })),
-    }),
-    execute: async (_toolCallId, input, signal) => {
-      signal?.throwIfAborted();
-      const result = await addPlayableNode(project.workspacePath, input);
-      const signals = result.signals.length ? result.signals.join(", ") : "none";
-      return {
-        content: [{
-          type: "text",
-          text: [
-            `Added Node "${result.id}" (${result.title}) from the ${result.preset} Preset.`,
-            `Files: ${result.files.join(", ")}`,
-            `Starter Signals: ${signals}`,
-            result.brief,
-          ].join("\n"),
-        }],
-        details: { playableNode: { id: result.id, preset: result.preset, files: result.files, signals: result.signals } },
-      };
-    },
-  }), defineTool({
-    name: "playable_check",
-    label: "Check Project",
-    description: [
-      "Validate the Playable Nodes project: graph.json against its schema and references, then check every Node's files and what they import the way the story's page loads them.",
-      "Run it after changing the project and fix every issue it reports. Use mode \"publish\" before the user publishes; it also requires every Signal other than navigation ones to be connected and every source file to exist.",
-    ].join("\n"),
-    parameters: Type.Object({
-      mode: Type.Optional(Type.Union([Type.Literal("draft"), Type.Literal("publish")], { description: "Validation strictness; defaults to draft" })),
-    }),
-    execute: async (_toolCallId, input, signal) => {
-      signal?.throwIfAborted();
-      const mode = input.mode ?? "draft";
-      const result = await validatePlayableProject(project.workspacePath, mode);
-      const issues = result.issues.map(({ phase, code, path: issuePath, message, surfaceId }) => ({ phase, code, path: issuePath, message, ...(surfaceId ? { surfaceId } : {}) }));
-      const text = result.ok
-        ? `The project passes ${mode} validation.`
-        : [
-          `The project has ${issues.length} ${mode} validation ${issues.length === 1 ? "issue" : "issues"}:`,
-          ...issues.map((issue) => `- [${issue.phase}] ${issue.surfaceId ? `${issue.surfaceId} ` : ""}${issue.path}: ${issue.message} (${issue.code})`),
-        ].join("\n");
-      return { content: [{ type: "text", text }], details: { playableCheck: { mode, ok: result.ok, issues } } };
-    },
-  })] : []);
 }
 
 /** Matches an agent-supplied action name to the library, case-insensitively, and suggests close names when it misses. */

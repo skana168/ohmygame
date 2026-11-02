@@ -1,3 +1,5 @@
+import { createExampleToolContribution } from "../src/daemon/example-tools.js";
+import { ToolBridge } from "../src/daemon/agent-runtimes/tool-bridge.js";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { indexPluginPackage } from "../src/daemon/plugin-index.js";
@@ -42,6 +44,52 @@ describe("agent tools", () => {
     const echo = tools.find((tool) => tool.name === "business_echo")!;
     expect(await echo.execute("echo", { value: "hello" }, undefined, undefined, {} as never)).toMatchObject({ content: [{ text: `${project.id}: hello` }] });
     expect(() => createAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, undefined, [contribution, contribution])).toThrow(/Duplicate tool.*business_echo.*test-business/);
+  });
+
+  it("rejects disabled business tools at the shared agent invocation boundary", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-selection-"));
+    contributionDirectories.push(directory);
+    const projects = new ProjectManager(directory);
+    await projects.load();
+    const project = await projects.create("Story", "interactive-story");
+    const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
+    const driver: GameRuntimeAdapter = { available: true, capabilities: WEB_GAME_USE_CAPABILITIES, request: async () => ({ operation: "closeAll" }), close: () => {} };
+    const playtest = { driver, resolveOpenTarget: async () => ({ runtime: "web" as const, url: "http://localhost/" }) };
+    for (const selection of [{ game: false }, { story: false }, { game: false, story: false }]) {
+      const tools = createAgentTools(project, runner, projects, undefined, undefined, playtest, undefined, undefined, [], selection);
+      const names = tools.map((tool) => tool.name);
+      const bridge = new ToolBridge(tools);
+      for (const name of [...(selection.game === false ? ["game_use"] : []), ...(selection.story === false ? ["playable_add_node", "playable_check"] : [])]) {
+        expect(projectPiToolNames("normal", [], names)).not.toContain(name);
+        expect(bridge.list("all").map((tool) => tool.name)).not.toContain(name);
+        expect(await bridge.call(name, {}, "disabled")).toMatchObject({ isError: true });
+      }
+      expect(names).toContain("canvas_check");
+      if (selection.story !== false) expect(names).toContain("playable_check");
+      if (selection.game !== false) expect(names).toContain("game_use");
+    }
+  });
+
+  it("runs the shipped example through Pi and the coding-agent bridge without widening planning permissions", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-example-"));
+    contributionDirectories.push(directory);
+    const projects = new ProjectManager(directory);
+    await projects.load();
+    const project = await projects.create("Example");
+    const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
+    const tools = createAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, undefined, [createExampleToolContribution(project)], { game: false, story: false });
+    const names = tools.map((tool) => tool.name);
+    expect(projectPiToolNames("normal", [], names)).toContain("example_echo");
+    expect(projectPiToolNames("planning", [], names)).not.toContain("example_echo");
+    const echo = tools.find((tool) => tool.name === "example_echo")!;
+    expect(await echo.execute("pi", { message: "hello" }, undefined, undefined, {} as never)).toMatchObject({ content: [{ text: "hello" }], details: { workspaceId: project.id } });
+    const bridge = new ToolBridge(tools);
+    expect(await bridge.call("example_echo", { message: "bridge" }, "native")).toMatchObject({ isError: false, result: { content: [{ text: "bridge" }], details: { workspaceId: project.id } } });
+    expect(await bridge.call("example_echo", { message: 42 }, "invalid")).toMatchObject({ isError: true });
+    expect(await bridge.call("example_echo", { message: "cancelled" }, "cancel", AbortSignal.abort())).toMatchObject({ isError: true });
+    bridge.setActive(projectPiToolNames("planning", [], names));
+    expect(bridge.list().map((tool) => tool.name)).not.toContain("example_echo");
+    expect(await bridge.call("example_echo", { message: "blocked" }, "plan")).toMatchObject({ isError: true });
   });
 
   it("maps enabled product tools to Pi tool names", () => {

@@ -352,8 +352,37 @@ composition adds no execution scheduler or lifecycle. Existing planning limits,
 abort signals and session cleanup still belong to the consumer. External MCP
 excludes conversation-only tools (`questionnaire`, `update_plan`, `install_plugin`
 and `web_search`) and Pi's file/shell tools; other contributions use its existing
-project binding and ToolBridge. This source seam does not select modules or
-promise a game-free build.
+project binding and ToolBridge.
+
+Host composition selects the built-in business tools with
+`createApp({ businessTools: { game: false, story: false } })`. Omitted flags
+are enabled, preserving OhMyGame defaults. `game` contributes `game_use` only
+when the existing runtime and project availability checks pass; `story`
+contributes `playable_add_node` and `playable_check` only for interactive stories.
+Selection applies to Pi, coding-agent bridges and external MCP catalogs and
+invocation. Disabling game tools also avoids creating agent playtest owners.
+Core canvas/media tools, Skills and MCP plugins retain their existing behavior.
+This is host configuration, independent of workspace manifests; it does not
+remove game dependencies from the build. Additional source contributions are
+trusted application code and should not re-register a disabled module's tools.
+
+A shipped non-game example is opt-in:
+
+```ts
+import { createExampleToolContribution } from "./example-tools.js";
+
+createApp({
+  businessTools: { game: false, story: false },
+  toolContributions: (project) => [createExampleToolContribution(project)],
+});
+```
+
+`example_echo` validates `{ message: string }`, returns that message, and reports
+the bound workspace ID in execution details without accessing workspace files.
+It checks cancellation and uses the ordinary execution contract. Like other
+business contributions it is unavailable in planning mode. The example adds no
+persistence or canvas node contract; applications can replace it with their own
+source-registered module.
 
 OhMyGame's tools are the handlers Pi uses (`createAgentTools`), offered through
 `ToolBridge`. Plugin MCP servers reach the agent through the same `mcp` tool
