@@ -166,3 +166,10 @@ it("leaves Settings alone on ⌘, when it is already open", async () => {
   await press(",");
   expect(navigate).not.toHaveBeenCalled();
 });
+
+it("omits community navigation when the application disables community", async () => {
+  await act(async () => root.render(<CommandMenuHost navigate={navigate} community={false} />));
+  await press("k");
+  expect(options()).not.toContain("Community");
+  expect(options()).toContain("Library");
+});

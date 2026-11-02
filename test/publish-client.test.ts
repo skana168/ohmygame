@@ -67,7 +67,11 @@ describe("Publish v1 client contract", () => {
     const publisher = new RemotePublisher({ apiUrl: "https://publish.ohmygame.test", fetch: fetcher });
     await publisher.publish({ ...project(), publication: { gameId: "game-1", deploymentId: "deployment-old", playUrl: "https://play.example", publishedAt: new Date(0).toISOString() } }, Buffer.from("zip"), "token", { title: "Updated" });
     expect(requests.some(request => request.url.endsWith("/listing"))).toBe(false);
-    expect(requests.map(request => request.method)).toEqual(["GET", "PUT", "POST"]);
+    expect(requests.map(request => `${request.method} ${new URL(request.url).pathname}`)).toEqual([
+      "GET /v1/games/game-1",
+      "PUT /v1/games/game-1",
+      "POST /v1/games/game-1/deployments",
+    ]);
   });
 
   it("persists one anonymous credential across restarts and renews it after account merge", async () => {

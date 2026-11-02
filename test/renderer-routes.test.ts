@@ -137,3 +137,10 @@ describe("renderer routes", () => {
     expect(parseAppRoute("#/playtest/%")).toEqual({ page: "home" });
   });
 });
+
+it("returns disabled community deep links to the local home route", () => {
+  for (const hash of [communityHash(), communityProfileHash("author"), gameHash("game")]) {
+    expect(parseAppRoute(hash, { community: false })).toEqual({ page: "home" });
+  }
+  expect(parseAppRoute("#/library", { community: false })).toEqual({ page: "library" });
+});
