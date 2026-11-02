@@ -1,3 +1,4 @@
+import { applicationComposition } from "../shared/application-composition.js";
 import { workspaceHasModule } from "../shared/workspace-policy.js";
 import type { ProjectState } from "../shared/contracts.js";
 import { Clapperboard, Gamepad2, Globe2, Image } from "./icons.js";
@@ -12,7 +13,7 @@ export interface ProjectTypeOption {
 
 
 export const PROJECT_TYPES: readonly ProjectTypeOption[] = [
-  ...PROJECT_TYPE_IDS.filter((value) => value !== "general"),
+  ...applicationComposition.projectTypes.filter((value) => value !== "general"),
   "general" as const,
 ].map((value) => ({ value, label: projectTypeLabel(value) }));
 
@@ -37,6 +38,6 @@ export function projectTypeDescription(type: ProjectType): string {
 }
 
 export function projectTypeLabel(type: ProjectType, project?: ProjectState): string {
-  if (project && project.type !== "asset-canvas" && !workspaceHasModule(project, "game")) return t("createDialog.workspace");
+  if ((project && project.type !== "asset-canvas" && !workspaceHasModule(project, "game")) || (!project && type === "general" && !applicationComposition.game)) return t("createDialog.workspace");
   return PROJECT_TYPE_IDS.includes(type) ? t(`projectType.${type}`) : type;
 }

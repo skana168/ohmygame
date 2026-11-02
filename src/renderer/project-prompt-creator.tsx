@@ -1,3 +1,4 @@
+import { applicationComposition } from "../shared/application-composition.js";
 import { applicationStorageKey } from "./application-identity.js";
 import { Lightbulb, LoaderCircle, SendArrow } from "./icons.js";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -29,7 +30,7 @@ const STARTERS = [
   "web-game-studio", "game-studio", "threejs-world", "wechat-minigame",
   "douyin-minigame", "cocos-creator", "unity", "unreal-engine",
 ];
-const DEFAULT_TYPE = "web-game";
+const DEFAULT_TYPE = applicationComposition.defaultProjectType;
 const TYPE_KEY = applicationStorageKey("ohmygame.home.projectType");
 type Plugin = ConversationCapabilities["plugins"][number];
 
