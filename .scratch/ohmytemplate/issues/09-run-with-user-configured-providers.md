@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — Create and reopen workspaces with a versioned module manifest.
 
-Status: claimed
+Status: resolved
 
 - [x] Separate OhMyGame account-specific cloud model/credential/quota integration from core provider configuration and model discovery.
 - [x] A composition without the account service starts and presents a usable provider setup flow without requiring OhMyGame login or private endpoints.
@@ -26,3 +26,25 @@ for per-criterion API/UI evidence, red-green slices, public checks and screensho
 The checked implementation criteria do not claim live provider/cloud or native
 Electron validation; those credential/platform-dependent checks remain open in
 the report.
+
+## Answer
+
+Merged only ticket 09 from `t3/run-configured-providers` at `6f0addc43173d6ff532020720911b11855f51dba`
+(worktree `/Users/yoyun/.t3/worktrees/ohmygame/t3-9f32fe5f`) into
+`refactor/ohmytemplate-integration` at `7fe9d5e008ec8436d2b5a2e28de72a4175380e8e` without conflicts or
+integration edits. All ticket criteria are satisfied by the reviewed implementation,
+deterministic fixtures and recorded English/Chinese UI evidence.
+
+Fresh root verification: 21 affected suites, 482 tests passed; Bun 1.4.2 typecheck, lint and git diff --check passed. Both account compositions retain configured
+provider/model discovery, conversation persistence and supported media execution
+without game/story tools. Account-off mode omits private model account routes and
+Supabase initialization/sign-in; the default remains enabled. Existing cancellation
+and paid-task recovery tests remain intact, with the new dual-composition restart
+fixture confirming exactly one simulated paid submission. No real paid call is
+required for this regression proof.
+
+See [the report](../reports/09-run-with-user-configured-providers.md#merger-verification-2026-11-02)
+for exact commands and inherited evidence limits. Real providers/private cloud,
+native Electron and other platforms remain manual gaps. Publishing/community
+and full application composition remain tickets 08/10. Tickets 04/06 and the
+08 queue are unchanged; `.codegraph/`, all worktrees and defaults are preserved.
