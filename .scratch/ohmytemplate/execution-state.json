@@ -127,8 +127,16 @@
       "remaining_validation": "Prior full-suite/build/Node/browser evidence is inherited, not rerun. Real language/paid media and live recovery, private Supabase/cloud, Electron, other platforms and packaging remain manual; publishing/community and full composition remain tickets 08/10."
     },
     "05": {
-      "status": "running",
-      "taskId": "node:delegated-task:command%3Amcp%3A06c8b30f-d5fa-4f76-bc38-03dc446b8abc%3Adelegate-task%3Abadd8a74-7ad1-4dfc-99a7-2a51f7598474"
+      "status": "resolved",
+      "taskId": "node:delegated-task:command%3Amcp%3A06c8b30f-d5fa-4f76-bc38-03dc446b8abc%3Adelegate-task%3Abadd8a74-7ad1-4dfc-99a7-2a51f7598474",
+      "merged": true,
+      "implementation_branch": "t3/register-custom-canvas-nodes",
+      "implementation_sha": "87409523cf39f2bcf1568a599ee8212f97b04659",
+      "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-fbcf8cfa",
+      "merge_sha": "4eda859f760561a9049792fc630c05d931d1198a",
+      "regression_sha": "bc205e806503f13ad09b05a64baeb9ea147b234a",
+      "merge_result": "Conflict-free; no production integration fixes; 13 suites / 246 tests and typecheck passed; final byte-preservation regression suite 65 passed; diff check passed.",
+      "remaining_validation": "Original browser interaction and full public checks inherited; no fresh manual checks. Screenshot/visual review and Electron custom-node edit/save/reopen remain unverified. Ticket07 unchanged; ticket10 awaits07."
     },
     "08": {
       "status": "resolved",

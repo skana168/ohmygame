@@ -38,6 +38,8 @@ Execution details are recorded in [execution-state.json](execution-state.json).
 
 - [Ticket 08](issues/08-isolate-publishing-and-community.md) resolved after conflict-free merge `c1885b30`; optional service construction/routes and UI guards preserve defaults, metadata, archives and local assets. Fresh 194 tests passed/23 private-cloud skips and typecheck passed; see report for inherited public/browser evidence and remaining manual gaps.
 
+- [Ticket 05](issues/05-register-custom-canvas-nodes.md) resolved after conflict-free merge `4eda859f`; source node contracts/renderers and persisted companion tool verified. Fresh 246 affected tests, typecheck and 65-test byte-preservation regression passed (`bc205e80`). Original browser evidence retained; screenshot and Electron gaps remain in the report. Ticket07 unchanged; ticket10 awaits07.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction

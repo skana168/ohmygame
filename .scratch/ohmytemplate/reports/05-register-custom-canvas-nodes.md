@@ -109,3 +109,29 @@ Worktree: `/Users/yoyun/.t3/worktrees/ohmygame/t3-fbcf8cfa`.
 Implementation and integration are committed; this report and the assigned
 acceptance checklist are committed separately. The final commit SHA is supplied
 in the agent handoff. Only the root merger should resolve the claimed ticket.
+
+## Root merge verification
+
+Merged worker head `87409523cf39f2bcf1568a599ee8212f97b04659` from branch
+`t3/register-custom-canvas-nodes`, worktree
+`/Users/yoyun/.t3/worktrees/ohmygame/t3-fbcf8cfa`, into
+`refactor/ohmytemplate-integration` at
+`4eda859f760561a9049792fc630c05d931d1198a` without conflicts or production fixes.
+Reviewed complete contribution contracts and normal persistence/tool selection.
+Fresh 13 affected suites / 246 tests and typecheck passed using Bun 1.4.2.
+The combined run emitted localhost:3000 connection-refused stderr from renderer
+fixtures but exited successfully with all tests passing.
+
+Regression commit `bc205e806503f13ad09b05a64baeb9ea147b234a` extends the existing
+custom-node persistence case to assert exact board bytes after rejected invalid
+saves, reads with missing/disabled modules, and rejected disabled-module edits.
+Existing assertions verify domain payload preservation during unrelated saves
+and restoration. Final game-design run: 65 passed; diff check passed.
+
+Ticket 05 resolved with its documented manual validation needs. Original browser
+evidence above is preserved verbatim; merger performed no new browser/Electron
+checks. Electron custom-node edit/save/reopen and screenshot/visual review remain
+unverified. Worker full public sequence is inherited, not freshly repeated.
+Ticket 07 and dependent ticket 10 were neither changed nor started.
+Root tracked tree was clean after implementation/regression commits; only the
+pre-existing untracked `.codegraph/` remains. Worktrees were preserved.

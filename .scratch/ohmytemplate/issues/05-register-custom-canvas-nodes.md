@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 — Create and use a non-game workspace with the shared workbench.
 
-Status: claimed
+Status: resolved
 
 - [x] Provide a module contribution interface for node identity, data validation, and compiled renderer components alongside the existing general-purpose nodes.
 - [x] Extend the minimal non-game module with one demonstrable custom node and a tool that operates on its persisted domain data, using the established tool boundary.
@@ -23,3 +23,25 @@ Status: claimed
 Implemented and verified in the isolated custom-node worktree. Status remains
 claimed for the root merger. Evidence, public checks, browser flow, and Electron
 limits are recorded in [the implementation report](../reports/05-register-custom-canvas-nodes.md).
+
+## Answer
+
+Merged `t3/register-custom-canvas-nodes` at `87409523cf39f2bcf1568a599ee8212f97b04659`
+from `/Users/yoyun/.t3/worktrees/ohmygame/t3-fbcf8cfa` into
+`refactor/ohmytemplate-integration` with conflict-free merge
+`4eda859f760561a9049792fc630c05d931d1198a`.
+
+Reviewed identity/schema/compiled renderer contributions, public companion-tool
+persistence and workspace selection, edit/save/reopen, invalid-data diagnostics,
+missing/restored modules, and unchanged core draft/conflict paths. New domain
+nodes use registrations rather than per-domain core union/switch edits.
+Fresh affected canvas API, renderer, tool, migration, storage, draft and conflict
+checks: 13 suites / 246 tests passed; Bun 1.4.2 typecheck passed. Additional
+byte-preservation assertions committed as `bc205e806503f13ad09b05a64baeb9ea147b234a`;
+the final game-design suite passed 65 tests. `git diff --check` passed.
+
+Original browser interaction evidence and worker full-public-check results remain
+in the report; neither was rerun by the merger. Screenshot capture and Electron
+custom-node editing/save/reopen remain unverified as documented. These are
+recorded validation needs, not claimed passing manual checks. Ticket 05 criteria
+are met; ticket 07 remains under its current owner and ticket 10 awaits 07.
