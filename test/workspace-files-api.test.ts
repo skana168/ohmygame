@@ -40,7 +40,7 @@ describe("project file management", () => {
     expect(await readFile(path.join(project.workspacePath, "game", "main.ts"), "utf8")).toBe("original");
     expect((await app.inject({ method: "DELETE", url: `${base}?path=game/main.ts` })).statusCode).toBe(204);
     expect((await app.inject({ method: "DELETE", url: `${base}?path=game` })).statusCode).toBe(204);
-    expect((await app.inject({ method: "GET", url: base })).json()).toEqual([]);
+    expect((await app.inject({ method: "GET", url: base })).json<WorkspaceFile[]>().map((file) => file.path).sort()).toEqual(["AGENTS.md", "workspace.json"]);
   });
 
   it("renames files and folders when only the letter case changes", async () => {
@@ -69,7 +69,7 @@ describe("project file management", () => {
     const caseInsensitive = await stat(file("README.md")).then(() => true, () => false);
     expect((await app.inject({ method: "PATCH", url: `${base}?path=notes.md`, payload: { name: "README.md" } })).statusCode).toBe(caseInsensitive ? 409 : 200);
     expect(await readFile(file("readme.md"), "utf8")).toBe("readme");
-    expect((await readdir(project.workspacePath)).filter((name) => name.endsWith(".md")).sort()).toEqual(caseInsensitive ? ["alias.md", "copy.md", "notes.md", "readme.md"] : ["README.md", "alias.md", "copy.md", "readme.md"]);
+    expect((await readdir(project.workspacePath)).filter((name) => name.endsWith(".md") && name !== "AGENTS.md").sort()).toEqual(caseInsensitive ? ["alias.md", "copy.md", "notes.md", "readme.md"] : ["README.md", "alias.md", "copy.md", "readme.md"]);
   });
 
   it("keeps provenance across folder renames and leaves Library copies intact after deletion", async () => {
@@ -103,7 +103,7 @@ describe("project file management", () => {
     // Emulates historical project metadata containing only a Library link.
     await writeFile(path.join(project.workspacePath, "ref.png"), "image");
     await writeAssetMetadata(project.workspacePath, "ref.png", { libraryAssetId: asset.id });
-    expect((await app.inject({ method: "GET", url: base })).json<WorkspaceFile[]>()[0]).toMatchObject({ origin: "uploaded", purpose: "reference" });
+    expect((await app.inject({ method: "GET", url: base })).json<WorkspaceFile[]>().find((file) => file.path === "ref.png")).toMatchObject({ origin: "uploaded", purpose: "reference" });
     const canvas = `/projects/${project.id}/canvas`;
     const workspace = (await app.inject({ method: "GET", url: `${canvas}/workspace` })).json();
     const boardUrl = `${canvas}/boards/${workspace.boards[0].id}`;

@@ -1074,7 +1074,7 @@ function isDesignCanvasFile(parts: string[]): boolean {
 }
 
 /**
- * Hidden entries, generated folders and the files Design keeps in `canvas/`
+ * Hidden entries, generated folders, workspace declarations/instructions and the files Design keeps in `canvas/`
  * (written as soon as a new project opens) are not files someone wrote for
  * the project.
  */
@@ -1086,7 +1086,7 @@ async function hasProjectFiles(directory: string): Promise<boolean> {
     return false;
   }
   for (const name of names) {
-    if (name.startsWith(".") || ["node_modules", "dist", "build"].includes(name)) continue;
+    if (name.startsWith(".") || ["node_modules", "dist", "build", "workspace.json", "AGENTS.md"].includes(name)) continue;
     if (name !== "canvas" || (await hasGameCanvasFiles(path.join(directory, name)))) return true;
   }
   return false;

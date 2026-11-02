@@ -82,7 +82,7 @@ export class ExampleStore {
   async createProject(
     projects: ProjectManager,
     id: string,
-    options: { type?: ProjectType; name?: string; workspacePath?: string } = {},
+    options: { type?: ProjectType; name?: string; workspacePath?: string; workspaceManifest?: ProjectState["workspaceManifest"] } = {},
   ): Promise<ProjectState> {
     const example = this.#example(id);
     if (!example) throw new ExampleError(`Example not found: ${id}`, 404);
@@ -94,7 +94,7 @@ export class ExampleStore {
     if (options.workspacePath && !(await isEmptyDirectory(options.workspacePath))) {
       throw new ProjectWorkspaceError("Choose an empty folder to start from an example");
     }
-    const project = await projects.create(options.name?.trim() || example.name, example.type, options.workspacePath);
+    const project = await projects.create(options.name?.trim() || example.name, example.type, options.workspacePath, undefined, options.workspaceManifest, true);
     try {
       // Copy entry by entry: the workspace folder itself already exists, and
       // fs.cp treats that as a conflict when overwriting is disabled.
@@ -106,6 +106,7 @@ export class ExampleStore {
           errorOnExist: true,
         });
       }
+      await projects.initializeWorkspace(project);
       // Keep copied boards and layouts verbatim. Historical jobs belong to the
       // new project; their node IDs, status, settings and outputs stay intact.
       // Retry inputs can contain inline images, exceeding the board-file limit.

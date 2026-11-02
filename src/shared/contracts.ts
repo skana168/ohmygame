@@ -1,3 +1,4 @@
+import type { WorkspaceManifest } from "./workspace-manifest.js";
 import type { ProjectPreviewSettings } from "./preview-settings.js";
 import type { PublishCommunityGame, PublishDeployment } from "./publish-v1.js";
 import type { WebSearchToolMetadata } from "./web-search.js";
@@ -427,6 +428,11 @@ export interface ProjectAppearance {
 }
 
 export interface ProjectState extends ProjectPreviewSettings {
+  workspaceManifest?: WorkspaceManifest;
+  /** Loading diagnostics preserve the registration and all workspace files. */
+  workspaceDiagnostics?: string[];
+  /** True when selection was inferred from a pre-manifest OhMyGame project. */
+  workspaceManifestLegacy?: boolean;
   id: string;
   name: string;
   /** Missing on legacy projects, which are not automatically renamed. */
@@ -941,6 +947,7 @@ export interface AnswerQuestionnaireRequest {
 }
 
 export interface CreateProjectRequest {
+  workspaceManifest?: WorkspaceManifest;
   name?: string;
   type?: ProjectType;
   /** Starts the workspace as a copy of a packaged example (see GET /examples). */

@@ -76,7 +76,7 @@ describe("Web Game project codebase", () => {
     const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-general-projects-"));
     const manager = new ProjectManager(directory);
     const project = await manager.create("Native game", "general");
-    expect(await readdir(project.workspacePath)).toEqual([]);
+    expect((await readdir(project.workspacePath)).sort()).toEqual(["AGENTS.md", "workspace.json"]);
     await writeFile(path.join(project.workspacePath, "project.godot"), "config_version=5\n");
 
     const restored = new ProjectManager(directory);
@@ -84,7 +84,7 @@ describe("Web Game project codebase", () => {
     expect(restored.get(project.id)).toMatchObject({ type: "general", preview: { status: "waiting" } });
     const copy = await restored.duplicate(project.id);
     expect(copy.type).toBe("general");
-    expect(await readdir(copy.workspacePath)).toEqual(["project.godot"]);
+    expect((await readdir(copy.workspacePath)).sort()).toEqual(["AGENTS.md", "project.godot", "workspace.json"]);
   });
   it("binds copied Canvas generation history to the duplicate", async () => {
     const manager = new ProjectManager(await mkdtemp(path.join(tmpdir(), "ohmygame-duplicate-history-")));
@@ -177,11 +177,11 @@ describe("Web Game project codebase", () => {
     expect(await manager.setRunSettings(project.id, { ...settings, webPreviewEnabled: false })).toMatchObject({ startupDirectory: "client", webPreviewEnabled: false, preview: { status: "waiting" } });
   });
 
-  it("starts with an empty workspace; the platform contract lives in the system prompt", async () => {
+  it("starts with workspace declarations and instructions without game source files", async () => {
     const manager = new ProjectManager(await mkdtemp(path.join(tmpdir(), "ohmygame-projects-")));
     const project = await manager.create("Game", "web-game");
 
-    expect(await readdir(project.workspacePath)).toEqual([]);
+    expect((await readdir(project.workspacePath)).sort()).toEqual(["AGENTS.md", "workspace.json"]);
   });
 
   it("keeps project media defaults through unrelated saves and removes cleared overrides on disk", async () => {

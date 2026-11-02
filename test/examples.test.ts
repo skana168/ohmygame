@@ -68,6 +68,14 @@ async function startApp(examplesDirectory?: string) {
 }
 
 describe("examples", () => {
+  it("retains an explicit module declaration when copying an example", async () => {
+    const app = await startApp(await writeExamples());
+    const workspaceManifest = { version: 1, modules: [] };
+    const response = await app.inject({ method: "POST", url: "/projects", payload: { exampleId: "pond", workspaceManifest } });
+    expect(response.statusCode, response.body).toBe(201);
+    expect(response.json().workspaceManifest).toEqual(workspaceManifest);
+  });
+
   it("preserves remixed node positions and the original viewport until explicitly edited", async () => {
     const directory = await writeExamples();
     const canvas = path.join(directory, "pond/files/canvas");
@@ -250,7 +258,7 @@ describe("examples", () => {
     await writeFile(path.join(empty, ".DS_Store"), "");
     const created = await app.inject({ method: "POST", url: "/projects", payload: { type: "web-game", exampleId: "pond", workspacePath: empty } });
     expect(created.statusCode).toBe(201);
-    expect((await readdir(empty)).sort()).toEqual([".DS_Store", "package.json", "src"]);
+    expect((await readdir(empty)).sort()).toEqual([".DS_Store", "AGENTS.md", "package.json", "src", "workspace.json"]);
   });
 
   it("validates prepared catalogs", () => {
