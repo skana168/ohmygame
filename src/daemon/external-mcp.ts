@@ -1,3 +1,4 @@
+import { composeToolContributions } from "./tool-contributions.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -24,7 +25,7 @@ import { ToolBridge, type BridgeTool } from "./agent-runtimes/tool-bridge.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 
-/** Project tools external agents may call. Their names and schemas are the public contract. */
+/** Legacy OhMyGame project tool names; the source-contributed catalog may add tools. */
 export const EXTERNAL_PROJECT_TOOLS = [
   "generate_image",
   "generate_video",
@@ -527,7 +528,10 @@ export class ExternalMcpService {
           jsonrpc: "2.0",
           id,
           result: {
-            tools: [...this.tools(), ...(await this.#pluginTools(session))],
+            tools: composeToolContributions<BridgeTool>([
+              { id: "application", tools: this.tools() },
+              { id: "plugins", tools: await this.#pluginTools(session) },
+            ]),
           },
         };
       case "tools/call": {
@@ -582,7 +586,10 @@ export class ExternalMcpService {
     const catalog = new ToolBridge(publicTools(this.#options.catalog())).list(
       "all",
     );
-    return [...OWN_TOOLS, ...catalog.map(({ _meta: _, ...tool }) => tool)];
+    return composeToolContributions<BridgeTool>([
+      { id: "external-mcp", tools: OWN_TOOLS },
+      { id: "application", tools: catalog.map(({ _meta: _, ...tool }) => tool) },
+    ]);
   }
 
   async #call(
@@ -633,14 +640,17 @@ export class ExternalMcpService {
     if (isPluginToolName(name) && this.#options.pluginTools) {
       const project = this.#project(session);
       if (!project) return failure(noProject());
-      const tools = await this.#options.pluginTools(project);
+      const tools = composeToolContributions([
+        { id: "application", tools: publicTools(this.#options.tools(project, session.id)) },
+        { id: "plugins", tools: await this.#options.pluginTools(project) },
+      ]);
       if (!tools.some((tool) => tool.name === name))
         return failure(
           `Tool ${name} is not available for project ${project.name}. Its plugin may be off, not allowed in this project, or not installed.`,
         );
       return new ToolBridge(tools).call(name, input, callId, signal);
     }
-    if (!(EXTERNAL_PROJECT_TOOLS as readonly string[]).includes(name))
+    if (!publicTools(this.#options.catalog()).some((tool) => tool.name === name))
       return failure(`Tool ${name} is not available`);
     const project = this.#project(session);
     if (!project) return failure(noProject());
@@ -737,9 +747,10 @@ function isPluginToolName(name: string): boolean {
 }
 
 function publicTools(tools: readonly ToolDefinition[]): ToolDefinition[] {
-  return tools.filter((tool) =>
-    (EXTERNAL_PROJECT_TOOLS as readonly string[]).includes(tool.name),
-  );
+  // Interactive host tools need an in-app conversation or consent flow. All
+  // other source contributions use the same project binding and ToolBridge.
+  const conversationTools = new Set(["questionnaire", "update_plan", "install_plugin", "web_search"]);
+  return tools.filter((tool) => !conversationTools.has(tool.name));
 }
 
 function describe(project: ProjectState) {

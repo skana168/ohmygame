@@ -413,6 +413,10 @@ describe("OhMyGame tool bridge", () => {
     execute: async () => ({ content: [], details: undefined }),
   });
 
+  it("rejects duplicate tool names instead of replacing a handler", () => {
+    expect(() => new ToolBridge([echo, echo])).toThrow(/Duplicate tool.*echo_tool/);
+  });
+
   it("offers OhMyGame's tools but not the file and shell tools every agent has", () => {
     const bridge = new ToolBridge([echo, failing, bash] as never);
     expect(bridge.list().map((tool) => tool.name)).toEqual([

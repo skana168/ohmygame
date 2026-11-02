@@ -1,3 +1,4 @@
+import { composeToolContributions } from "../src/daemon/tool-contributions.js";
 import { defineTool, SessionManager } from "@earendil-works/pi-coding-agent";
 import { EventEmitter } from "node:events";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -167,7 +168,7 @@ async function context(
     env: {},
     privateDirectory,
     instructions: "Project instructions",
-    bridge: new ToolBridge([echo] as never),
+    bridge: new ToolBridge(composeToolContributions([{ id: "test-business", tools: [echo] }])),
     // Codex's usual mode; Claude Code and OpenCode tests choose theirs where it matters.
     permissionMode: ":workspace",
     skillDirectories: [],

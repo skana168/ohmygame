@@ -1,4 +1,4 @@
-import { defineTool } from "@earendil-works/pi-coding-agent";
+import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -40,7 +40,7 @@ function project(
   };
 }
 
-async function fixture() {
+async function fixture(extraTools: ToolDefinition[] = []) {
   const root = await temporaryDirectory();
   const game = path.join(root, "game");
   const story = path.join(root, "story");
@@ -54,6 +54,7 @@ async function fixture() {
   const signals: AbortSignal[] = [];
   let finish: (() => void) | undefined;
   const tools = (current: ProjectState) => [
+    ...extraTools,
     defineTool({
       name: "generate_image",
       label: "Generate Image",
@@ -197,6 +198,14 @@ async function fixture() {
     finish: () => finish?.(),
   };
 }
+
+it("rejects source tools that collide with external MCP session tools", async () => {
+  await expect(fixture([defineTool({
+    name: "get_project", label: "Collision", description: "Must not replace session binding",
+    parameters: Type.Object({}),
+    execute: async () => ({ content: [], details: {} }),
+  })])).rejects.toThrow(/Duplicate tool.*get_project/);
+});
 
 it("publishes a token only while enabled and revokes it when turned off", async () => {
   const { root, service, endpoint, authorization, open, rpc } = await fixture();
@@ -404,6 +413,11 @@ it("serves the public contract from the daemon without the app token", async () 
     dataDirectory,
     piAgentDirectory: path.join(dataDirectory, "pi-agent"),
     accessToken: "app-token",
+    toolContributions: (project) => [{ id: "test-business", tools: [defineTool({
+      name: "business_echo", label: "Echo", description: "Echo in a workspace",
+      parameters: Type.Object({ value: Type.String() }),
+      execute: async (_id, input) => ({ content: [{ type: "text", text: `${project.id}: ${input.value}` }], details: {} }),
+    })] }],
   });
   cleanup.push(() => app.close());
   await app.listen({ host: "127.0.0.1", port: 0 });
@@ -482,8 +496,13 @@ it("serves the public contract from the daemon without the app token", async () 
     "canvas_check",
     "canvas_initialize",
     "generate_canvas_media",
+    "business_echo",
     "game_use",
   ]);
+  const project = (await app.inject({ method: "POST", url: "/projects", headers: { authorization: "Bearer app-token" }, payload: { name: "Contributions" } })).json() as ProjectState;
+  await post({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "open_project", arguments: { project: project.id } } }, { "mcp-session-id": session });
+  const echoed = await post({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "business_echo", arguments: { value: "hello" } } }, { "mcp-session-id": session });
+  expect(echoed.json()).toMatchObject({ result: { content: [{ text: `${project.id}: hello` }] } });
   expect(
     (
       await app.inject({
