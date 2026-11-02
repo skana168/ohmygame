@@ -1,3 +1,4 @@
+import { CanvasStore, readCanvasBoard, readCanvasIndex } from "../src/daemon/canvas-workspace.js";
 import { OHMYGAME_WORKSPACE_MODULES } from "../src/shared/workspace-manifest.js";
 import { createExampleToolContribution } from "../src/daemon/example-tools.js";
 import { ToolBridge } from "../src/daemon/agent-runtimes/tool-bridge.js";
@@ -110,6 +111,17 @@ describe("agent tools", () => {
     const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
     const tools = createAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, undefined, [createExampleToolContribution(project)], { game: false, story: false });
     const names = tools.map((tool) => tool.name);
+    const canvas = new CanvasStore(projects, new AssetLibrary(directory), runner);
+    await canvas.workspace(project.id);
+    await canvas.close();
+    const boardId = (await readCanvasIndex(project.workspacePath))!.boards[0]!.id;
+    const beforeNote = (await readCanvasBoard(project.workspacePath, boardId))!;
+    const noteBridge = new ToolBridge(tools);
+    expect(await noteBridge.call("example_note", { boardId, nodeId: "note", revision: beforeNote.revision, text: "Ship extension", done: false }, "note")).toMatchObject({ isError: false });
+    const savedNote = (await readCanvasBoard(project.workspacePath, boardId))!;
+    expect(savedNote.board.nodes).toContainEqual(expect.objectContaining({ id: "note", type: "custom", data: { module: "example", kind: "note", value: { text: "Ship extension", done: false } } }));
+    expect(await noteBridge.call("example_note", { boardId, nodeId: "note", revision: beforeNote.revision, text: "stale", done: true }, "stale")).toMatchObject({ isError: true });
+    expect(await noteBridge.call("example_note", { boardId, nodeId: "note", revision: savedNote.revision, text: 42, done: false }, "invalid-note")).toMatchObject({ isError: true });
     expect(projectPiToolNames("normal", [], names)).toContain("example_echo");
     expect(projectPiToolNames("planning", [], names)).not.toContain("example_echo");
     const echo = tools.find((tool) => tool.name === "example_echo")!;

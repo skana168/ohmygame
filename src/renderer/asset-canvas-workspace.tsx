@@ -1,3 +1,4 @@
+import { CustomCanvasNodeRenderer } from "./custom-canvas-node.js";
 import { workspaceVersion } from "./workspace-version.js";
 import { CanvasTableNode, type CanvasTables } from "./canvas-table-node.js";
 import {
@@ -156,6 +157,7 @@ function canvasCreationGroups(documents: CanvasDocuments, tables: CanvasTables):
 }
 
 const STORY_NODE_TYPES: NodeTypes = {
+  custom: CustomCanvasNodeRenderer,
   table: CanvasTableNode,
   document: CanvasDocumentNode,
   text: TextNode,
@@ -1342,6 +1344,10 @@ export function CanvasBoardEditor({ project, initialNodeId, onInitialNodeHandled
       title: original.title?.trim(), label: canvasNodeTitle(toAssetCanvasNode(original, model3DModels), documents.documents, libraryAssets, tableContents), description: original.description,
       edit: () => setNodeDetails({ id: original.id, title: original.title ?? "", description: original.description ?? "" }),
     } } };
+    if (node.type === "custom") return { ...node, data: { ...node.data, customRuntime: {
+      project,
+      onChange: (value: Record<string, unknown>) => setNodes((current) => current.map((candidate) => candidate.id === node.id ? { ...candidate, data: { ...candidate.data, value } } : candidate)),
+    } } };
     if (node.type === "table") {
       const session = tables.storage.sessions.get(node.data.tableId ?? "");
       return { ...node, data: { ...node.data, tableRuntime: { tables, table: session?.local, issue: session?.issue ?? tables.issues?.find((issue) => issue.id === node.data.tableId)?.message, models: textModelCatalog.models, modelStatus: textModelCatalog.status, defaultModel: defaultTextModel, defaultReasoningLevel: textModelCatalog.defaultReasoningLevel } } };
@@ -2012,7 +2018,7 @@ function toFlowNode(node: AssetCanvasNode, imageModels: ImageModel[], videoModel
   return { ...flowNodeData(node, imageModels, videoModels), ...(measured ? { measured } : {}), ...(node.width !== undefined ? { width: node.width } : {}), ...(node.height !== undefined ? { height: node.height } : {}), ...(node.title !== undefined ? { title: node.title } : {}), ...(node.description !== undefined ? { description: node.description } : {}) };
 }
 function flowNodeData(node: AssetCanvasNode, imageModels: ImageModel[], videoModels: VideoModel[]): AssetCanvasFlowNode {
-  if (node.type === "asset" || node.type === "file") return { ...node, deletable: true };
+  if (node.type === "custom" || node.type === "asset" || node.type === "file") return { ...node, deletable: true };
   if (node.type === "text") return {
     id: node.id,
     type: "text",
@@ -2301,6 +2307,7 @@ function assetCanvasNodeData(node: AssetCanvasFlowNode, model3DModels?: readonly
       },
     };
   }
+  if (node.type === "custom") return { id: node.id, type: "custom", position: node.position, data: { module: String(node.data.module), kind: String(node.data.kind), value: node.data.value as Record<string, unknown> } };
   if (node.type === "table") return { id: node.id, type: "table", position: node.position, data: { tableId: node.data.tableId ?? "" } };
   if (node.type === "file") return { id: node.id, type: "file", position: node.position, data: { path: node.data.path ?? "", ...(node.data.directory ? { directory: true as const } : {}) } };
   if (node.type === "document") return { id: node.id, type: "document", position: node.position, data: { documentId: node.data.documentId ?? "", ...(node.data.references ? { references: textNodeReferences(node) } : {}) } };

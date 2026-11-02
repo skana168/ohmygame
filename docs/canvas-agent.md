@@ -209,3 +209,53 @@ all connections, including connections within a copied selection. The originals
 stay in place. Releasing at the starting position cancels the copies; a completed
 drag is one board undo step. If the copies would exceed the 2,000-node limit,
 the editor rejects the drag and keeps the originals in place.
+
+## Source-registered custom nodes
+
+A business module can contribute a compiled renderer and a JSON Schema without
+adding domain-specific members to `AssetCanvasNode` or the core rendering switch.
+The common envelope is:
+
+```json
+{
+  "id": "release-note",
+  "type": "custom",
+  "data": {
+    "module": "example",
+    "kind": "note",
+    "value": { "text": "Prepare release", "done": false }
+  }
+}
+```
+
+Positions remain in `canvas/editor/<board-id>.json`. The shipped minimal example
+is `src/modules/example/manifest.ts` (`EXAMPLE_WORKSPACE_MODULE`) and
+`src/modules/example/note.tsx`. Its manifest descriptor supplies `canvasNodes`
+with a `kind` and `dataSchema`, plus English agent instructions. Application
+source composition includes the descriptor in `workspaceModules`, registers its
+contracts in `canvasNodeContributions` using `collectCanvasNodeContributions`,
+and registers its compiled component in `canvasRendererContributions`. Duplicate
+module/kind contracts fail explicitly. No workspace file imports executable code.
+Register companion tools through the existing `toolContributions` option using
+`createExampleToolContribution(project)`. These source registrations do not
+select account, publishing, or community services.
+
+A workspace opts in with `{"version":1,"modules":[{"id":"example","config":{}}]}`
+in `workspace.json`. Open its canvas once (or use `canvas_initialize`), read the
+board and revision, then call `example_note` with `boardId`, `nodeId`, `revision`,
+`text`, and `done`. The tool creates or updates the note through the shared canvas
+lock and atomic persistence path, rejects stale revisions and different node
+identities, and validates the payload. The editor shows a text field and a Done
+checkbox; autosave, reopening, and normal agent-result synchronization use the
+existing board workflow. Planning mode cannot invoke this mutating tool.
+
+The canvas writes each compiled payload contract to
+`canvas/schemas/custom/<module>-<kind>.schema.json`. Agent file edits can be checked
+with `canvas_check`. The envelope schema remains readable when a module is
+missing or its payload is invalid. The renderer displays a diagnostic and does
+not replace the saved payload with defaults. Unchanged unavailable or invalid
+payloads survive unrelated board saves; changed payloads require an enabled
+module and valid contract. Restore the source registration and workspace module
+to render the original valid content again, or repair an invalid payload in its
+board JSON. General-purpose nodes, board revisions, and draft/conflict handling
+retain their existing contracts.
