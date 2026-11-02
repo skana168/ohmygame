@@ -65,3 +65,13 @@ it("deduplicates custom balances while keeping distinct model-level endpoints se
   expect(container.querySelector('[aria-label="API balance · First"]')).not.toBeNull();
   expect(container.querySelector('[aria-label="API balance · Other account"]')).not.toBeNull();
 });
+
+it("configures Hyper3D API access without an account connection or daily quota", async () => {
+  const hyper3d = provider("hyper3d");
+  api.providers.mockResolvedValue([hyper3d]);
+  await render(hyper3d);
+  expect(container.querySelector('[aria-label="Daily quota"]')).toBeNull();
+  expect(container.textContent).not.toContain("OhMyGame account");
+  expect(container.querySelector('[aria-label="API balance"]')?.textContent).toContain("10 credits");
+  expect(api.balance).toHaveBeenCalledWith({ provider: "hyper3d", id: "connection" });
+});

@@ -277,6 +277,7 @@ const zhCN: typeof en = {
     account: {
       signedInAs: "当前登录",
       loading: "正在载入账户",
+      unavailable: "账号服务已禁用。请在“服务商”中配置自己的服务商。",
       signedOut: "未登录",
       signedOutHint: "登录后可以发布游戏、使用 OhMyGame Cloud。",
       signedInWith: "当前登录：{{email}}",
@@ -412,6 +413,7 @@ const zhCN: typeof en = {
     custom: "自定义",
     enableProvider: "启用 {{name}}",
     hyper3d: {
+      keyDescription: "使用你自己的 Hyper3D API 密钥生成 3D 模型。",
       description: "免费账户额度和你的 API 密钥",
       yourKey: "你的 API 密钥",
       keyRequired: "需要 API 密钥",

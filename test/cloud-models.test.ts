@@ -43,16 +43,28 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
-async function fixture(cloudFetch = remote()) {
+async function fixture(cloudFetch = remote(), accountServices = true) {
   const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-free-cloud-")); directories.push(directory);
   const runtime = await ModelRuntime.create({ authPath: path.join(directory, "auth.json"), modelsPath: path.join(directory, "models.json"), modelsStorePath: path.join(directory, "catalog.json"), allowModelNetwork: false });
-  const app = createApp({ dataDirectory: directory, piAgentDirectory: directory, cloudApiUrl: "https://cloud.example", cloudFetch, accessToken: "daemon-token", createModelRuntime: async () => runtime }); apps.push(app);
+  const app = createApp({ accountServices, dataDirectory: directory, piAgentDirectory: directory, cloudApiUrl: accountServices ? "https://cloud.example" : "not-a-cloud-url", cloudFetch, accessToken: "daemon-token", createModelRuntime: async () => runtime }); apps.push(app);
   const request = (url: string, method: "GET" | "PUT" | "PATCH" = "GET", body?: unknown) => app.inject({ method, url,
     headers: { authorization: "Bearer daemon-token", ...(body !== undefined ? { "content-type": "application/json" } : {}) },
     ...(body !== undefined ? { payload: JSON.stringify(body) } : {}) });
   return { app, directory, cloudFetch, request };
 }
 describe("desktop free cloud connection", () => {
+  it("starts without account services and keeps user-key providers available", async () => {
+    const { request, cloudFetch } = await fixture(remote(), false);
+    expect((await request("/settings/providers")).json().some((provider: { managed?: string }) => provider.managed === "free_cloud")).toBe(false);
+    expect((await request("/cloud/session", "PUT", { accessToken: "foreign-account", userId: "foreign-user" })).statusCode).toBe(404);
+    expect((await request("/cloud/quotas")).statusCode).toBe(404);
+    expect((await request("/cloud/jobs")).statusCode).toBe(404);
+    expect((await request("/cloud/jobs/foreign-job/result")).statusCode).toBe(404);
+    expect((await request(`/settings/models/providers/${MODEL.provider}`)).statusCode).toBe(404);
+    expect((await request("/settings/models/providers/hyper3d", "PUT", { apiKey: "own-key" })).statusCode).toBe(200);
+    expect((await request("/model3d-models/catalog")).json().models).toContainEqual(expect.objectContaining({ provider: "hyper3d", id: "Gen-2.5-Medium" }));
+    expect(cloudFetch).not.toHaveBeenCalled();
+  });
   it("keeps account and API-key models together, and gates both with a persistent Hyper3D switch", async () => {
     const { app, request, cloudFetch, directory } = await fixture();
     const enabledUrl = "/settings/models/providers/hyper3d/enabled";

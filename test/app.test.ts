@@ -24,7 +24,7 @@ async function saveProjectAsset(app: Awaited<ReturnType<typeof createApp>>, proj
 }
 
 describe("daemon", () => {
-  it("keeps independently configured applications' projects, conversations and provider credentials separate across restart", async () => {
+  it.each([true, false])("keeps independently configured applications' projects, conversations and provider credentials separate across restart (account services: %s)", async (accountServices) => {
     const directory = await mkdtemp(path.join(tmpdir(), "application-isolation-"));
     const base = identity.loadIdentity();
     const firstDirectory = identity.dataDirectory({ ...base, name: "Notes", packageName: "notes", desktopId: "org.example.notes", dataDirectory: "notes" }, directory, {});
@@ -51,8 +51,8 @@ describe("daemon", () => {
         }),
       });
     };
-    const first = createApp({ dataDirectory: firstDirectory, createSession });
-    const second = createApp({ dataDirectory: secondDirectory });
+    const first = createApp({ accountServices, businessTools: { game: false, story: false }, dataDirectory: firstDirectory, createSession });
+    const second = createApp({ accountServices, businessTools: { game: false, story: false }, dataDirectory: secondDirectory });
     let reopened: ReturnType<typeof createApp> | undefined;
     let otherRestarted: ReturnType<typeof createApp> | undefined;
     try {
@@ -85,13 +85,13 @@ describe("daemon", () => {
       expect((await first.inject({ method: "GET", url: `/projects/${project.id}/conversations` })).json()).toEqual([expect.objectContaining({ id: conversation.json().id })]);
       expect((await first.inject({ method: "PATCH", url: conversationUrl, payload: { title: "Private session" } })).statusCode).toBe(200);
       await first.close();
-      reopened = createApp({ dataDirectory: firstDirectory });
+      reopened = createApp({ accountServices, businessTools: { game: false, story: false }, dataDirectory: firstDirectory });
       const restored = await reopened.inject({ method: "GET", url: conversationUrl });
       expect(restored.statusCode).toBe(200);
       expect(restored.json().turns.flatMap((turn: { items: unknown[] }) => turn.items)).toEqual(expectedItems);
       expect((await reopened.inject({ method: "GET", url: `/projects/${project.id}/conversations` })).json()).toEqual([expect.objectContaining({ id: conversation.json().id, title: "Private session", messageCount: 2 })]);
       await second.close();
-      otherRestarted = createApp({ dataDirectory: secondDirectory });
+      otherRestarted = createApp({ accountServices, businessTools: { game: false, story: false }, dataDirectory: secondDirectory });
       expect((await otherRestarted.inject({ method: "GET", url: otherConversations })).json()).toEqual([]);
       expect((await otherRestarted.inject({ method: "GET", url: `${otherConversations}/${conversation.json().id}` })).statusCode).toBe(404);
       await otherRestarted.close();
@@ -1180,10 +1180,12 @@ describe("daemon", () => {
     expect(response.json().skills).toEqual([{ name: "godot", description: "Control Godot" }]);
   });
 
-  it("offers every OhMyGame media generation tool, audio included, before any provider is connected", async () => {
+  it.each([true, false])("offers every core media generation tool before any provider is connected (account services: %s)", async (accountServices) => {
     const setActiveToolsByName = vi.fn();
     const prompt = vi.fn<CodingSession["prompt"]>(async () => {});
     const app = createApp({
+      accountServices,
+      businessTools: { game: false, story: false },
       dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-default-media-tools-")),
       createSession: async () => ({
         messages: [],
@@ -1953,8 +1955,8 @@ describe("daemon", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
-  it("stores the Doubao Speech key and default voice without exposing them", async () => {
-    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-volcengine-tts-settings-")) });
+  it.each([true, false])("stores the Doubao Speech key and default voice without exposing them (account services: %s)", async (accountServices) => {
+    const app = createApp({ accountServices, businessTools: { game: false, story: false }, dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-volcengine-tts-settings-")) });
     apps.push(app);
 
     expect((await app.inject({ method: "GET", url: "/settings/models/providers/volcengine-tts" })).json())
@@ -2016,8 +2018,8 @@ describe("daemon", () => {
     });
   });
 
-  it("stores the Doubao Seed Audio key independently and exposes compatible models", async () => {
-    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-volcengine-seed-audio-settings-")) });
+  it.each([true, false])("stores the Doubao Seed Audio key independently and exposes compatible models (account services: %s)", async (accountServices) => {
+    const app = createApp({ accountServices, businessTools: { game: false, story: false }, dataDirectory: await mkdtemp(path.join(tmpdir(), "ohmygame-volcengine-seed-audio-settings-")) });
     apps.push(app);
 
     expect((await app.inject({ method: "GET", url: "/settings/models/providers/volcengine-seed-audio" })).json())
