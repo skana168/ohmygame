@@ -56,7 +56,7 @@ describe("daemon", () => {
     let reopened: ReturnType<typeof createApp> | undefined;
     let otherRestarted: ReturnType<typeof createApp> | undefined;
     try {
-      const created = await first.inject({ method: "POST", url: "/projects", payload: { name: "Private notes", type: "general" } });
+      const created = await first.inject({ method: "POST", url: "/projects", payload: { name: "Private notes", type: "general", workspaceManifest: { version: 1, modules: [] } } });
       expect(created.statusCode).toBe(201);
       const project = created.json();
       const conversation = await first.inject({ method: "POST", url: `/projects/${project.id}/conversations` });

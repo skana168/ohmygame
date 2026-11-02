@@ -1,16 +1,17 @@
+import { workspaceHasModule } from "../shared/workspace-policy.js";
 import type { ProjectState } from "../shared/contracts.js";
 
 /** The parts of a project that change what the agent is told. */
 export type AgentPromptProject = Pick<ProjectState, "type"> &
-  Partial<Pick<ProjectState, "startupDirectory" | "startupScript" | "packageManager" | "workspaceLocation" | "webPreviewEnabled" | "pluginType">>;
+  Partial<Pick<ProjectState, "startupDirectory" | "startupScript" | "packageManager" | "workspaceLocation" | "webPreviewEnabled" | "pluginType" | "workspaceManifest" | "workspaceDiagnostics">>;
 
 const COMMON_AGENT_INSTRUCTIONS = [
   "Do not create or change files for casual conversation or for questions that need no code.",
   "For tasks that require several tool calls, send a brief commentary update before the first tool call and whenever you discover something important or begin a new major step. Keep commentary concise, do not narrate routine tool calls, and reserve the final answer for the completed result.",
   "For work with several meaningful steps, keep a concise plan with update_plan: at most one step in_progress, updated as steps start or finish. Skip it for quick one-step requests.",
-  "The user and the OhMyGame editor can change files between your turns. Build on the files as they are now, and do not revert changes you did not make.",
-  "When canvas/index.json exists, read canvas/AGENTS.md, the index and relevant boards/documents before canvas, design or asset work. If the requested work needs a canvas and none exists, use canvas_initialize before editing. Show final media deliverables on the relevant canvas board, reusing existing nodes and asset IDs. For game implementation, also read the main document if one is selected. Canvas is ordinary project JSON, Markdown and local media; use read/edit/write and run canvas_check after changes. Use the current board and selected node IDs from editor context to resolve references. Preserve IDs and concurrent user edits. Read actual image files when evaluating appearance. Follow the user's current request and explicitly referenced document snapshots; do not silently rewrite documents. Use generate_canvas_media to execute saved generation nodes through shared canvas history. Editing a prompt or reference does not request generation. Casual conversation needs no canvas reads.",
-  "End a turn that changed the game with a short summary in the user's language: what changed in terms of what the player sees, how you checked it, and anything you could not verify. Do not repeat file contents the user can already see.",
+  "The user and the workspace editor can change files between your turns. Build on the files as they are now, and do not revert changes you did not make.",
+  "When canvas/index.json exists, read canvas/AGENTS.md, the index and relevant boards/documents before canvas, design or asset work. If the requested work needs a canvas and none exists, use canvas_initialize before editing. Show final media deliverables on the relevant canvas board, reusing existing nodes and asset IDs. Canvas is ordinary project JSON, Markdown and local media; use read/edit/write and run canvas_check after changes. Use the current board and selected node IDs from editor context to resolve references. Preserve IDs and concurrent user edits. Read actual image files when evaluating appearance. Follow the user's current request and explicitly referenced document snapshots; do not silently rewrite documents. Use generate_canvas_media to execute saved generation nodes through shared canvas history. Editing a prompt or reference does not request generation. Casual conversation needs no canvas reads.",
+  "End a turn that changed the workspace with a short summary in the user's language: what changed in terms of what the user sees, how you checked it, and anything you could not verify. Do not repeat file contents the user can already see.",
 ] as const;
 
 const GENERATED_MEDIA = "Media generation tools (generate_image, generate_video, generate_3d_asset, when available) save files under assets/generated/ in the workspace and return the path. A file there is not part of the game until the game's own source uses it as described next.";
@@ -45,8 +46,15 @@ const INTERACTIVE_STORY_INSTRUCTIONS = [
 ] as const;
 
 export function appendSystemPromptForProject(project: AgentPromptProject): string[] {
-  if (project.type === "general") return [
-    ...COMMON_AGENT_INSTRUCTIONS,
+  const common = [...COMMON_AGENT_INSTRUCTIONS, ...(workspaceHasModule(project, "game") ? [
+    "For game implementation, also read the main document if one is selected. For game work, identify reference mockups and production assets in canvas titles/descriptions. Record production assets' intended gameplay use in the design document; reference mockups do not fulfill those requirements. A game-creation request includes its needed media unless the user narrows the scope.",
+  ] : [])];
+  if (!workspaceHasModule(project, "game") && project.type !== "asset-canvas") return [
+    ...common,
+    "You are a general-purpose workspace assistant. Help with the user's files, documents, tables, assets and canvas. Preserve the existing tools and structure; follow root AGENTS.md and the selected modules. Documents are ordinary references; no main document is required.",
+  ];
+  if (project.type === "general" || (project.type === "interactive-story" && !workspaceHasModule(project, "interactive-story"))) return [
+    ...common,
     ...GENERAL_GAME_INSTRUCTIONS,
     ...(project.pluginType?.preview === "native" ? [
       `This project's type comes from the ${project.pluginType.plugin} plugin, and the game runs outside OhMyGame through it. Preserve its engine and project setup, follow its Skills, and use its tools to preview and build. Web preview, game_use, and OhMyGame Community publishing are unavailable for this project.`,
@@ -58,10 +66,10 @@ export function appendSystemPromptForProject(project: AgentPromptProject): strin
       "Web publishing is independent of the preview switch. It accepts a static index.html in the configured startup directory, or a package.json build script that produces dist/, build/, or out/index.html with relative asset URLs. Do not change engines or add a Web wrapper just to satisfy preview or publishing.",
     ]),
   ];
-  if (project.type === "web-game") return [...COMMON_AGENT_INSTRUCTIONS, ...WEB_GAME_INSTRUCTIONS, webGameRunContract(project)];
-  if (project.type === "interactive-story") return [...COMMON_AGENT_INSTRUCTIONS, ...INTERACTIVE_STORY_INSTRUCTIONS];
-  if (project.type === "asset-canvas") return [...COMMON_AGENT_INSTRUCTIONS, "This is an Asset Canvas production workspace with one default board. Documents describe creative briefs, prompts and asset requirements. Use canvas/index.json to locate the board and canvas/AGENTS.md for the file contract. There is no game runtime or main game design document. Do not create a game loop or game runtime unless the user requests it."];
-  return [...COMMON_AGENT_INSTRUCTIONS];
+  if (project.type === "web-game") return [...common, ...WEB_GAME_INSTRUCTIONS, webGameRunContract(project)];
+  if (project.type === "interactive-story") return [...common, ...INTERACTIVE_STORY_INSTRUCTIONS];
+  if (project.type === "asset-canvas") return [...common, "This is an Asset Canvas production workspace with one default board. Documents describe creative briefs, prompts and asset requirements. Use canvas/index.json to locate the board and canvas/AGENTS.md for the file contract. There is no game runtime or main game design document. Do not create a game loop or game runtime unless the user requests it."];
+  return [...common];
 }
 
 /** What preview and publish actually run, from the project's run settings. */

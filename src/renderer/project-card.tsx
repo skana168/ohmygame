@@ -169,7 +169,7 @@ export function ProjectRow({ project, onOpen, actions, agentStatus, selection }:
         <span className="project-card-name" title={project.name}>{project.name}</span>
         <span className="project-row-type">
           <ProjectTypeIcon type={project.type} size={14} />
-          {projectTypeLabel(project.type)}
+          {projectTypeLabel(project.type, project)}
         </span>
         <span className="project-row-time" title={projectTimestamp(project.updatedAt)}>
           <ProjectStatus project={project} agentStatus={agentStatus} />

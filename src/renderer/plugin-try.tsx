@@ -101,7 +101,7 @@ export function usePluginTry({ displayName, suits, emptyLabel, target, onTry }: 
       {phase === "starting" ? <div className="project-switcher-state"><LoaderCircle className="spin" size={14} />{t("plugins.startingConversation")}</div> : null}
       {phase === "ready" ? visible.map((project) => <button className="project-switcher-item" type="button" key={project.id} onClick={() => void start(project.id)}>
         <ProjectTypeIcon type={project.type} />
-        <span><strong>{project.name}</strong><small>{projectTypeLabel(project.type)}</small></span>
+        <span><strong>{project.name}</strong><small>{projectTypeLabel(project.type, project)}</small></span>
         <ChevronRight size={13} />
       </button>) : null}
       {phase === "ready" && !visible.length ? <div className="project-switcher-state">{normalized ? t("plugins.noMatchingProjects") : emptyLabel}</div> : null}

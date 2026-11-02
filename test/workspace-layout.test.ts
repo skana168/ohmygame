@@ -38,6 +38,12 @@ describe("workspace layouts", () => {
     expect(tabs(presetLayout("art", GAME)).center).toBe("*canvas,game,design,code,assets");
   });
 
+  it("opens manifest-selected non-game workspaces on the canvas without game design navigation", () => {
+    const offered = panelsOf({ type: "general", workspaceManifest: { version: 1, modules: [] } });
+    expect(offered).toEqual(["chat", "canvas", "code", "assets"]);
+    expect(tabs(presetLayout("default", offered)).center).toBe("*canvas,code,assets");
+  });
+
   it("opens with the saved arrangement, or the chat where the old setting put it", () => {
     expect(tabs(openingLayout(GAME).layout)).toMatchObject({ left: "*chat", right: "" });
     localStorage.setItem("ohmygame:chat-layout", "right");

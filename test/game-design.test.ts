@@ -104,6 +104,48 @@ describe("Markdown design workspace", () => {
     expect((await checkCanvasWorkspace(project.workspacePath)).issues.some((issue) => issue.file.endsWith(`${updated.id}.json`))).toBe(true);
   });
 
+  it("opens a generic multi-board workspace without game document policy and reopens its files", async () => {
+    const directory = await temp();
+    const app = createApp({ dataDirectory: directory }); apps.push(app);
+    const project = (await app.inject({ method: "POST", url: "/projects", payload: { type: "general", workspaceManifest: { version: 1, modules: [] } } })).json();
+    const base = `/projects/${project.id}/canvas`;
+    await app.inject(`${base}/workspace`);
+    const document = (await app.inject({ method: "POST", url: `${base}/documents`, payload: { title: "Research notes" } })).json();
+    expect((await app.inject(`${base}/workspace`)).json().mainDocumentId).toBeUndefined();
+    expect((await app.inject({ method: "PUT", url: `${base}/main-document`, payload: { documentId: document.document.id } })).statusCode).toBe(409);
+    expect((await app.inject({ method: "POST", url: `${base}/boards`, payload: { name: "Research" } })).statusCode).toBe(201);
+    const table = (await app.inject({ method: "POST", url: `${base}/tables`, payload: { title: "Findings" } })).json();
+    const index = (await app.inject(`${base}/workspace`)).json();
+    const boardUrl = `${base}/boards/${index.boards[1].id}`;
+    const board = (await app.inject(boardUrl)).json();
+    board.board.nodes.push(
+      { id: "notes", type: "document", position: { x: 50, y: 70 }, data: { documentId: document.document.id } },
+      { id: "findings", type: "table", position: { x: 500, y: 70 }, data: { tableId: table.table.id } },
+      { id: "summary", type: "text", position: { x: 50, y: 400 }, data: { text: "Research summary", instruction: "" } },
+    );
+    board.board.editorLayout.nodes.notes = { x: 50, y: 70, width: 400, height: 250 };
+    board.board.editorLayout.nodes.findings = { x: 500, y: 70 };
+    board.board.editorLayout.nodes.summary = { x: 50, y: 400 };
+    expect((await app.inject({ method: "PUT", url: boardUrl, payload: board })).statusCode).toBe(200);
+    expect((await app.inject({ method: "PUT", url: boardUrl, payload: board })).statusCode).toBe(409);
+    const invalid = structuredClone(board); invalid.board.nodes[0].data.documentId = "missing";
+    invalid.revision = (await app.inject(boardUrl)).json().revision;
+    expect((await app.inject({ method: "PUT", url: boardUrl, payload: invalid })).statusCode).toBe(404);
+    const instructions = await readFile(path.join(project.workspacePath, "canvas/AGENTS.md"), "utf8");
+    expect(instructions).not.toContain("game");
+    await app.close(); apps.splice(apps.indexOf(app), 1);
+    const reopened = createApp({ dataDirectory: directory }); apps.push(reopened);
+    const workspace = (await reopened.inject(`${base}/workspace`)).json();
+    expect(workspace.boards).toHaveLength(2);
+    expect(workspace.documents[0].title).toBe("Research notes");
+    expect(workspace.mainDocumentId).toBeUndefined();
+    expect(workspace.tables[0].title).toBe("Findings");
+    const saved = (await reopened.inject(boardUrl)).json().board;
+    expect(saved.nodes.map((node: AssetCanvasNode) => node.id)).toEqual(["notes", "findings", "summary"]);
+    expect(saved.editorLayout.nodes.notes).toMatchObject({ x: 50, y: 70, width: 400, height: 250 });
+
+  });
+
   it("validates table routes, revisions, identities and unknown board references", async () => {
     const app = createApp({ dataDirectory: await temp() }); apps.push(app);
     const project = (await app.inject({ method: "POST", url: "/projects", payload: {} })).json(), base = `/projects/${project.id}/canvas`;

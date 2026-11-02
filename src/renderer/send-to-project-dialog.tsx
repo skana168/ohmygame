@@ -85,7 +85,7 @@ export function SendToProjectDialog({ assetId, name, onClose }: { assetId: strin
             onClick={() => void send(project)}
           >
             <ProjectTypeIcon type={project.type} />
-            <span><strong>{project.name}</strong><small>{projectTypeLabel(project.type)}</small></span>
+            <span><strong>{project.name}</strong><small>{projectTypeLabel(project.type, project)}</small></span>
             {phase.kind === "sending" && phase.projectId === project.id ? <LoaderCircle className="spin" size={13} /> : <ChevronRight size={13} />}
           </button>) : null}
           {phase.kind === "ready" && !visibleProjects.length ? <div className="project-switcher-state">{normalizedQuery ? t("sendToProject.noMatch") : t("sendToProject.none")}</div> : null}

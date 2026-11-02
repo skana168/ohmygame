@@ -362,8 +362,9 @@ contributes `playable_add_node` and `playable_check` only for interactive storie
 Selection applies to Pi, coding-agent bridges and external MCP catalogs and
 invocation. Disabling game tools also avoids creating agent playtest owners.
 Core canvas/media tools, Skills and MCP plugins retain their existing behavior.
-This is host configuration, independent of workspace manifests; it does not
-remove game dependencies from the build. Additional source contributions are
+Workspace manifests further restrict these host defaults; see
+[workspace manifests](workspace-manifests.md). This does not remove game dependencies
+from the build. Additional source contributions are
 trusted application code and should not re-register a disabled module's tools.
 
 A shipped non-game example is opt-in:
@@ -373,9 +374,12 @@ import { createExampleToolContribution } from "./example-tools.js";
 
 createApp({
   businessTools: { game: false, story: false },
+  workspaceModules: [{ id: "example", configSchema: { type: "object", additionalProperties: false } }],
   toolContributions: (project) => [createExampleToolContribution(project)],
 });
 ```
+
+Create the workspace with `workspaceManifest: { version: 1, modules: [{ id: "example", config: {} }] }` to select it.
 
 `example_echo` validates `{ message: string }`, returns that message, and reports
 the bound workspace ID in execution details without accessing workspace files.

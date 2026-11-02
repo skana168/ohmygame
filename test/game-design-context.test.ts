@@ -17,7 +17,7 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-async function runtime(hold = false, type: ProjectType = "web-game") {
+async function runtime(hold = false, type: ProjectType = "web-game", generic = false) {
   const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-design-context-"));
   directories.push(directory);
   let sessionManager: SessionManager;
@@ -36,7 +36,7 @@ async function runtime(hold = false, type: ProjectType = "web-game") {
     },
   });
   apps.push(app);
-  const project = (await app.inject({ method: "POST", url: "/projects", payload: { name: "Sky garden", type } })).json();
+  const project = (await app.inject({ method: "POST", url: "/projects", payload: { name: "Sky garden", type, ...(generic ? { workspaceManifest: { version: 1, modules: [] } } : {}) } })).json();
   const conversation = (await app.inject({ method: "POST", url: `/projects/${project.id}/conversations` })).json();
   const url = `/projects/${project.id}/conversations/${conversation.id}/turns`;
   const idle = () => vi.waitFor(async () => expect((await app.inject({ method: "GET", url: "/projects/activity" })).json().activity).toEqual([]));
@@ -44,8 +44,8 @@ async function runtime(hold = false, type: ProjectType = "web-game") {
 }
 
 describe("game design prompt context", () => {
-  it("captures an explicitly referenced Asset Canvas document without a main game design", async () => {
-    const { app, project, prompt, url, idle } = await runtime(false, "asset-canvas");
+  it.each(["asset-canvas", "general"] as const)("captures an explicitly referenced %s document without a main game design", async (type) => {
+    const { app, project, prompt, url, idle } = await runtime(false, type, type === "general");
     const detail = await writeCanvasDocument(project.workspacePath, { ...createCanvasDocument("Art brief"), markdown: "A bright garden" }, false);
     const other = await writeCanvasDocument(project.workspacePath, { ...createCanvasDocument("Another brief"), markdown: "Unrelated brief" }, false);
     const response = await app.inject({ method: "POST", url, payload: {
@@ -58,7 +58,8 @@ describe("game design prompt context", () => {
     expect(prompt.mock.calls[0]![0]).toContain("A bright garden");
     expect(prompt.mock.calls[0]![0]).toContain(detail.revision);
     expect(prompt.mock.calls[0]![0]).not.toContain(other.document.markdown);
-    expect(prompt.mock.calls[0]![0]).toContain("production references");
+    expect(prompt.mock.calls[0]![0]).toContain(type === "asset-canvas" ? "production references" : "no main document is required");
+    if (type === "general") expect(prompt.mock.calls[0]![0]).not.toContain("A game's main design");
   });
   it("refreshes compact metadata on each turn and keeps it out of visible messages", async () => {
     const { app, project, prompt, url, idle, items } = await runtime();

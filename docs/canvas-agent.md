@@ -178,6 +178,8 @@ Both editors share nodes, documents, metadata, generation, history, clipboard,
 file uploads and external file synchronization. Asset Canvas uses one default
 board and retains automatic covers and sending assets to projects. Game
 projects expose multiple boards and an optional main game design document.
+[Non-game workspaces](workspace-manifests.md#non-game-workspaces) use the same
+contracts with multiple boards and reference documents, without game design policy.
 
 Dropping, pasting or uploading files imports Markdown and text files as
 documents (up to 1 MB) and CSV or TSV files as tables (up to 4 MB). Images

@@ -529,7 +529,7 @@ export class ExternalMcpService {
           id,
           result: {
             tools: composeToolContributions<BridgeTool>([
-              { id: "application", tools: this.tools() },
+              { id: "application", tools: this.tools(this.#project(session), session.id) },
               { id: "plugins", tools: await this.#pluginTools(session) },
             ]),
           },
@@ -581,9 +581,9 @@ export class ExternalMcpService {
       .map(({ _meta: _, ...tool }) => tool);
   }
 
-  /** The public tool list: the same for every session, whichever project it uses. */
-  tools(): BridgeTool[] {
-    const catalog = new ToolBridge(publicTools(this.#options.catalog())).list(
+  /** Before binding, advertise the application catalog; afterwards honor workspace selection. */
+  tools(project?: ProjectState, sessionId = "catalog"): BridgeTool[] {
+    const catalog = new ToolBridge(publicTools(project ? this.#options.tools(project, sessionId) : this.#options.catalog())).list(
       "all",
     );
     return composeToolContributions<BridgeTool>([
