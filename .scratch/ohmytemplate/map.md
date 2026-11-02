@@ -15,6 +15,10 @@ Execution details are recorded in [execution-state.json](execution-state.json).
   persisted history isolation proved by `4007afd40168fed9690acf6a62dc368bd6baa4de`
   through daemon/agent execution and restart. See its report for platform limits.
 
+- [Ticket 02](issues/02-select-business-tools.md) is resolved: host business-tool
+  selection merged at `fbeb9975173204340c8688f2bf7359e9ce12f4c7`; 151 focused tests and
+  typecheck passed. See its report for full-check evidence and manual limits.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction

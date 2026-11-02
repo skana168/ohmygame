@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Unify tool contributions while preserving existing behavior.
 
-Status: claimed
+Status: resolved
 
 - [x] Game and story tools are contributed by explicit source-registered business modules rather than unconditional mixed tool assembly.
 - [x] With those modules enabled, existing tool names, inputs, and behavior remain compatible, including game tool availability checks.
@@ -19,4 +19,21 @@ Status: claimed
 
 ## Implementation evidence
 
-Implemented in `t3/gate-business-tools`; keep claimed until the merger closes this ticket. See [implementation report](../reports/02-select-business-tools.md) for host configuration, acceptance evidence, checks, integration merges and validation limits.
+Implemented in `t3/gate-business-tools` and merged into the integration branch. See [implementation report](../reports/02-select-business-tools.md) for host configuration, acceptance evidence, checks, integration merges and validation limits.
+
+## Answer
+
+Resolved by implementation `37f353482118ad3cc6217fd35670790f81892336`, merged conflict-free into
+`refactor/ohmytemplate-integration` as `fbeb9975173204340c8688f2bf7359e9ce12f4c7`.
+Host selection gates catalogs and invocation for Pi, coding-agent bridges and
+external MCP; default game/story behavior, planning restrictions and plugin
+composition remain intact. The opt-in non-game example executes through the
+existing contracts. No integration code fixes were necessary.
+
+Root verification: 151 tests passed in eight tool/external-MCP/runtime/Pi/plugin
+suites; typecheck and `git diff --check` passed. Full required checks are recorded
+in the [report](../reports/02-select-business-tools.md) and were not repeated
+because the merge introduced no further code changes. Live-provider and installed
+third-party CLI sessions remain unverified; no renderer interaction changed and
+no UI evidence is claimed. Workspace manifest selection and game-free builds
+remain outside this ticket.

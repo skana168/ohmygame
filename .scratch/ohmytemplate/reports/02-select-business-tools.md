@@ -1,6 +1,6 @@
 # Ticket 02 implementation report
 
-Status: implemented; ticket remains claimed for the merger.
+Status: resolved; merged and verified in the shared integration root.
 
 ## Checkout and integration
 
@@ -45,3 +45,12 @@ Used Bun 1.4.2 through `/tmp/ohmytemplate-tools/node_modules/.bin`; `bun install
 The final integration update changes identity tests and tracker evidence only; affected app/identity/tool suites and type checking were rerun after that merge. No tracker files from other tickets or execution-state were edited directly; their changes came exclusively from integration merges.
 
 No live model-provider or installed third-party coding CLI session was run; deterministic bridge/driver fixtures cover those transports. No browser/Electron UI interaction was needed for this host-only selection change. This ticket does not claim a game-free build, workspace-manifest selection, custom canvas nodes or independent template completion. Remote cloud checks requiring private services remain subject to the suite's documented skips.
+
+## Integration acceptance
+
+- Implementation head: `37f353482118ad3cc6217fd35670790f81892336` (`t3/gate-business-tools`), worktree `/Users/yoyun/.t3/worktrees/ohmygame/t3-b36ec637`.
+- Conflict-free conventional merge: `fbeb9975173204340c8688f2bf7359e9ce12f4c7` on `refactor/ohmytemplate-integration`. No integration fixes were needed.
+- Reviewed both catalog and invocation paths: Pi and native sessions consume `conversationAgentTools`; external MCP selects both its schema catalog and bound execution tools. Default game availability predicate and planning allowlist are preserved.
+- Root Bun 1.4.2 verification: `bun run test -- test/agent-tools.test.ts test/external-mcp.test.ts test/external-mcp-launcher.test.ts test/agent-runtime-bridge.test.ts test/agent-runtime-session.test.ts test/agent-runtime-drivers.test.ts test/pi-agent.test.ts test/plugin-runtime.test.ts`: **151 passed, eight files, no skips**.
+- Root `bun run typecheck` and `git diff --check`: passed. Required full checks above were retained as implementer evidence; no additional code changes warranted repeating them.
+- Ticket 03 changes/status were not modified. Untracked `.codegraph/` and all worktrees were preserved. Live providers, installed third-party CLI sessions and private-cloud validation remain limited as described above; no changed renderer interaction or UI verification is claimed.
