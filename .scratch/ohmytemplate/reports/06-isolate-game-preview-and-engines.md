@@ -114,3 +114,86 @@ merged in `48b5a54c`. This second merge only inherited provider09's report,
 resolved-ticket, map and execution-state updates; this worker did not author
 changes to those files. No application code changed after the merged-tree checks.
 Final working-tree and whitespace checks passed; integration is an ancestor.
+
+## Serial root integration (2026-11-02)
+
+- Merged after ticket04, from `a271265672a4177d737d745238c819679835c8ff`
+  (`t3/isolate-game-preview-engines`, `/Users/yoyun/.t3/worktrees/ohmygame/t3-f92edbee`)
+  at `7a6dbf9804aa29f1ca586437ad58bc9c2831dd32`.
+- Resolved daemon owner conflicts in favor of capability/environment checks and
+  project-bound owners. Retained both tool tests and combined documentation.
+  `gameCapabilityEnabled` delegates module/legacy/invalid-manifest semantics to
+  ticket04's `workspaceHasModule`, adding host and daemon-response restrictions.
+  Independent accountServices, source contribution ownership, game/asset canvas
+  policy and direct IPC authorization remain intact.
+- Actual isolated browser work exposed an integration defect: ticket04's panel
+  filter removed reusable preview navigation even when web preview was enabled.
+  Existing renderer navigation coverage was extended and observed red (missing
+  preview panel), then green. Restored the optional panel after Canvas and used
+  the existing translated Preview label; game controls remain capability guarded.
+  An additional daemon compatibility assertion verifies asset canvases do not
+  gain game ownership. That assertion passed before policy consolidation and is
+  compatibility coverage, not claimed as a red-green defect.
+
+Fresh merged-root evidence (Bun 1.4.2 PATH as above):
+
+- 34 affected suites / 658 tests passed, no skips, after capability consolidation.
+  Command covered the union of ticket04's 15 suites and ticket06's 22 suites
+  listed above. Log: `/tmp/ohmytemplate-merge06-tests.log`.
+- Full suite after consolidation, before the navigation fix: 352 files passed,
+  three skipped; 4312 tests passed, 41 skipped. This is explicitly not a full-suite
+  run of the final navigation edit. Log: `/tmp/ohmytemplate-merge06-full-tests.log`.
+- After navigation fix: workspace-layout, coding-workspace,
+  project-settings-dialog, desktop-close, app and agent-tools: six suites /
+  189 tests passed. Log: `/tmp/ohmytemplate-merge06-final-tests.log`.
+- Final typecheck, lint, renderer build and diff checks passed. An intermediate
+  typecheck caught a missing label-helper import; it was corrected to use
+  `gameCapabilityEnabled`, then final typecheck and browser rendering passed.
+  Logs: `/tmp/ohmytemplate-merge06-final-{types,lint,build-renderer}.log`.
+- Plugin preparation and changelog check passed. Host build passed. Node runtime
+  initially failed because prepared plugin index was absent; after plugin
+  preparation, the complete `bun run test:node-runtime` retry passed on Node
+  24.20.0. Logs: `/tmp/ohmytemplate-merge06-{prepare,changelog,build-host,node,node-retry}.log`.
+  Node/host checks preceded the renderer-only navigation edit; no host code changed
+  afterward. Existing fixture connection-refused and MaxListeners warnings remain.
+
+Actual browser validation used isolated daemon43516/renderer43526, accountServices
+false, data `/tmp/ohmytemplate-merge-browser-data`, Pi settings
+`/tmp/ohmytemplate-merge-browser-pi`. Opened the API-created empty-module workspace,
+Canvas, Code, project settings and restored Preview tab. Settings displayed
+Preview defaults and reusable restart/stop/open-browser actions. Preview used an
+iframe; Play, Record, agent-watch and tuning controls were absent. Navigating to
+that iframe's URL displayed `Reusable non-game preview`. No screenshot was
+obtained: both snapshot attempts timed out; DOM/browser interaction evidence is
+recorded without claiming visual screenshot QA. Existing picker tooltip still
+says “Pick an element in the game”; neutralizing that inherited copy is not
+claimed here. Owned tab and isolated server were closed; data preserved.
+
+Actual Electron failure investigation:
+
+- Installed the declared Electron43.3.0 binary with `node node_modules/electron/install.js`
+  (cached installation, no dependency/lockfile changes). Fresh root host/renderer
+  builds followed by `node scripts/test-web-game-runtime.mjs` reproduced the
+  exact line101 fractional landscape timeout. Log:
+  `/tmp/ohmytemplate-merge06-electron.log`. Later assertions did not run.
+- Baseline diagnostic used `git show 4f39f31f:src/desktop/web-game-player.ts`,
+  transpiled to `/tmp/ohmytemplate-baseline-player.mjs`, with the existing fixture
+  copied to `/tmp/ohmytemplate-baseline-runtime-check.cjs`. Only import/root paths
+  and a catch printing observed dimensions changed; assertions were unchanged.
+  The baseline player, host HTML/renderer, proxy and fixture are unchanged by this
+  integration. Baseline run with the same Electron binary also failed at line101:
+  observed width667/height375, DPR2, expected width549/height309. Log:
+  `/tmp/ohmytemplate-baseline-electron.log`. The first diagnostic launch needed
+  NODE_PATH for Electron's module resolution; the corrected launch reproduced
+  the resize failure. Temporary diagnostic files/data were preserved.
+- Evidence supports a pre-existing runtime/environment failure, not a change in
+  ticket06's native player. No unrelated player redesign or weakened assertion
+  was made. Failed smoke is not passing evidence.
+
+Status remains **claimed**, merged but not resolved: actual desktop capability
+navigation/authorization flow and completion of native smoke (including later
+fullscreen/playback/cleanup) remain unverified. External engines/recording and
+other platform checks remain as above. Ticket04's Electron creation/edit/reopen
+validation is still mandatory for overall template delivery. Browser document
+ title editing remains unverified. Ticket08 and all existing worktrees/recovery
+snapshots were left untouched.

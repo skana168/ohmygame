@@ -26,3 +26,15 @@ Status: claimed
   for exact checks, red-green event correction, Electron failure, and remaining
   browser/engine manual validation. The final manual-validation criterion remains
   unchecked; no new engine implementation or full-build exclusion is claimed.
+
+## Integration result
+
+Merged at `7a6dbf9804aa29f1ca586437ad58bc9c2831dd32` after ticket04, with
+shared workspace policy and a red-green reusable preview navigation correction.
+34 suites / 658 tests passed; full pre-navigation-fix run passed 4312 tests
+(41 skipped), then six affected suites / 189 tests passed. Final typecheck,
+lint and renderer build passed; Node runtime passed after preparing plugins.
+Browser non-game preview flow exercised. Electron fractional resize failure
+reproduces with baseline player code; later smoke assertions and actual desktop
+capability UI flow remain unverified. Status stays claimed and final acceptance
+item stays unchecked. See report for precise run order and retained evidence.
