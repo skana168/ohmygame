@@ -85,3 +85,12 @@ editor's words.
 Start with `runtime.md` for implementation, `authoring.md` for editor behavior,
 or `agent.md` for agent integration. Read `vision.md` for the redesign's rationale;
 its description of the former editor is historical.
+
+## Module availability
+
+Interactive stories require the source-registered `interactive-story` business
+module. OhMyGame enables it by default, including for historical projects without
+`workspace.json`. Applications may omit it; unavailable stories show a diagnostic
+and retain their files while the shared canvas and media remain usable. See
+[optional interactive stories](../workspace-manifests.md#optional-interactive-stories)
+for composition, direct-operation guards and restoration.

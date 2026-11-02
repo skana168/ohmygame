@@ -112,3 +112,13 @@ export function gameCapabilityEnabled(
 ): boolean {
   return hostEnabled && project.gameCapability !== false && workspaceHasModule(project, "game");
 }
+
+/** Story editing and execution use the same module declaration as story tools. */
+export function storyCapabilityEnabled(
+  project: Pick<ProjectState, "type" | "workspaceManifest" | "workspaceDiagnostics" | "gameCapability" | "storyCapability">,
+  hostEnabled = true,
+): boolean {
+  return hostEnabled && project.storyCapability !== false &&
+    project.type === "interactive-story" && workspaceHasModule(project, "game") &&
+    workspaceHasModule(project, "interactive-story");
+}

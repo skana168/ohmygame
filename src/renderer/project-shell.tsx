@@ -1,5 +1,5 @@
 import { publishingEnabled } from "../shared/application-services.js";
-import { gameCapabilityEnabled } from "../shared/project-runtime.js";
+import { storyCapabilityEnabled, gameCapabilityEnabled } from "../shared/project-runtime.js";
 import { canvasPolicy } from "../shared/workspace-policy.js";
 import type { GameTuningState } from "../shared/game-tuning.js";
 import { isAccountRuntimeId, isAgentRuntimeId, type ApprovalDecision, type AgentAccountProfileStatus } from "../shared/agent-runtimes.js";
@@ -1345,6 +1345,7 @@ export function ProjectShell({
   return (
     <>
     {chatInput}
+    {project?.type === "interactive-story" && !storyCapabilityEnabled(project) ? <p role="alert" className="settings-note">{t("storyModule.unavailable")}</p> : null}
     {project ? <PluginChangesSheet projectId={project.id} open={pluginChangesOpen} busy={agentBusy} onClose={() => setPluginChangesOpen(false)}
       onUndone={() => setWorkspaceRevision((value) => value + 1)} /> : null}
     {pluginLink ? <Dialog open title={t("pluginCommands.openLinkTitle")} onClose={() => setPluginLink(undefined)} footer={<>

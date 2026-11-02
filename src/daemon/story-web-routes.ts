@@ -22,6 +22,7 @@ export function registerStoryWebRoutes(
   app: FastifyInstance,
   options: {
     projects: ProjectManager;
+    enabled: (project: ProjectState) => boolean;
     agents: AgentManager;
     writes: ProjectWrites;
     checkpoints: CheckpointStore;
@@ -38,6 +39,7 @@ export function registerStoryWebRoutes(
     if (!project) throw Object.assign(new Error("Project not found"), { statusCode: 404 });
     if (project.type !== "interactive-story")
       throw Object.assign(new Error("Upgrading requires an Interactive Story project"), { statusCode: 409 });
+    if (!options.enabled(project)) throw Object.assign(new Error("The interactive-story module is unavailable for this workspace."), { statusCode: 409 });
     return project;
   };
   const assertIdle = (id: string) => {

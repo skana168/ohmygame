@@ -24,6 +24,7 @@ const getHomeComposerCapabilities = vi.fn(async () => capabilities);
 // Godot's type is the app's own, so only the other plugin type is added to the menu.
 const listProjectTypes = vi.fn(async () => [
   { id: "general", title: "General" },
+  { id: "interactive-story", title: "Interactive story" },
   { id: "ohmygame/godot:godot-game", title: "Godot game", plugin: { id: "ohmygame/godot", version: "1.0.0" } },
   { id: "acme/tiles:map", title: "Tile Map", description: "A Tiled map game", plugin: { id: "acme/tiles", version: "2.1.0" } },
 ]);
@@ -101,6 +102,13 @@ function button(text: string): HTMLButtonElement {
 }
 
 describe("new project dialog", () => {
+  it("omits Interactive Story when the application does not offer its module", async () => {
+    listProjectTypes.mockResolvedValueOnce([{ id: "general", title: "General" }]);
+    await act(async () => root.render(<ProjectCreateDialog onClose={() => {}} onCreated={() => {}} />));
+    expect(await typeOptions()).not.toContain("Interactive Story");
+    expect(await typeOptions()).toContain("Workspace");
+  });
+
   it("offers every project type, Asset Canvas included, and asks only for name, type and folder", async () => {
     await act(async () =>
       root.render(

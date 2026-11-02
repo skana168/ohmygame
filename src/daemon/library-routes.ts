@@ -2,7 +2,7 @@ import { isUtf8 } from "node:buffer";
 import { createReadStream } from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
-import type { CreateLibraryImageRequest, LibraryUploadMediaType } from "../shared/contracts.js";
+import type { CreateLibraryImageRequest, LibraryUploadMediaType, ProjectState } from "../shared/contracts.js";
 import { MEDIA_CONTENT_TYPES } from "../shared/media-files.js";
 import { AssetLibraryError, isLibraryAssetDerivation, type AssetLibrary } from "./asset-library.js";
 import { sniffImageType } from "./image-format.js";
@@ -20,7 +20,12 @@ export const ASSET_NAME_BODY_SCHEMA = {
 } as const;
 
 /** The Library: listing, saving, uploading, reading, renaming and deleting shared assets. */
-export function registerLibraryRoutes(app: FastifyInstance, { projects, library }: { projects: ProjectManager; library: AssetLibrary }): void {
+export function registerLibraryRoutes(app: FastifyInstance, { projects, library, referenceRemovalError }: {
+  projects: ProjectManager;
+  library: AssetLibrary;
+  /** Preflight all referenced workspaces before a forced removal mutates any files. */
+  referenceRemovalError?: (project: ProjectState) => string | undefined;
+}): void {
   app.get("/library/assets", async (request) => {
     const associations = await projects.libraryAssetAssociations((project, cause) => request.log.warn({ projectId: project.id, err: cause }, "Could not read Library asset usage"));
     return library.list().map((asset) => ({
@@ -174,6 +179,10 @@ export function registerLibraryRoutes(app: FastifyInstance, { projects, library 
     try {
       const references = await projects.referencesLibraryAsset(request.params.assetId);
       if (references.length && request.query.force !== "true") return reply.code(409).send({ error: `Asset is used by ${references.length} project${references.length === 1 ? "" : "s"}` });
+      if (request.query.force === "true") {
+        const unavailable = references.map((project) => referenceRemovalError?.(project)).find(Boolean);
+        if (unavailable) return reply.code(409).send({ error: unavailable });
+      }
       if (request.query.force === "true") await projects.removeLibraryAssetReferences(request.params.assetId);
       await library.delete(request.params.assetId);
       return reply.code(204).send();

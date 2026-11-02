@@ -359,6 +359,8 @@ Host composition selects the built-in business tools with
 are enabled, preserving OhMyGame defaults. `game` contributes `game_use` only
 when the existing runtime and project availability checks pass; `story`
 contributes `playable_add_node` and `playable_check` only for interactive stories.
+The same selection controls story editing, templates, runtime startup and direct
+operations; see [optional interactive stories](workspace-manifests.md#optional-interactive-stories).
 Selection applies to Pi, coding-agent bridges and external MCP catalogs and
 invocation. Disabling game tools also avoids creating agent playtest owners.
 Core canvas/media tools and general-purpose plugins retain their existing behavior.

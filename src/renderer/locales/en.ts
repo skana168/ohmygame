@@ -1,5 +1,6 @@
 // English is the source language. Add every UI string here first.
 const en = {
+  storyModule: { unavailable: "Interactive stories are unavailable in this workspace. Your saved story files are preserved. Enable the interactive-story module to edit or play them. Files, canvas and media remain available." },
   customCanvas: { note: "Example note", done: "Done", missing: "Restore module {{module}}/{{kind}} to edit this node. Saved data is preserved.", invalid: "Invalid {{module}}/{{kind}} data. Fix the saved payload; content is preserved." },
   audioStudio: {
     speechOptions: "Speech options",

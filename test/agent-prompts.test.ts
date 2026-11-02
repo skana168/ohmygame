@@ -27,6 +27,14 @@ describe("OhMyGame system prompt", () => {
     expect(text).toContain("canvas_check");
   });
 
+  it("preserves unavailable story data without instructing agents to run story operations", () => {
+    const text = prompt({ type: "interactive-story", storyCapability: false });
+    expect(text).not.toContain("playable_add_node");
+    expect(text).not.toContain("playable_check");
+    expect(text).toContain("Preserve existing story files");
+    expect(text).toContain("canvas_check");
+  });
+
   it("carries the Web Game platform contract in the system prompt", () => {
     const text = prompt({ type: "web-game" });
 

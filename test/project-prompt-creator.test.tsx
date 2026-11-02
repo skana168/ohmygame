@@ -26,6 +26,7 @@ let projectPlugins: ProjectPluginChoice[];
 let pendingTypes: Promise<never> | undefined;
 let pendingCapabilities: Promise<ConversationCapabilities> | undefined;
 let typesFail = 0;
+let storyAvailable = true;
 let choicesFail = 0;
 vi.doMock(path.resolve("src/renderer/api.ts"), async (original) => ({
   ...(await original<typeof import("../src/renderer/api.js")>()),
@@ -34,6 +35,7 @@ vi.doMock(path.resolve("src/renderer/api.ts"), async (original) => ({
   listModels: async () => ({ models: [] }),
   listProjectPluginChoices: async () => choicesFail-- > 0 ? Promise.reject(new Error("offline")) : projectPlugins,
   listProjectTypes: async () => typesFail-- > 0 ? Promise.reject(new Error("offline")) : pendingTypes ?? [
+    ...(storyAvailable ? [{ id: "interactive-story", title: "Interactive story" }] : []),
     { id: "ohmygame/godot:godot-game", title: "Godot game", plugin: { id: "ohmygame/godot", version: "1.0.0" } },
     { id: "acme/tiles:tile-map", title: "Tile Map", plugin: { id: "acme/tiles", version: "2.1.0" } },
   ],
@@ -48,6 +50,7 @@ let draftKey = "";
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   // Blender helps any project but does not start one, so the picker leaves it out.
+  storyAvailable = true;
   capabilities = {
     plugins: [
       plugin("game-studio", "Game Studio", ["general", "godot-game", "interactive-story"]),
@@ -132,6 +135,14 @@ const menuItem = (label: string) =>
     .find((item) => item.querySelector(".home-plugin-text > span")?.textContent === label);
 
 describe("Home prompt box", () => {
+  it("omits stories from Home when the application does not offer the module", async () => {
+    storyAvailable = false;
+    await render();
+    await act(async () => typePicker().click());
+    expect(options()).not.toContain("Interactive Story");
+    expect(options()).toContain("Asset Canvas");
+  });
+
   it("starts with the plugin the type names, and changes it with the type", async () => {
     await render();
     expect(typePicker().textContent).toBe("Web Game");

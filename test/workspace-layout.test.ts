@@ -38,6 +38,18 @@ describe("workspace layouts", () => {
     expect(tabs(presetLayout("art", GAME)).center).toBe("*canvas,game,design,code,assets");
   });
 
+  it("keeps shared panels available without opening a disabled Story editor", () => {
+    for (const project of [
+      { type: "interactive-story" as const, storyCapability: false },
+      { type: "interactive-story" as const, workspaceManifest: { version: 1 as const, modules: [{ id: "game", config: {} }] } },
+    ]) {
+      const offered = panelsOf(project);
+      expect(offered).not.toContain("story");
+      expect(offered).toEqual(expect.arrayContaining(["chat", "canvas", "code", "assets"]));
+      expect(openingLayout(offered).layout.center.active).not.toBe("story");
+    }
+  });
+
   it("opens manifest-selected non-game workspaces on the canvas without game design navigation", () => {
     const offered = panelsOf({ type: "general", workspaceManifest: { version: 1, modules: [] } });
     expect(offered).toEqual(["chat", "canvas", "code", "assets"]);
