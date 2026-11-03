@@ -54,8 +54,8 @@ OhMyGame 账号、私有仓库或凭据。在设置中添加语言及媒体提�
 后续手动修改身份时保持三者一致，执行冻结安装并重新构建。相对数据路径在浏览器
 Node 开发中基于各自应用根目录，在 Electron 中基于各自桌面配置目录。
 绝对路径或显式共享覆盖值会有意共享存储；请使用不同路径与 ID。基线为 OhMyTemplate / ohmytemplate /
-org.example.ohmytemplate；产品应使用唯一 ID。浏览器开发数据位于 `.data`，
-Electron 使用独立配置目录。可通过 `OHMYGAME_DATA_DIR` 和 `PI_CODING_AGENT_DIR`
+org.example.ohmytemplate；产品应使用唯一 ID。浏览器开发数据使用配置的数据目录（基线为 `.data`，
+初始化示例为 `.app-data`），Electron 使用独立配置目录。可通过 `OHMYGAME_DATA_DIR` 和 `PI_CODING_AGENT_DIR`
 显式隔离数据。不要提交数据、提供商凭据、`.runtime`、构建产物及 node_modules。
 不同浏览器来源可隔离不同产品的浏览器偏好。
 

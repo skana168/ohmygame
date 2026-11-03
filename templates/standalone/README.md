@@ -62,7 +62,8 @@ and rebuild. Relative data paths resolve inside each application root for browse
 Node development and inside its desktop profile for Electron. Absolute paths or
 explicit shared overrides intentionally share storage; choose distinct paths/IDs.
 The baseline is OhMyTemplate / ohmytemplate / org.example.ohmytemplate; use a unique
-ID for your product. Browser data lives under `.data`; Electron uses its own profile.
+ID for your product. Browser data uses the configured data directory (`.data` in the baseline,
+`.app-data` in the initialization example); Electron uses its own profile.
 `OHMYGAME_DATA_DIR` and `PI_CODING_AGENT_DIR` are optional explicit isolation overrides.
 Do not commit data, provider credentials, `.runtime`, build output, or node_modules.
 Separate browser origins isolate browser preferences across products.
