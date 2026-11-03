@@ -104,6 +104,13 @@ async function checkNonGame(runtime, dataDirectory) {
   for (const route of ["/cloud/session", "/community/games", "/playable/presets"]) {
     assert.equal((await fetch(runtime.url + route, { headers })).status, 404);
   }
+  const instructions = await request(`/projects/${project.id}/files/content?path=AGENTS.md`);
+  assert(instructions.content.includes("workspace.json"), "Core workspace file reads must survive business exclusion");
+  assert.equal((await fetch(`${runtime.url}/projects/${project.id}/files/content?path=../project.json`, { headers })).status, 400);
+  const unavailableManifest = await fetch(runtime.url + "/projects", { method: "POST", headers,
+    body: JSON.stringify({ name: "Unavailable module", workspaceManifest: { version: 1, modules: [{ id: "interactive-story", config: {} }] } }) });
+  assert.equal(unavailableManifest.status, 400);
+  assert.match((await unavailableManifest.json()).error, /unavailable/);
   const base = `/projects/${project.id}/canvas`;
   const workspace = await request(`${base}/workspace`);
   const boardRoute = `${base}/boards/${workspace.boards[0].id}`;
@@ -139,6 +146,10 @@ async function checkNonGame(runtime, dataDirectory) {
   const note = await rpc("tools/call", { name: "example_note", arguments: { boardId: saved.board.id, nodeId: "runtime-tool-note", revision: saved.revision, text: "Saved by an actual module tool", done: false } });
   assert(!note.result.isError, JSON.stringify(note));
   assert((await request(boardRoute)).board.nodes.some(node => node.id === "runtime-tool-note" && node.data.value.text === "Saved by an actual module tool"));
+  const beforeInvalid = await request(boardRoute);
+  const invalid = await rpc("tools/call", { name: "example_note", arguments: { boardId: saved.board.id, nodeId: "runtime-tool-note", revision: beforeInvalid.revision, text: "Must not overwrite", done: "invalid" } });
+  assert(invalid.error || invalid.result?.isError, "Custom module schema must reject invalid input");
+  assert.deepEqual(await request(boardRoute), beforeInvalid, "Rejected custom-node input must preserve persisted data and revision");
   const rejected = await rpc("tools/call", { name: "game_use", arguments: {} });
   assert.equal(rejected.result.isError, true);
 
