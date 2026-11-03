@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build, transform } from "esbuild";
 import { applicationComposition } from "../src/shared/application-composition.ts";
+import { typecheckHost } from "./typecheck-host.mjs";
 import { hostAssemblyPlugin } from "./application-host-build.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -38,6 +39,12 @@ if (!nonGame) {
     outdir: "/unused-host-graph",
     plugins: [hostAssemblyPlugin(root, true)],
   });
+  typecheckHost(
+    root,
+    Object.keys(graph.metafile.inputs).filter(
+      (file) => file.startsWith("src/") && file.endsWith(".ts"),
+    ),
+  );
   const { readFile } = await import("node:fs/promises");
   for (const input of Object.keys(graph.metafile.inputs)) {
     if (!input.startsWith("src/") || !input.endsWith(".ts")) continue;

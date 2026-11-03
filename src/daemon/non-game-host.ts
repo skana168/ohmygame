@@ -1,5 +1,5 @@
-import type { HostBusiness } from "./host-business.js";
-export type { HostBusiness } from "./host-business.js";
+import type { HostBusiness } from "./host-business-contract.js";
+export type { HostBusiness } from "./host-business-contract.js";
 export const hostBusiness: HostBusiness | undefined = undefined;
 export function requireHostBusiness(): HostBusiness {
   throw new Error(

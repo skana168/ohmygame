@@ -7,7 +7,8 @@ export function excluded(root, file) {
   const relative = path.relative(root, file).replaceAll(path.sep, "/");
   if (
     relative.startsWith("src/story-web/") ||
-    relative.startsWith("src/daemon/assets/story-templates/")
+    relative.startsWith("src/daemon/assets/story-templates/") ||
+    relative.startsWith("src/daemon/assets/scene-templates/")
   )
     return true;
   if (relative.startsWith("src/daemon/publish/")) return true;

@@ -1,7 +1,8 @@
-/** Source-owned host assembly. Non-game builds select non-game-host.ts at this seam. */
-export { ohmygameHost as hostBusiness } from "./ohmygame-host.js";
+/** Source-owned host assembly. Non-game builds select non-game-host.ts here. */
 import { ohmygameHost } from "./ohmygame-host.js";
-export type HostBusiness = typeof ohmygameHost;
+import type { HostBusiness } from "./host-business-contract.js";
+export type { HostBusiness } from "./host-business-contract.js";
+export const hostBusiness: HostBusiness | undefined = ohmygameHost;
 export function requireHostBusiness(): HostBusiness {
   return ohmygameHost;
 }
