@@ -1,7 +1,7 @@
 import { accountServicesEnabled } from "../shared/application-services.js";
 import { applicationStorageKey } from "./application-identity.js";
 import { createClient, type User } from "@supabase/supabase-js";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SignInDialog, type SignInProvider } from "./sign-in-dialog.js";
 import { syncCloudSession } from "./api.js";
 import { useReadyRuntimeGeneration } from "./runtime-connection.js";
@@ -9,26 +9,9 @@ import { isLocalDebugEnabled, isLoopbackHostname, LOCAL_DEBUG_ACCESS_TOKEN, LOCA
 import { t } from "./i18n.js";
 import { setAnalyticsAccount } from "./analytics.js";
 
-export type AuthState =
-  | { status: "loading" }
-  | { status: "signed-out" }
-  | { status: "signed-in"; user: AuthUser };
+import { AuthContext, type AuthState, type AuthUser, type AuthContextValue } from "./account-context.js";
+export type { AuthState, AuthUser } from "./account-context.js";
 
-export interface AuthUser {
-  id: string;
-  name: string;
-  email?: string;
-  avatarUrl?: string;
-}
-
-interface AuthContextValue {
-  state: AuthState;
-  openSignIn: () => void;
-  requestAccessToken: () => Promise<string | undefined>;
-  signOut: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const supabase = createSupabaseClient();
 export const localDebug = accountServicesEnabled && isLocalDebugEnabled(
   import.meta.env.DEV && typeof window !== "undefined" && isLoopbackHostname(window.location.hostname),

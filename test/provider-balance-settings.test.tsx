@@ -10,7 +10,7 @@ const api = { balance: vi.fn(), providers: vi.fn(), custom: vi.fn() };
 vi.doMock(path.resolve("src/renderer/api.ts"), () => ({
   model3DBalance: api.balance, listProviders: api.providers, getCustomProvider: api.custom, MODELS_CHANGED_EVENT: "ohmygame-models-changed",
 }));
-vi.doMock(path.resolve("src/renderer/auth.tsx"), () => ({ useAuth: () => ({ state: { status: "signed-in", user: { id: "u", name: "Player" } }, openSignIn: vi.fn() }) }));
+vi.doMock(path.resolve("src/renderer/account-context.ts"), () => ({ useOptionalAccount: () => ({ state: { status: "signed-in", user: { id: "u", name: "Player" } }, openSignIn: vi.fn() }) }));
 vi.doMock(path.resolve("src/renderer/provider-models.tsx"), () => ({ ProviderModels: () => <div>Models</div> }));
 const { ModelsSettings } = await import("../src/renderer/models-settings.js");
 

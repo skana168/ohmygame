@@ -27,8 +27,8 @@ const projects = [
   project("new", "New Rocket", "2026-10-20T00:00:00Z"),
 ];
 
-vi.doMock(path.resolve("src/renderer/auth.tsx"), () => ({
-  useAuth: () => auth,
+vi.doMock(path.resolve("src/renderer/account-context.ts"), () => ({
+  useOptionalAccount: () => auth,
 }));
 vi.doMock(
   path.resolve("src/renderer/runtime-connection.ts"),

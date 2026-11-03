@@ -1013,3 +1013,67 @@ unsigned local macOS directory without notarization or hosted release credential
 shipping signed installers and setting up update feeds remain release tasks.
 Identity configuration does not replace product-specific artwork, domain tools,
 plugin identifiers or hosted-service configuration.
+
+## Source application composition
+
+`src/shared/application-selection.ts` selects `ohmygame` (the default) or
+`non-game` before building. Rebuild the host and renderer together after changing
+it. The definitions in `src/shared/application-composition.ts` select workspace
+module metadata, project creation defaults, business tool availability, and
+account, publishing and community service defaults. The non-game composition
+registers the example note module and its tools, uses general workspaces, and
+retains user-configured model/media providers, canvas, files and plugins.
+Existing embedded daemon options can further configure individual services.
+
+`prepare:examples` and the story-resource build skip their game implementations
+and resources for the non-game selection. Renderer entry pages for the native
+game host and recorder are included only for the game composition. Core plugin
+preparation remains required for either selection.
+
+The renderer keeps the same `main.tsx`, application routes, project shell, code,
+canvas, media, provider and plugin views in both compositions. Vite selects
+`renderer/business-contributions.ts` for OhMyGame and
+`renderer/core-contributions.ts` for non-game. The latter supplies no business
+contributions; it does not replace the workbench or emulate game services.
+Account/quota, community, publishing, game playback/recording and story editor
+implementations are imported only by the business assembly. Local contribution
+contracts and the optional account context can be used without those sources.
+Saved story files remain accessible through shared panels when the editor is
+absent. Saved game previews retain the reusable iframe without game controls.
+
+`bun run test -- test/renderer-composition.test.ts` bundles the full renderer with
+non-game provider selection and rejects resolution of business implementation
+files. It also copies a source fixture without those implementations, selects
+non-game in that fixture, and runs the production Vite build plus unchanged core
+canvas interaction suites (including example-node edit and reopen). The fixture
+uses its own Vitest module cache so nested checks do not invalidate the parent
+suite. Any external renderer graph audit must apply the same Vite provider
+selection; directly bundling `main.tsx` without it uses the default OhMyGame
+assembly. This renderer check complements the host and desktop acceptance checks.
+
+The current composition boundary is not yet a standalone non-game source build:
+core consumers still import optional game implementations, and the host TypeScript
+build includes those sources. Do not remove game sources or describe this as the
+independent template export. Complete source extraction and deleted-source
+build/start verification are prerequisites for that export.
+
+The core agent tool factory (`daemon/agent-tools.ts`) accepts bound contributions;
+`daemon/ohmygame-agent-tools.ts` owns the shipped game/story catalog and its
+implementation imports. Reusable previews accept the optional story editor
+bridge from application assembly. Preview workspace inspection lives separately
+from project creation so serving a generic page does not load story templates.
+
+Run `node scripts/check-application-sources.mjs --core` to check these two extracted
+entry points with business implementation resolution rejected. Run the command
+without `--core` to audit the complete daemon, desktop and renderer entry points.
+It currently fails and prints the remaining required business edges. This is a
+source graph diagnostic, not host TypeScript, renderer build or authenticated
+startup acceptance; all three are still required with excluded sources absent.
+In particular, a selected non-game host build can succeed yet fail at startup
+because eager story preset imports require omitted template resources.
+
+After selecting and building non-game, `node scripts/test-node-runtime.mjs --non-game`
+checks the same authenticated standalone daemon, workspace defaults, custom-node
+persistence, project archives, native MCP, extension hosts and independent-identity
+restart. It rejects a game build. This mode currently fails before readiness in a
+clean non-game build because the required story template import is still present.

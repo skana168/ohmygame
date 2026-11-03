@@ -25,7 +25,7 @@ import {
   UserRound,
 } from "./icons.js";
 import { getProjectCover, getProjectLogo, listConversations, listProjects, waitForRuntime } from "./api.js";
-import { useAuth } from "./auth.js";
+import { useOptionalAccount } from "./account-context.js";
 import { BrandLogo } from "./brand-logo.js";
 import { ProjectPlaceholder } from "./project-placeholder.js";
 import { ProjectCreateDialog } from "./project-create-dialog.js";
@@ -600,9 +600,9 @@ function openSettings(section: "account" | "about"): void {
 // The account at the foot of the sidebar: your avatar and name, or Sign in
 // while signed out. Its menu holds settings either way.
 function AccountMenu({ active, avatarSize, onNavigate }: { active: boolean; avatarSize: number; onNavigate: (page: AppNavigationTarget) => void }) {
-  const auth = useAuth();
-  const signedIn = auth.state.status === "signed-in" ? auth.state.user : undefined;
-  const loading = auth.state.status === "loading";
+  const auth = useOptionalAccount();
+  const signedIn = auth?.state.status === "signed-in" ? auth?.state.user : undefined;
+  const loading = auth?.state.status === "loading";
   const name = !accountServicesEnabled ? t("common.settings") : signedIn?.name ?? (loading ? t("sidebar.loadingAccount") : t("common.signIn"));
   const settings: MenuEntry = { label: t("common.settings"), icon: <Settings size={16} />, shortcut: shortcut(","), onSelect: () => onNavigate("settings") };
   const about: MenuEntry = { label: t("sidebar.about"), icon: <InfoCircle size={16} />, onSelect: () => openSettings("about") };
@@ -615,7 +615,7 @@ function AccountMenu({ active, avatarSize, onNavigate }: { active: boolean; avat
     about,
   ] : [
     // Signed out, the menu leads with signing in; settings stay one step away.
-    { label: t("sidebar.signInEllipsis"), icon: <LogIn size={16} />, disabled: loading, onSelect: auth.openSignIn },
+    { label: t("sidebar.signInEllipsis"), icon: <LogIn size={16} />, disabled: loading, onSelect: () => auth?.openSignIn() },
     settings,
     "separator",
     about,

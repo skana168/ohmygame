@@ -21,12 +21,9 @@ import { CommandMenuHost } from "./command-menu.js";
 import { useNotificationTargets } from "./agent-notifications.js";
 import { rememberLastProject } from "./general-preferences.js";
 import { useRunAlerts } from "./run-alerts.js";
-import { GameRecordingNotices } from "./game-recording.js";
+import { rendererContributions } from "./business-contributions.js";
 
 // Home and onboarding stay in the main chunk; every other route loads on first visit.
-const CommunityProfilePage = lazy(() => import("./community-profile.js").then((module) => ({ default: module.CommunityProfilePage })));
-const GamesPage = lazy(() => import("./games.js").then((module) => ({ default: module.GamesPage })));
-const GamePlayer = lazy(() => import("./games.js").then((module) => ({ default: module.GamePlayer })));
 const LibraryPage = lazy(() => import("./library.js").then((module) => ({ default: module.LibraryPage })));
 const ProjectsPage = lazy(() => import("./projects.js").then((module) => ({ default: module.ProjectsPage })));
 const ProjectShell = lazy(() => import("./project-shell.js").then((module) => ({ default: module.ProjectShell })));
@@ -35,16 +32,18 @@ const PluginsSettings = lazy(() => import("./plugins.js").then((module) => ({ de
 const PluginBuilder = lazy(() => import("./plugin-builder.js").then((module) => ({ default: module.PluginBuilder })));
 
 export function App() {
+  const GameRecordingNotices = rendererContributions.game?.GameRecordingNotices;
   const navigation = useAppNavigation();
   useRunAlerts((projectId) => navigation.navigate(projectHash(projectId)));
   return <>
     <AppRoute navigation={navigation} />
     <CommandMenuHost navigate={navigation.navigate} />
-    <GameRecordingNotices />
+    {GameRecordingNotices ? <GameRecordingNotices /> : null}
   </>;
 }
 
 function AppRoute({ navigation }: { navigation: ReturnType<typeof useAppNavigation> }) {
+  const { CommunityProfilePage, GamesPage, GamePlayer } = rendererContributions.community ?? {};
   const serviceGeneration = useReadyRuntimeGeneration();
   const { route, navigate, projectReturnTo, projectBackLabel } = navigation;
   const onboarding = useOnboarding(route.page === "home");
@@ -85,11 +84,11 @@ function AppRoute({ navigation }: { navigation: ReturnType<typeof useAppNavigati
   if (route.page === "home") {
     return <><Home inert={welcoming} start={start} onStartHandled={() => setStart(undefined)} onNavigate={navigateToSidebarPage} onCreate={openCreatedProject} onOpen={openProject} />{welcoming ? <OnboardingArrival onComplete={() => setWelcoming(false)} /> : null}</>;
   }
-  if (route.page === "community") {
+  if (route.page === "community" && GamesPage) {
     return <Suspense fallback={sidebarFallback("community")}><GamesPage onNavigate={navigateToSidebarPage} onOhMyGame={ohMyGame} /></Suspense>;
   }
-  if (route.page === "community-profile") return <Suspense fallback={sidebarFallback("community")}><CommunityProfilePage authorId={route.authorId} onNavigate={navigateToSidebarPage} onBack={goToGames} onOpenGame={ohMyGame} /></Suspense>;
-  if (route.page === "game") return <Suspense fallback={sidebarFallback("community")}><GamePlayer gameId={route.gameId} onBack={goToGames} onNavigate={navigateToSidebarPage} onOhMyGame={ohMyGame} /></Suspense>;
+  if (route.page === "community-profile" && CommunityProfilePage) return <Suspense fallback={sidebarFallback("community")}><CommunityProfilePage authorId={route.authorId} onNavigate={navigateToSidebarPage} onBack={goToGames} onOpenGame={ohMyGame} /></Suspense>;
+  if (route.page === "game" && GamePlayer) return <Suspense fallback={sidebarFallback("community")}><GamePlayer gameId={route.gameId} onBack={goToGames} onNavigate={navigateToSidebarPage} onOhMyGame={ohMyGame} /></Suspense>;
   if (route.page === "projects") return <Suspense fallback={sidebarFallback("projects")}><ProjectsPage projectType={route.projectType} query={route.query} sort={route.sort} onFiltersChange={(filters, replace) => navigate(projectsHash(filters), { replace })} onNavigate={navigateToSidebarPage} onOpenProject={openProject} /></Suspense>;
   if (route.page === "library") return <Suspense fallback={sidebarFallback("library")}><LibraryPage onNavigate={navigateToSidebarPage} onOpenProject={openProject} /></Suspense>;
   if (route.page === "playtest") return null;

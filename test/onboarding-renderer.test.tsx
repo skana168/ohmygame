@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { applicationComposition } from "../src/shared/application-composition.js";
 import { act, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import path from "node:path";
@@ -1788,5 +1789,17 @@ it("shows the arrival only after saving setup and reveals the interactive studio
     expect(container.textContent).toBe("Studio");
   } finally {
     vi.useRealTimers();
+  }
+});
+
+it("welcomes non-game users to workspace work", async () => {
+  const game = applicationComposition.game;
+  applicationComposition.game = false;
+  try {
+    await act(async () => root.render(<Onboarding step="welcome" onStepChange={vi.fn()} onFinish={vi.fn()} />));
+    expect(container.textContent).toContain("Describe what you want to create");
+    expect(container.textContent).not.toContain("Describe a game");
+  } finally {
+    applicationComposition.game = game;
   }
 });

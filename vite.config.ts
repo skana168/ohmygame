@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { applicationComposition } from "./src/shared/application-composition.js";
 import identity from "./application-identity.cjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -17,6 +18,9 @@ const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
 
 export default defineConfig({
   base: "./",
+  resolve: {
+    alias: applicationComposition.id === "non-game" ? [{ find: /^.*\/business-contributions\.js$/, replacement: path.resolve(import.meta.dirname, "src/renderer/core-contributions.ts") }] : [],
+  },
   define: {
     __APP_NAME__: JSON.stringify(application.name),
     __APP_PACKAGE_NAME__: JSON.stringify(application.packageName),
@@ -45,8 +49,10 @@ export default defineConfig({
     rolldownOptions: {
       input: {
         main: path.resolve(import.meta.dirname, "index.html"),
-        webGameHost: path.resolve(import.meta.dirname, "web-game-host.html"),
-        gameRecorder: path.resolve(import.meta.dirname, "game-recorder.html"),
+        ...(applicationComposition.game ? {
+          webGameHost: path.resolve(import.meta.dirname, "web-game-host.html"),
+          gameRecorder: path.resolve(import.meta.dirname, "game-recorder.html"),
+        } : {}),
       },
     },
   },
