@@ -270,7 +270,7 @@ async function checkConversation(request, projectId) {
   await once(provider, "listening");
   try {
     const configured = await request("/settings/models/providers/custom", "POST", {
-      name: "Deterministic local provider", baseUrl: `http://127.0.0.1:${provider.address().port}/v1`,
+      name: `Deterministic local provider ${projectId}`, baseUrl: `http://127.0.0.1:${provider.address().port}/v1`,
       api: "openai-completions", authentication: "none",
       models: [{ id: "template-fixture", name: "Template fixture", contextWindow: 32000, maxTokens: 1000, reasoning: false, supportsImages: false }],
     });
