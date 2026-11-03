@@ -5,8 +5,8 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const exportDiagnostics = vi.fn();
-vi.doMock(path.resolve("src/renderer/auth.tsx"), () => ({
-  useAuth: () => ({ state: { status: "signed-out" }, openSignIn: vi.fn() }),
+vi.doMock(path.resolve("src/renderer/account-context.ts"), () => ({
+  useOptionalAccount: () => ({ state: { status: "signed-out" }, openSignIn: vi.fn() }),
 }));
 vi.doMock(path.resolve("src/renderer/api.ts"), async (importOriginal) => ({
   ...(await importOriginal<object>()),

@@ -12,7 +12,7 @@ import { BUILTIN_CLOUD_CATALOG, HYPER3D_CONNECTION_ID, HYPER3D_DEFAULT_TIER, typ
 import { accountCloudState, canAffordCloudModel, cloudQuotaSummary, quotaResetTime, CloudQuotaDetails, CloudQuotaStatus } from "../src/renderer/cloud-quota.js";
 import { ToolRunner } from "../src/daemon/tools.js";
 import { ProjectManager } from "../src/daemon/projects.js";
-import { createAgentTools } from "../src/daemon/agent-tools.js";
+import { createAgentTools } from "../src/daemon/ohmygame-agent-tools.js";
 
 const MODEL = { provider: HYPER3D_CONNECTION_ID, id: HYPER3D_DEFAULT_TIER };
 const CLOUD_MODEL_IDS = BUILTIN_CLOUD_CATALOG.models.map((model) => model.id);

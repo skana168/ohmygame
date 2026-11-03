@@ -1,3 +1,4 @@
+import { applicationComposition } from "../shared/application-composition.js";
 import { applicationStorageKey } from "./application-identity.js";
 import { useReadyRuntimeGeneration } from "./runtime-connection.js";
 import { Archive, FilePlus, Import, LayoutGrid, List, LoaderCircle, Plus, RefreshCw } from "./icons.js";
@@ -249,7 +250,7 @@ export function ProjectsPage({ projectType = "all", query = "", sort = "updated"
       {projectActions.dialogs}
       {selection.dialogs}
       {creating ? <ProjectCreateDialog
-        initialType={projectType === "all" ? "web-game" : projectType}
+        initialType={projectType === "all" ? applicationComposition.defaultProjectType : projectType}
         initialWorkspacePath={creating.workspacePath}
         onClose={() => setCreating(undefined)}
         onOpenProject={(projectId) => { setCreating(undefined); onOpenProject(projectId); }}

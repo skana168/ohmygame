@@ -49,8 +49,8 @@ import { openModelAuthExternal as openExternal, useModelProviderAuth } from "./u
 import { Badge, Button, IconButton, SearchInput, Switch, Tabs } from "./ui/index.js";
 import { useAgentModels } from "./model-selector.js";
 import { SettingsDetailHead, SettingsGroup, SettingsNote, SettingsRow } from "./settings-parts.js";
-import { useAuth } from "./auth.js";
-import { accountCloudState, cloudQuotaSummary, CloudQuotaDetails } from "./cloud-quota.js";
+import { useOptionalAccount } from "./account-context.js";
+import { rendererContributions } from "./business-contributions.js";
 import { getCloudQuotas, MODELS_CHANGED_EVENT } from "./api.js";
 import { HYPER3D_CONNECTION_ID } from "../shared/cloud-models.js";
 import { isLocalModelProvider, LOCAL_MODEL_PROVIDERS, withLocalModelProviders, type LocalModelProviderId } from "./local-model-providers.js";
@@ -84,8 +84,8 @@ export function ModelsSettings({ view, onViewChange, onOpenAgents, onOpenChatMod
 }
 
 function ProviderList({ onProvider, onOpenChatModel }: { onProvider: (provider: ProviderSummary) => void; onOpenChatModel?: () => void }) {
-  const auth = useAuth();
-  const userId = auth.state.status === "signed-in" ? auth.state.user.id : undefined;
+  const auth = useOptionalAccount();
+  const userId = auth?.state.status === "signed-in" ? auth?.state.user.id : undefined;
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -138,7 +138,7 @@ function ProviderList({ onProvider, onOpenChatModel }: { onProvider: (provider: 
   };
   const availableProviders = (loading ? providers : withLocalModelProviders(providers)).map((provider) => {
     if (!provider.managed) return provider;
-    const cloud = accountCloudState(provider.cloud, userId);
+    const cloud = rendererContributions.account?.accountCloudState(provider.cloud, userId);
     return { ...provider, cloud, ...(provider.cloud?.userId !== userId || !userId ? { configured: false, status: "not_configured" as const } : {}) };
   });
   const normalizedQuery = query.trim().toLowerCase();
@@ -233,7 +233,7 @@ function ProviderRow({ detail, featured = false, onProvider, provider, onToggle,
       title={<><span className="settings-provider-name">{provider.name}</span>{featured && !provider.configured ? <Badge tone="outline">{t("providers.recommended")}</Badge> : null}</>}
       description={
         <span className="settings-meta settings-provider-details">
-          <span className="settings-provider-description">{provider.managed ? cloudQuotaSummary(provider.cloud) : providerDescription(provider)}{detail ? <> · {detail}</> : null}</span>
+          <span className="settings-provider-description">{provider.managed ? rendererContributions.account?.cloudQuotaSummary(provider.cloud) : providerDescription(provider)}{detail ? <> · {detail}</> : null}</span>
           <span className="settings-meta" aria-label={t("providers.labels", { labels: labels.join(", ") })}>
             {labels.map((label) => <span className="settings-cap" key={label}>{label}</span>)}
           </span>
@@ -269,7 +269,10 @@ function ProviderMark({ provider }: { provider: Pick<ProviderSummary, "id" | "pr
 export function ProviderAuthView({ provider, onBack, onCompleted, onOpenAgents }: { provider: ProviderSummary; onBack: () => void; onCompleted: () => void; onOpenAgents?: () => void }) {
   if (provider.id === "codex-cli") return <CodexImageProviderDetail provider={provider} onBack={onBack} onOpenAgents={onOpenAgents} />;
   if (provider.id === "hyper3d" || provider.id === HYPER3D_CONNECTION_ID) return <Hyper3DProviderDetail provider={provider} onBack={onBack} onRemoved={onCompleted} />;
-  if (provider.managed === "free_cloud") return <FreeCloudProviderDetail provider={provider} onBack={onBack} />;
+  if (provider.managed === "free_cloud") {
+    const Detail = rendererContributions.account?.FreeCloudProviderDetail;
+    return Detail ? <Detail provider={provider} onBack={onBack} /> : null;
+  }
   if (provider.custom) return <CustomProviderDetail provider={provider} onBack={onBack} onRemoved={onCompleted} />;
   if (provider.id === "meshy" || provider.id === "tripo") return <Native3DProviderAuthView provider={provider} onBack={onBack} onCompleted={onCompleted} />;
   if (SEEDANCE_PROVIDER_IDS.has(provider.id)) return <SeedanceAuthView provider={provider} onBack={onBack} onCompleted={onCompleted} />;
@@ -329,8 +332,8 @@ function CodexImageProviderDetail({ provider, onBack, onOpenAgents }: { provider
 }
 
 function Hyper3DProviderDetail({ provider, onBack, onRemoved }: { provider: ProviderSummary; onBack: () => void; onRemoved: () => void }) {
-  const auth = useAuth();
-  const userId = auth.state.status === "signed-in" ? auth.state.user.id : undefined;
+  const auth = useOptionalAccount();
+  const userId = auth?.state.status === "signed-in" ? auth?.state.user.id : undefined;
   const [providers, setProviders] = useState([provider]);
   const [error, setError] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
@@ -344,7 +347,7 @@ function Hyper3DProviderDetail({ provider, onBack, onRemoved }: { provider: Prov
       const revision = ++sequence;
       setRefreshing(true);
       try {
-        if (force) await getCloudQuotas?.();
+        if (force && rendererContributions.account) await getCloudQuotas?.();
         const loaded = await listProviders();
         if (active && revision === sequence) { setProviders(loaded); setError(undefined); if (force) setModelsRevision((value) => value + 1); }
       } catch (cause) { if (active && revision === sequence) setError(errorMessage(cause)); }
@@ -358,6 +361,7 @@ function Hyper3DProviderDetail({ provider, onBack, onRemoved }: { provider: Prov
     const timer = setInterval(refresh, 30_000);
     return () => { active = false; clearInterval(timer); window.removeEventListener("focus", refresh); window.removeEventListener(MODELS_CHANGED_EVENT, refresh); };
   }, [userId]);
+  const FreeCloudAccount = rendererContributions.account?.FreeCloudAccount;
   const keyProvider = providers.find((item) => item.id === "hyper3d");
   const account = providers.find((item) => item.id === HYPER3D_CONNECTION_ID);
   const current = keyProvider ?? { ...provider, id: "hyper3d", name: "Hyper3D" };
@@ -367,74 +371,11 @@ function Hyper3DProviderDetail({ provider, onBack, onRemoved }: { provider: Prov
       <ProviderEnableControl provider={current} disabled={deletion.busy || savingKey} onChanged={() => void refreshRef.current()} />
     </ProviderDetailHeader>
     <ProviderDeleteConfirmation provider={keyProvider ?? current} deletion={deletion} disabled={savingKey} />
-    {account ? <FreeCloudAccount provider={account} refreshing={refreshing} onRefresh={() => void refreshRef.current(true)} /> : null}
+    {account && FreeCloudAccount ? <FreeCloudAccount provider={account} refreshing={refreshing} onRefresh={() => void refreshRef.current(true)} /> : null}
     {keyProvider ? <Native3DProviderKeyForm key={String(keyProvider.configured)} provider={keyProvider} deletion={deletion} onSavingChange={setSavingKey} /> : null}
     {error ? <p className="settings-note is-danger" role="alert">{error}</p> : null}
     <ProviderModels key={`${userId}-${keyProvider?.configured}-${modelsRevision}`} providerId="hyper3d" additionalProviderId={account?.id}
       sourceLabels={{ hyper3d: keyProvider?.configured ? t("providers.hyper3d.yourKey") : t("providers.hyper3d.keyRequired"), [HYPER3D_CONNECTION_ID]: t("providers.hyper3d.freeAccount") }} />
-  </section>;
-}
-
-function FreeCloudAccount({ provider, refreshing, onRefresh }: { provider?: ProviderSummary; refreshing: boolean; onRefresh: () => void }) {
-  const auth = useAuth();
-  const userId = auth.state.status === "signed-in" ? auth.state.user.id : undefined;
-  const cloud = accountCloudState(provider?.cloud, userId);
-  const needsSignIn = !userId || cloud?.availability === "sign_in_required";
-  const quota = cloud?.quota;
-  return <>
-    <div className="settings-provider-connection">
-      <div className="settings-provider-setting-row settings-provider-auth-row">
-        <span className="settings-search-field-label">{t("providers.account")}</span>
-        <span className="settings-provider-setting-value" title={auth.state.status === "signed-in" ? auth.state.user.email : undefined}>{auth.state.status === "signed-in" ? auth.state.user.email ?? auth.state.user.name : t("providers.ohMyGameAccount")}</span>
-        {needsSignIn ? <Button onClick={auth.openSignIn}>{t("common.signIn")}</Button> : null}
-      </div>
-    </div>
-    <section className="settings-detail-section provider-models" aria-label={t("providers.quota.title")}>
-      <div className="provider-models-heading">
-        <h4>{t("providers.quota.title")}</h4>
-        {userId ? <IconButton size="sm" disabled={refreshing} onClick={onRefresh} label={t("providers.quota.refresh")}><RefreshCw size={15} className={refreshing ? "spin" : undefined} aria-hidden="true" /></IconButton> : null}
-      </div>
-      {quota ? <CloudQuotaDetails quota={quota} /> : <p className="settings-detail-hint" role="status">{needsSignIn ? t("providers.quota.signIn") : refreshing ? t("providers.quota.checking") : cloudQuotaSummary(cloud)}</p>}
-      {quota && cloud?.availability !== "ready" ? <p className="settings-detail-hint" role="status">{cloud?.availability === "personal_exhausted" ? t("providers.quota.exhausted") : cloudQuotaSummary(cloud)}</p> : null}
-    </section>
-  </>;
-}
-
-function FreeCloudProviderDetail({ provider, onBack }: { provider: ProviderSummary; onBack: () => void }) {
-  const auth = useAuth();
-  const userId = auth.state.status === "signed-in" ? auth.state.user.id : undefined;
-  const [current, setCurrent] = useState(provider);
-  const [modelsRevision, setModelsRevision] = useState(0);
-  const [error, setError] = useState<string>();
-  const [refreshing, setRefreshing] = useState(false);
-  const refreshRef = useRef<(force?: boolean) => void>(() => {});
-  useEffect(() => {
-    let active = true, sequence = 0;
-    const load = (force = false) => {
-      const revision = ++sequence;
-      setRefreshing(true);
-      void (force ? getCloudQuotas?.() ?? Promise.resolve() : Promise.resolve()).then(listProviders).then((providers) => {
-        if (!active || revision !== sequence) return;
-        setCurrent(providers.find((item) => item.id === provider.id) ?? provider);
-        setError(undefined);
-        if (force) setModelsRevision((value) => value + 1);
-      }).catch((cause) => { if (active && revision === sequence) setError(errorMessage(cause)); })
-        .finally(() => { if (active && revision === sequence) setRefreshing(false); });
-    };
-    refreshRef.current = load;
-    const refresh = () => load();
-    refresh();
-    window.addEventListener(MODELS_CHANGED_EVENT, refresh);
-    const timer = setInterval(refresh, 30_000);
-    return () => { active = false; clearInterval(timer); window.removeEventListener(MODELS_CHANGED_EVENT, refresh); };
-  }, [provider.id, userId]);
-  return <section className="settings-panel settings-provider-detail">
-    <ProviderDetailHeader provider={current} onBack={onBack}>
-      <ProviderEnableControl provider={current} onChanged={() => refreshRef.current()} />
-    </ProviderDetailHeader>
-    <FreeCloudAccount provider={current} refreshing={refreshing} onRefresh={() => refreshRef.current(true)} />
-    {error ? <p className="settings-note is-danger" role="alert">{error}</p> : null}
-    <ProviderModels key={`${provider.id}-${userId}-${modelsRevision}`} providerId={provider.id} />
   </section>;
 }
 
@@ -1196,7 +1137,7 @@ export function ActiveProviderAuth({ provider, method, inline = false, onBack, o
   );
 }
 
-function ProviderDetailHeader({ provider, onBack, children, description }: { provider: ModelProviderSummary; onBack: () => void; children?: ReactNode; description?: string }) {
+export function ProviderDetailHeader({ provider, onBack, children, description }: { provider: ModelProviderSummary; onBack: () => void; children?: ReactNode; description?: string }) {
   return (
     <SettingsDetailHead mark={<ProviderMark provider={provider} />} title={provider.name} description={description ?? providerDescription(provider)} onBack={onBack} backLabel={t("settings.providers.back")}>
       {children}
@@ -1204,7 +1145,7 @@ function ProviderDetailHeader({ provider, onBack, children, description }: { pro
   );
 }
 
-function ProviderEnableControl({ provider, onChanged, disabled = false, label }: { provider: ProviderSummary; onChanged?: () => void; disabled?: boolean; label?: string }) {
+export function ProviderEnableControl({ provider, onChanged, disabled = false, label }: { provider: ProviderSummary; onChanged?: () => void; disabled?: boolean; label?: string }) {
   const [enabled, setEnabled] = useState(provider.enabled !== false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();

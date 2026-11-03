@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import path from "node:path";
+import { applicationComposition } from "../src/shared/application-composition.js";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
@@ -33,7 +34,8 @@ vi.doMock(path.resolve("src/renderer/page-frame.tsx"), () => ({
 }));
 // Stands in for the prompt box: sending hands its message to Home.
 vi.doMock(path.resolve("src/renderer/project-prompt-creator.tsx"), () => ({
-  ProjectPromptCreator: ({ onSubmit, starts }: { onSubmit: (message: unknown) => void; starts?: React.ReactNode }) => (<>
+  ProjectPromptCreator: ({ onSubmit, starts, placeholder }: { placeholder?: string; onSubmit: (message: unknown) => void; starts?: React.ReactNode }) => (<>
+    <textarea placeholder={placeholder} />
     <button type="button" onClick={() => onSubmit({ prompt: "Make a maze", mentions: [], attachments: [], mode: "normal" })}>Send prompt</button>
     {starts}
   </>),
@@ -102,4 +104,19 @@ it("creates the project from the prompt at once, and opens the new-project dialo
   expect(button("Create")).toBeDefined();
   // Import folder needs the desktop folder picker.
   expect(button("Import folder")).toBeUndefined();
+});
+
+it("describes workspace creation on non-game Home", async () => {
+  const game = applicationComposition.game;
+  applicationComposition.game = false;
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  try {
+    await act(async () => root!.render(<Home onNavigate={() => {}} onCreate={async () => {}} onOpen={() => {}} />));
+    expect(container.querySelector("textarea")?.placeholder).toBe("Describe what you want to create...");
+  } finally {
+    applicationComposition.game = game;
+  }
 });

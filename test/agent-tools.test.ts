@@ -1,3 +1,5 @@
+import { createAgentTools as createCoreAgentTools } from "../src/daemon/agent-tools.js";
+import { build } from "esbuild";
 import { CanvasStore, readCanvasBoard, readCanvasIndex } from "../src/daemon/canvas-workspace.js";
 import { OHMYGAME_WORKSPACE_MODULES } from "../src/shared/workspace-manifest.js";
 import { createExampleToolContribution } from "../src/daemon/example-tools.js";
@@ -10,7 +12,7 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } f
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { activePiToolNames, createAgentTools, planningPiToolNames, projectPiToolNames } from "../src/daemon/agent-tools.js";
+import { activePiToolNames, createAgentTools, planningPiToolNames, projectPiToolNames } from "../src/daemon/ohmygame-agent-tools.js";
 import { AssetLibrary } from "../src/daemon/asset-library.js";
 import type { ImageGenerator } from "../src/daemon/openai-image.js";
 import { ProjectManager } from "../src/daemon/projects.js";
@@ -29,6 +31,30 @@ afterEach(async () => {
 const TEST_VIDEO_MODEL = { provider: "openrouter", id: "example/video-model" } as const;
 
 describe("agent tools", () => {
+  it("builds the core agent catalog with business implementations unavailable", async () => {
+    const result = await build({
+      entryPoints: [path.resolve("src/daemon/agent-tools.ts")],
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      packages: "external",
+      write: false,
+      metafile: true,
+      plugins: [{
+        name: "unavailable-business-implementations",
+        setup(builder) {
+          builder.onResolve({ filter: /(?:playable-|story-web|playtest-tools)/ }, (args) => {
+            if (args.importer.includes(`${path.sep}src${path.sep}`)) {
+              return { errors: [{ text: `Business implementation unavailable: ${args.path} from ${args.importer}` }] };
+            }
+          });
+        },
+      }],
+    });
+    expect(result.outputFiles[0]?.text).toContain("canvas_check");
+    expect(result.outputFiles[0]?.text).toContain("generate_image");
+  });
+
   it("discovers and invokes source contributions alongside the default tools", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-contributions-"));
     contributionDirectories.push(directory);
@@ -109,7 +135,7 @@ describe("agent tools", () => {
     await projects.load();
     const project = await projects.create("Example", "general", undefined, undefined, { version: 1, modules: [{ id: "example", config: {} }] });
     const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
-    const tools = createAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, undefined, [createExampleToolContribution(project)], { game: false, story: false });
+    const tools = createCoreAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, [createExampleToolContribution(project)]);
     const names = tools.map((tool) => tool.name);
     const canvas = new CanvasStore(projects, new AssetLibrary(directory), runner);
     await canvas.workspace(project.id);
@@ -127,7 +153,7 @@ describe("agent tools", () => {
     const echo = tools.find((tool) => tool.name === "example_echo")!;
     expect(await echo.execute("pi", { message: "hello" }, undefined, undefined, {} as never)).toMatchObject({ content: [{ text: "hello" }], details: { workspaceId: project.id } });
     const otherProject = await projects.create("Other example", "general", undefined, undefined, { version: 1, modules: [{ id: "example", config: {} }] });
-    const otherTools = createAgentTools(otherProject, runner, projects, undefined, undefined, undefined, undefined, undefined, [createExampleToolContribution(otherProject)], { game: false, story: false });
+    const otherTools = createCoreAgentTools(otherProject, runner, projects, undefined, undefined, undefined, undefined, [createExampleToolContribution(otherProject)]);
     const otherBridge = new ToolBridge(otherTools);
     expect(await otherBridge.call("example_echo", { message: "other workspace" }, "other")).toMatchObject({ result: { details: { workspaceId: otherProject.id } } });
     expect(otherProject.id).not.toBe(project.id);

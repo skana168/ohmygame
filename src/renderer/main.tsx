@@ -1,9 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { init as initSentry } from "@sentry/electron/renderer";
 import { App } from "./app.js";
-import { AuthProvider } from "./auth.js";
-import { PlaytestPage } from "./playtest.js";
-import { NodeThumbnailPage } from "./node-thumbnail-page.js";
+import { rendererContributions } from "./business-contributions.js";
+import { Fragment } from "react";
 import { parseAppRoute, projectHash } from "./routes.js";
 import { applyAutoUpdate, launchProject } from "./general-preferences.js";
 import { applyAppearance, applyChatFont, applyPalette, readAppearance, readChatFont, readPalette } from "./appearance.js";
@@ -39,6 +38,9 @@ if (route.page !== "thumbnail" && route.page !== "playtest") applyAutoUpdate();
 if (window.ohMyGameDesktop?.platform === "darwin") {
   document.documentElement.classList.add("desktop-macos");
 }
+const AuthProvider = rendererContributions.account?.AuthProvider ?? Fragment;
+const PlaytestPage = rendererContributions.story?.PlaytestPage;
+const NodeThumbnailPage = rendererContributions.story?.NodeThumbnailPage;
 const content = (
   <>
     <RuntimeNotice />
@@ -52,9 +54,9 @@ const content = (
             }
       }
     >
-      {route.page === "playtest" ? (
+      {route.page === "playtest" && PlaytestPage ? (
         <PlaytestPage projectId={route.projectId} />
-      ) : route.page === "thumbnail" ? (
+      ) : route.page === "thumbnail" && NodeThumbnailPage ? (
         <NodeThumbnailPage projectId={route.projectId} nodeId={route.nodeId} />
       ) : (
         <DesktopWindowFrame>
@@ -69,7 +71,7 @@ const content = (
   </>
 );
 createRoot(root).render(
-  route.page === "playtest" || route.page === "thumbnail" ? (
+  (route.page === "playtest" && PlaytestPage) || (route.page === "thumbnail" && NodeThumbnailPage) ? (
     content
   ) : (
     <DesktopCloseGuard>{content}</DesktopCloseGuard>

@@ -1,3 +1,4 @@
+import { applicationComposition } from "../shared/application-composition.js";
 import { publishingEnabled } from "../shared/application-services.js";
 import { storyCapabilityEnabled, gameCapabilityEnabled } from "../shared/project-runtime.js";
 import { canvasPolicy } from "../shared/workspace-policy.js";
@@ -109,8 +110,8 @@ import { ProjectAppearanceDialog } from "./project-appearance-settings.js";
 import { AgentTimeline } from "./agent-timeline.js";
 import type { TurnChangesControls } from "./turn-changes.js";
 import { CodingWorkspace, WorkspaceCodeView } from "./coding-workspace.js";
-import { PlayableEditorWorkspace, type StoryView } from "./playable-editor-workspace.js";
-import type { PlayableChatState } from "./playable-chat.js";
+import type { StoryView } from "./contribution-contract.js";
+import type { PlayableChatState } from "./contribution-contract.js";
 import { Composer, type ComposerDraft } from "./composer.js";
 import { FloatingChat } from "./floating-chat.js";
 import { composerDrafts } from "./composer-drafts.js";
@@ -121,11 +122,10 @@ import { notifyPromptSent, useNotificationView } from "./agent-notifications.js"
 import { PlanApprovalCard } from "./plan-approval-card.js";
 import { initialRendererState, rendererReducer } from "./state.js";
 import { useAgentModels } from "./model-selector.js";
-import { useAuth } from "./auth.js";
-import { forgetPendingPublish, rememberPendingPublish, takePendingPublish } from "./pending-publish.js";
+import { useOptionalAccount } from "./account-context.js";
+import { rendererContributions } from "./business-contributions.js";
 import type { PluginUiConfirm } from "../shared/plugin-ui-protocol.js";
-import type { PublishDetails } from "./publish-dialog.js";
-import { usePlaytestAskRequests } from "./playable-playtest.js";
+import type { PublishDetails } from "./contribution-contract.js";
 import { useRuntimeConnection } from "./runtime-connection.js";
 import { ErrorBoundary } from "./error-boundary.js";
 import { closePanel, createPanelNodes, PanelLayout, PanelMount, place, showPanel, visiblePanels, areaOf, type Layout, type PanelNodes } from "./panel-layout.js";
@@ -195,7 +195,8 @@ export function ProjectShell({
   onHome,
   homeLabel = t("navigation.backTo", { page: t("sidebar.projects") }),
 }: ProjectShellProps) {
-  const auth = useAuth();
+  const PlayableEditorWorkspace = rendererContributions.story?.PlayableEditorWorkspace;
+  const auth = useOptionalAccount();
   const runtime = useRuntimeConnection();
   const openedGeneration = useRef(runtime.generation);
   // The conversation the route opens now, for answers that arrive after the person moved on.
@@ -219,7 +220,7 @@ export function ProjectShell({
   const plugins = useProjectPluginContributions(state.project, capabilitiesRevision);
   const pluginPanels = new Map(plugins.panels.map((panel) => [pluginPanelId(panel), panel]));
   const homes: PanelHomes = Object.fromEntries(plugins.panels.map((panel) => [pluginPanelId(panel), panel.area]));
-  const offered: PanelId[] = state.project ? [...panelsOf(state.project), ...pluginPanels.keys()] : [];
+  const offered: PanelId[] = state.project ? [...panelsOf(rendererContributions.story ? state.project : { ...state.project, storyCapability: false }), ...pluginPanels.keys()] : [];
   const [saved, setSaved] = useState<SavedLayout | undefined>();
   const opening = useMemo(() => state.project ? openingLayout(offered, homes) : undefined, [!!state.project]);
   const current = saved ?? opening;
@@ -302,7 +303,7 @@ export function ProjectShell({
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   // "Ask AI to fix" in the Playtest window lands in this chat, ready to send.
   // The chat takes the request once its conversation is open.
-  usePlaytestAskRequests(state.conversation ? state.project?.id : undefined, requestPrompt);
+  rendererContributions.story?.usePlaytestAskRequests(state.conversation ? state.project?.id : undefined, requestPrompt);
   const accountRuntime = isAccountRuntimeId(state.settings.model?.provider) ? state.settings.model.provider : undefined;
   const storedProfileId = accountRuntime ? state.settings.accountProfiles?.[accountRuntime] ?? "system" : "system";
   const selectedProfileId = accountProfiles.length && !accountProfiles.some((profile) => profile.id === storedProfileId) ? "system" : storedProfileId;
@@ -599,10 +600,10 @@ export function ProjectShell({
     const project = state.project;
     const busy = sendingInitialPrompt ||
       state.agent.status === "running" || state.agent.status === "cancelling";
-    if (!publishingEnabled || runtime.recovered || !project || (!isWebRuntimeProjectType(project.type) && project.type !== "interactive-story") || auth.state.status !== "signed-in" || state.phase !== "ready" || publishing || busy) return;
-    const pending = takePendingPublish(sessionStorage, project.id);
+    if (!publishingEnabled || runtime.recovered || !project || (!isWebRuntimeProjectType(project.type) && project.type !== "interactive-story") || auth?.state.status !== "signed-in" || state.phase !== "ready" || publishing || busy) return;
+    const pending = rendererContributions.account?.takePendingPublish(sessionStorage, project.id);
     if (pending) void publish(pending).catch(() => undefined);
-  }, [auth.state.status, state.phase, state.project?.id, state.project?.type, state.agent.status, sendingInitialPrompt, publishing]);
+  }, [auth?.state.status, state.phase, state.project?.id, state.project?.type, state.agent.status, sendingInitialPrompt, publishing]);
 
   useNotificationView(state.project?.id, state.conversation?.id);
 
@@ -855,17 +856,17 @@ export function ProjectShell({
 
   async function publish(details: PublishDetails): Promise<boolean> {
     if (!publishingEnabled || !project || publishing || agentBusy) return false;
-    const resumeAfterWebSignIn = !window.ohMyGameDesktop && auth.state.status !== "signed-in";
-    if (resumeAfterWebSignIn) rememberPendingPublish(sessionStorage, project.id, details);
+    const resumeAfterWebSignIn = !window.ohMyGameDesktop && auth?.state.status !== "signed-in";
+    if (resumeAfterWebSignIn) rendererContributions.account?.rememberPendingPublish(sessionStorage, project.id, details);
     setPublishing(true);
     dispatch({ type: "notice", message: undefined });
     try {
-      const accessToken = await auth.requestAccessToken();
+      const accessToken = await auth?.requestAccessToken();
       if (!accessToken) {
-        if (resumeAfterWebSignIn) forgetPendingPublish(sessionStorage);
+        if (resumeAfterWebSignIn) rendererContributions.account?.forgetPendingPublish(sessionStorage);
         return false;
       }
-      forgetPendingPublish(sessionStorage);
+      rendererContributions.account?.forgetPendingPublish(sessionStorage);
       const result = await publishProject(project.id, accessToken, details);
       const publication = {
         gameId: result.game.id,
@@ -1171,7 +1172,7 @@ export function ProjectShell({
     "separator",
     { label: homeLabel, icon: <ArrowLeft size={14} />, onSelect: requestHome },
   ];
-  const publishButton = project ? publishAction(project, { publishing, agentBusy }) : undefined;
+  const publishButton = project && (applicationComposition.game || applicationComposition.story) ? publishAction(project, { publishing, agentBusy }) : undefined;
 
   // The code panel opens the file, and comes back if it was closed. A game's
   // workspace brings it forward itself.
@@ -1345,7 +1346,7 @@ export function ProjectShell({
   return (
     <>
     {chatInput}
-    {project?.type === "interactive-story" && !storyCapabilityEnabled(project) ? <p role="alert" className="settings-note">{t("storyModule.unavailable")}</p> : null}
+    {project?.type === "interactive-story" && !storyCapabilityEnabled(project, !!rendererContributions.story) ? <p role="alert" className="settings-note">{t("storyModule.unavailable")}</p> : null}
     {project ? <PluginChangesSheet projectId={project.id} open={pluginChangesOpen} busy={agentBusy} onClose={() => setPluginChangesOpen(false)}
       onUndone={() => setWorkspaceRevision((value) => value + 1)} /> : null}
     {pluginLink ? <Dialog open title={t("pluginCommands.openLinkTitle")} onClose={() => setPluginLink(undefined)} footer={<>
@@ -1515,7 +1516,7 @@ export function ProjectShell({
             play: playSlot,
           }}
         />
-      ) : story ? <PlayableEditorWorkspace
+      ) : story && PlayableEditorWorkspace ? <PlayableEditorWorkspace
         project={project}
         showStoryMap={showStoryMap}
         onStoryMapShown={onStoryMapShown}
