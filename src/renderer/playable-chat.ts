@@ -1,9 +1,8 @@
 import { useEffect, useRef, type RefObject } from "react";
-import type { PromptContext, PromptImage, PromptReference } from "../shared/contracts.js";
+import type { PromptImage } from "../shared/contracts.js";
 import type { NodeGraph } from "../shared/playable-nodes.js";
 import type { PlayablePickResult } from "../shared/playable-picker.js";
 import { playableAssetContext, playableDrawingContext, playableElementContext, playableMomentContext, playableNodeContext, playableNodeReferences, type PlayableMoment } from "../shared/playable-chat-context.js";
-import type { ChatContextChip } from "./chat-reference.js";
 import { captureElementImage } from "./page-capture.js";
 import { t } from "./i18n.js";
 
@@ -24,32 +23,8 @@ export interface PlayableMediaAttachment {
   type: "image" | "video";
 }
 
-/** Something the next chat message carries besides the open Node. */
-export interface PlayableChatAttachment {
-  chip: ChatContextChip;
-  context: PromptContext;
-}
-
-/**
- * What the Playable editor contributes to the next chat message: the Node
- * (Scene) open in its Workbench, the elements picked or drawn on in that
- * preview, media added from it, and a moment marked in its background video.
- * Picks, the drawing, and the moment share one screenshot.
- */
-export interface PlayableChatState {
-  surface?: {
-    /** Identifies the Node, so a removed chip comes back for another one. */
-    key: string;
-    chip: ChatContextChip;
-    context: PromptContext;
-    references: PromptReference[];
-  };
-  attachments: PlayableChatAttachment[];
-  /** A screenshot of the preview, at the marked moment, with the picks outlined and the drawing on it. */
-  capture: () => Promise<PromptImage | undefined>;
-  removeAttachment: (key: string) => void;
-  clearAttachments: () => void;
-}
+import type { PlayableChatState, PlayableChatAttachment } from "./contribution-contract.js";
+export type { PlayableChatState, PlayableChatAttachment } from "./contribution-contract.js";
 
 /** Picks are told apart by where they came from. */
 export function playablePickKey(pick: PlayablePickResult): string {

@@ -14,8 +14,8 @@ import { useEffect, useId, type CSSProperties, useState, useRef, useMemo, type S
 import { VideoReferencePrompt } from "./video-reference-prompt.js";
 import { audioNodeHasSettings, type AudioProviderCatalogStatus, type AudioOperation } from "../shared/audio.js";
 import { audioSettingsIssue, CanvasAudioControls } from "./canvas-audio-controls.js";
-import { useAuth } from "./auth.js";
-import { accountCloudState, canAffordCloudModel, CloudQuotaStatus } from "./cloud-quota.js";
+import { useOptionalAccount } from "./account-context.js";
+import { rendererContributions } from "./business-contributions.js";
 import { remeshPolycount, MODEL3D_CONNECTION_ID } from "../shared/model3d-operations.js";
 import { normalizeModel3DConfig, resolveModel3DConnection, resolveModel3D, DEFAULT_CHARACTER_HEIGHT_METERS, MAX_ANIMATION_ACTIONS } from "../shared/generation-config.js";
 import { useWorkspaceAssetUrl } from "./use-workspace-asset-url.js";
@@ -357,19 +357,19 @@ export function audioOperationForNode(type: AssetCanvasNodeType): AudioOperation
 }
 
 export function Model3DNode({ data, selected }: Pick<NodeProps<AssetCanvasFlowNode>, "data" | "selected">) {
-  const auth = useAuth();
+  const auth = useOptionalAccount();
   const runtime = data.model3DRuntime;
   const config = nodeModel3DConfig({ type: "model-3d", data });
   const selectedModel = nodeModel3D({ type: "model-3d", data }, runtime?.models ?? []);
   const provider = runtime?.providers?.find((provider) => provider.provider === (selectedModel?.provider ?? config.model?.provider))
     ?? (!selectedModel && !config.model ? runtime?.providers?.find((provider) => provider.cloud) : undefined);
-  const cloud = accountCloudState(provider?.cloud, auth.state.status === "signed-in" ? auth.state.user.id : undefined);
+  const cloud = rendererContributions.account?.accountCloudState(provider?.cloud, auth?.state.status === "signed-in" ? auth?.state.user.id : undefined);
   const operation = data.model3DOperation ?? "image";
   const polycount = operation === "remesh" ? remeshPolycount(selectedModel?.protocol) : selectedModel?.polycount;
   const processing = operation === "retexture" || operation === "remesh";
   const hasInput = operation === "image" ? Boolean(data.images?.length) : operation === "text" ? Boolean(data.prompt?.trim() || runtime?.linkedPrompt?.trim())
     : Boolean(data.model3DSource) && (operation === "remesh" || (selectedModel?.protocol === "hyper3d" ? Boolean(data.images?.length) : Boolean(data.images?.length || data.prompt?.trim() || runtime?.linkedPrompt?.trim())));
-  const canGenerate = !runtime?.busy && !runtime?.generating && Boolean(hasInput && selectedModel && !(cloud && !canAffordCloudModel(cloud, selectedModel.estimatedCredits)));
+  const canGenerate = !runtime?.busy && !runtime?.generating && Boolean(hasInput && selectedModel && !(cloud && !rendererContributions.account?.canAffordCloudModel(cloud, selectedModel.estimatedCredits)));
   const changeOperation = (operation: Exclude<Model3DOperation, "animate">) => runtime?.onChange({ ...data, model3DOperation: operation, images: [], prompt: "", promptSource: undefined, model3DSource: undefined, model3DOptions: undefined });
   const updateConfig = (next: Partial<Model3DGenerationConfig>) => runtime?.onChange({
     ...data,
@@ -425,7 +425,7 @@ export function Model3DNode({ data, selected }: Pick<NodeProps<AssetCanvasFlowNo
         <GenerateMediaButton kind="model" assetId={data.assetId} runtime={runtime} disabled={!canGenerate} />
       </div>
       {selectedModel?.protocol === "hyper3d" && operation === "retexture" ? <small>{t("assetCanvas.hyper3dRetexture")}</small> : null}
-      {cloud ? <CloudQuotaStatus cloud={cloud} estimatedCredits={selectedModel?.estimatedCredits} onSignIn={auth.openSignIn} /> : operation === "image" && selectedModel?.estimatedCredits !== undefined ? <div className="canvas-model-generation-label">{t("assetCanvas.apiKeyCredits", { credits: selectedModel.estimatedCredits })}</div> : null}
+      {cloud && rendererContributions.account ? <rendererContributions.account.CloudQuotaStatus cloud={cloud} estimatedCredits={selectedModel?.estimatedCredits} onSignIn={() => auth?.openSignIn()} /> : operation === "image" && selectedModel?.estimatedCredits !== undefined ? <div className="canvas-model-generation-label">{t("assetCanvas.apiKeyCredits", { credits: selectedModel.estimatedCredits })}</div> : null}
     </MediaNodeShell>
   );
 }

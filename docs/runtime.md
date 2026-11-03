@@ -1036,6 +1036,30 @@ it retains the complete reusable daemon and example module. Story routes are
 registered by the business provider, and workspace/archive/example operations
 request story adapters only when processing an enabled story workspace.
 Document context and reusable previews remain core capabilities.
+The renderer keeps the same `main.tsx`, application routes, project shell, code,
+canvas, media, provider and plugin views in both compositions. Vite selects
+`renderer/business-contributions.ts` for OhMyGame and
+`renderer/core-contributions.ts` for non-game. The latter supplies no business
+contributions; it does not replace the workbench or emulate game services.
+Account/quota, community, publishing, game playback/recording and story editor
+implementations are imported only by the business assembly. Local contribution
+contracts and the optional account context can be used without those sources.
+Saved story files remain accessible through shared panels when the editor is
+absent. Saved game previews retain the reusable iframe without game controls.
+
+`bun run test -- test/renderer-composition.test.ts` bundles the full renderer with
+non-game provider selection and rejects resolution of business implementation
+files. It also copies a source fixture without those implementations, selects
+non-game in that fixture, and runs the production Vite build plus unchanged core
+canvas interaction suites (including example-node edit and reopen). The fixture
+uses its own Vitest module cache so nested checks do not invalidate the parent
+suite. Any external renderer graph audit must apply the same Vite provider
+selection; directly bundling `main.tsx` without it uses the default OhMyGame
+assembly. This renderer check complements the host and desktop acceptance checks.
+
+Full application source exclusion still requires the combined host, renderer and
+desktop acceptance checks. A passing surface check alone does not establish the
+independent template export.
 
 `build:host` preserves the default TypeScript build and story preparation for
 OhMyGame. For non-game it compiles the selected daemon dependency graph without
@@ -1043,9 +1067,9 @@ loading game, story, publishing or account implementations or story resources.
 Modules remain separate so worker and resource paths using `import.meta.url`
 keep working. `node --import tsx scripts/build-host.mjs --non-game` explicitly
 selects this host target without changing the renderer or desktop selection.
-This command emits JavaScript with esbuild; run the repository's separate
-`typecheck` command as well. It does not establish a TypeScript check with
-business type declarations absent. Use a fresh output directory when auditing
+This command checks the selected TypeScript program, rejecting excluded type
+inputs, before emitting JavaScript with esbuild. Run the repository's separate
+`typecheck` command as well to verify the default application. Use a fresh output directory when auditing
 shipped contents after switching composition; builds do not delete old output.
 
 Run `node scripts/check-application-sources.mjs --core` to audit the core tools

@@ -28,7 +28,6 @@ import {
 } from "@xyflow/react";
 import { snapCanvasPosition } from "./canvas-alignment.js";
 import { EditorCanvas, isTextEntry, ownsCanvasKeys, undoShortcut, type CanvasContextMenuState } from "./editor-canvas.js";
-import type { ProjectState, PromptContext } from "../shared/contracts.js";
 import { PLAYABLE_CARD_TITLE_HEIGHT, playableCanvasStageSize, rebasePlayableCodebase, samePlayableGraph, type NodeCodebase, type NodeCodebaseUpdate, type NodeEditorLayout } from "../shared/playable-codebase.js";
 import {
   type NodeGraph,
@@ -69,12 +68,10 @@ import { playtestHash } from "./routes.js";
 import { PlayableNodeWorkbench, type PlayableAssetRequest } from "./playable-node-workbench.js";
 import { PlayableProjectSettingsDialog } from "./playable-project-settings-dialog.js";
 import { PlaytestControls, requestPlaytest, type PlaytestRequest } from "./playable-playtest.js";
-import type { PlayableChatState } from "./playable-chat.js";
 import { buildCodebase, createFlowNode, nodeIdForIssuePath, nodeSourcePaths, toFlowEdge, toFlowNode, uniqueNodeId, type GraphMeta, type PlayableFlowData, type PlayableFlowNode } from "./playable-flow.js";
 import { PLAYABLE_NODE_TYPES, PlayableCanvasContext } from "./playable-node-card.js";
 import { PlayableAddControl, PlayableCanvasContextMenu } from "./playable-canvas-menus.js";
 import { useDesktopSave } from "./desktop-close-guard.js";
-import type { PanelNodes } from "./panel-layout.js";
 import { useCanvasDocuments } from "./use-canvas-documents.js";
 import { t } from "./i18n.js";
 
@@ -82,17 +79,8 @@ const DEFAULT_CANVAS_VIEWPORT = { x: 64, y: 32, zoom: 1 };
 const CanvasWorkspace = lazy(() => import("./canvas-workspace.js").then((module) => ({ default: module.CanvasWorkspace })));
 const DesignDocumentPanel = lazy(() => import("./design-document-panel.js").then((module) => ({ default: module.DesignDocumentPanel })));
 
-/** The story editor's views, each a panel of its own. */
-export type StoryView = "story" | "design" | "canvas" | "code" | "assets";
-
-export interface StoryPanels {
-  /** Where each view renders: its panel's body and its controls in the tab strip. */
-  nodes: Record<StoryView, PanelNodes>;
-  /** The views the person can see now. */
-  visible: ReadonlySet<StoryView>;
-  /** Brings a view forward, opening its panel if it was closed. */
-  onShow: (view: StoryView) => void;
-}
+import type { StoryView, StoryWorkspaceProps } from "./contribution-contract.js";
+export type { StoryView, StoryPanels } from "./contribution-contract.js";
 
 const HISTORY_LIMIT = 50;
 const SAVE_ATTEMPTS = 3;
@@ -119,38 +107,7 @@ interface CopiedPlayableNode {
  * It speaks the editor's words (Scene, Exit, Variables); code and
  * graph.json keep the engine's (Node, Signal, State).
  */
-export function PlayableEditorWorkspace({ project, publishing, workspaceRevision = 0, openFileRequest, showStoryMap = false, onStoryMapShown, onPublish, publishDialog, onClosePublish, onChatContextChange, onAskAgent, onSendToAgent, onDesignSaveReady, onDesignContextChange, onProjectUpdated, referencedDocument, onReferenceDocument, onQuoteDocument, panels }: {
-  project: ProjectState;
-  onProjectUpdated?: (project: ProjectState) => void;
-  publishing: boolean;
-  workspaceRevision?: number;
-  openFileRequest?: { path: string; id: number };
-  /** A Playtest navigation request to show the Story map. */
-  showStoryMap?: boolean;
-  onStoryMapShown?: () => void;
-  onPublish: (details: PublishDetails) => Promise<boolean>;
-  publishDialog?: "open" | "success";
-  onClosePublish: () => void;
-  /** Receives what the open Workbench adds to the next chat message. */
-  onChatContextChange?: (state: PlayableChatState | undefined) => void;
-  /** Puts a request in the chat prompt. */
-  onAskAgent?: (text: string) => void;
-  onDesignSaveReady?: (save: (() => Promise<void>) | undefined) => void;
-  onDesignContextChange?: (context: PromptContext | undefined) => void;
-  /** Sends a request to the AI now, with the open Node as context. */
-  onSendToAgent?: (text: string, contexts: PromptContext[]) => Promise<boolean>;
-  /** The design document the next message references, by its workspace path. */
-  referencedDocument?: string;
-  /** References a design document in the next message, or stops referencing it. */
-  onReferenceDocument?: (document: { id: string; title: string } | undefined) => void;
-  /** Quotes text picked in the design document into the next message. */
-  onQuoteDocument?: (text: string) => void;
-  /**
-   * The panels the views render into. Without them (in tests), the story
-   * renders in place.
-   */
-  panels?: StoryPanels;
-}) {
+export function PlayableEditorWorkspace({ project, publishing, workspaceRevision = 0, openFileRequest, showStoryMap = false, onStoryMapShown, onPublish, publishDialog, onClosePublish, onChatContextChange, onAskAgent, onSendToAgent, onDesignSaveReady, onDesignContextChange, onProjectUpdated, referencedDocument, onReferenceDocument, onQuoteDocument, panels }: StoryWorkspaceProps) {
   const projectId = project.id;
   const visible = panels?.visible ?? new Set<StoryView>(["story"]);
   const shows = (view: StoryView) => visible.has(view);

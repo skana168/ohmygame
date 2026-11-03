@@ -9,10 +9,8 @@ import { localDebug } from "./auth.js";
 import { gameHash } from "./routes.js";
 import { language, t } from "./i18n.js";
 
-export interface PublishDetails {
-  title: string;
-  description: string;
-}
+import type { PublishDetails } from "./contribution-contract.js";
+export type { PublishDetails } from "./contribution-contract.js";
 
 type PublishDialogProps = {
   project: ProjectState;
