@@ -115,3 +115,37 @@ platforms and release packaging were not run in this subslice. Earlier main10
 runtime notes are historical evidence, not fresh verification here. Template
 export/initialization belongs to subsequent tickets. Main10 report, ticket and
 execution-state were not edited during this retry.
+
+## Root integration verification
+
+- Merged `t3/extract-optional-renderer-contributions` at
+  `0950e1e9075807f4abecef48784ee4ff0e0bbda3` from worktree
+  `/Users/yoyun/.t3/worktrees/ohmygame/t3-4523cbea` into
+  `refactor/ohmytemplate-integration` with conventional merge commit
+  `2cfedfd3f232bb34623904e2f16f086f3545bff5`. No conflicts or integration
+  corrections; shared `ba371b5d` foundation remains an ancestor.
+- Inspected actual default business contributions and source-selected empty
+  optional contribution assembly: default uses real account/game/story/publishing/
+  community implementations; core supplies no fake or noop game providers.
+- Fresh Bun 1.4.2 validation using
+  `PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH`: 10 focused renderer
+  suites / 190 tests passed (`renderer-composition`, `asset-canvas-serialize`,
+  `canvas-table-node`, `canvas-markdown`, `editor-canvas-viewport`,
+  `coding-workspace`, `project-shell-checkpoints`, `onboarding-renderer`,
+  `app-sidebar`, `provider-balance-settings`). Renderer composition includes
+  the renderer-scoped esbuild graph plus real production Vite compilation with
+  excluded business UI sources physically absent and nested unchanged core
+  interaction suites (4 files / 56 tests). No source/import suppression or
+  replacement shell is used.
+- Fresh typecheck, default `build:renderer`, and `git diff --check` passed.
+  Default build retains game entry pages and reports the existing chunk-size
+  advisory. Logs: `/tmp/ohmytemplate-renderer-merge-tests.log`,
+  `/tmp/ohmytemplate-renderer-merge-typecheck.log`,
+  `/tmp/ohmytemplate-renderer-merge-build.log`.
+- Full public checks, Node runtime and manual browser/Electron flows were not
+  repeated during this merge; earlier evidence above is inherited. This proves
+  renderer exclusion only, with no daemon/desktop exclusion claim.
+- Ticket10 stays CLAIMED and every parent acceptance checkbox remains pending
+  combined proof; host and desktop work is still ongoing. Tickets12/13 and other
+  execution-state metadata are unchanged. Root tracked tree was clean after
+  merge; untracked `.codegraph/` is preserved.

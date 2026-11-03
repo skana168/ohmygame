@@ -190,12 +190,19 @@
           "previous_failure": "provider quota; user requested retry"
         },
         "renderer": {
-          "status": "retry_pending",
+          "status": "merged",
           "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-3120277a",
           "previous_branch": "t3/renderer-module-assembly",
           "previous_sha": "95497583194354c196a2fc6d8e321eb0b3392013",
           "recovery_patch": "/tmp/ohmytemplate-recovery-10-renderer/working.patch",
-          "previous_failure": "provider quota; user requested retry"
+          "previous_failure": "provider quota; user requested retry",
+          "merged": true,
+          "implementation_branch": "t3/extract-optional-renderer-contributions",
+          "implementation_sha": "0950e1e9075807f4abecef48784ee4ff0e0bbda3",
+          "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-4523cbea",
+          "merge_sha": "2cfedfd3f232bb34623904e2f16f086f3545bff5",
+          "merge_result": "Conflict-free; shared ba371b5d foundation retained; fresh 10 renderer suites / 190 tests passed, including renderer-only esbuild graph, production Vite build with business UI sources physically absent and nested unchanged core interaction suites; typecheck, default renderer build and diff check passed.",
+          "remaining_validation": "Renderer subslice only. Ticket10 remains claimed with all parent acceptance pending combined host/renderer/desktop source/resource exclusion and build/startup proof. No daemon/desktop exclusion claimed; live browser/Electron, providers/private cloud/platform/packaging checks remain unverified."
         },
         "desktop": {
           "status": "retry_pending",
