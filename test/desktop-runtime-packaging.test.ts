@@ -1,13 +1,17 @@
 import {
+  cp,
   mkdir,
   mkdtemp,
   readFile,
   readdir,
   realpath,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -61,6 +65,38 @@ describe("desktop runtime packaging", () => {
     });
     expect(result.outputFiles.every((file) => file.contents.length > 0)).toBe(true);
   });
+
+  it("emits the selected core desktop with native business source files absent", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-core-desktop-emit-"));
+    try {
+      // Copy real sources, omitting implementations rather than replacing imports.
+      // Shared persisted contracts remain available to the sandboxed preload.
+      await cp("src", path.join(directory, "src"), {
+        recursive: true,
+        filter(source) {
+          const file = source.replaceAll(path.sep, "/");
+          return !(/^src\/desktop\/(?:game-|playtest-driver|web-game-player|ohmygame-main|account-contribution|oauth)/.test(file)
+            || /^src\/(?:daemon|renderer)\/(?:game-|playable-|story-|playtest|publish\/|cloud-models)/.test(file)
+            || file === "src/story-web");
+        },
+      });
+      for (const file of ["tsconfig.json", "tsconfig.build.json", "package.json", "application-identity.cjs", "application-identity.d.cts"]) {
+        await cp(file, path.join(directory, file));
+      }
+      await symlink(path.resolve("node_modules"), path.join(directory, "node_modules"), "junction");
+      await writeFile(path.join(directory, "src/shared/application-selection.ts"), 'export const applicationCompositionId: "ohmygame" | "non-game" = "non-game";\n');
+      await promisify(execFile)(process.execPath, [
+        path.resolve("node_modules/typescript/bin/tsc"),
+        "-p", path.join(directory, "src/desktop/tsconfig.core.json"),
+      ]).catch((error) => { throw new Error(`${error.message}\n${error.stdout}\n${error.stderr}`); });
+      const emitted = await readdir(path.join(directory, "dist/desktop"));
+      expect(emitted).toEqual(expect.arrayContaining(["bootstrap.cjs", "main.js", "preload.cjs", "external-mcp-main.js"]));
+      expect(emitted.filter((file) => /^(?:game-|playtest-driver|web-game-player|ohmygame-main|account-contribution|oauth)/.test(file))).toEqual([]);
+      await expect(readFile(path.join(directory, "src/desktop/game-contribution.ts"))).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 30000);
 
   it("does not resolve missing packaged dependencies from the build checkout", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-isolated-archive-"));
