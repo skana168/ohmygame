@@ -1,4 +1,13 @@
-import { mkdtemp, writeFile, rm, readFile, lstat } from "node:fs/promises";
+import {
+  mkdtemp,
+  writeFile,
+  rm,
+  readFile,
+  lstat,
+  mkdir,
+  symlink,
+  readdir,
+} from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -173,4 +182,34 @@ it("exports an independent selected workbench without overwriting an existing de
   }
   expect(run().status).not.toBe(0);
   expect(identity.loadIdentity().name).toBe("OhMyGame");
+});
+
+it("refuses empty destinations and source paths through a symlinked parent", async () => {
+  const parent = await mkdtemp(path.join(tmpdir(), "template-boundary-"));
+  const invoke = (destination: string) =>
+    spawnSync(process.execPath, ["scripts/export-template.mjs", destination], {
+      encoding: "utf8",
+    });
+  try {
+    const empty = path.join(parent, "empty");
+    await mkdir(empty);
+    expect(invoke(empty).status).not.toBe(0);
+    expect(await readdir(empty)).toEqual([]);
+    const alias = path.join(parent, "source");
+    await symlink(process.cwd(), alias, "junction");
+    for (const destination of [
+      process.cwd(),
+      path.join(process.cwd(), "template-boundary-output"),
+      path.join(alias, "template-boundary-output"),
+    ]) {
+      const result = invoke(destination);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("Export outside the source checkout");
+    }
+    await expect(
+      lstat(path.join(alias, "template-boundary-output")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });

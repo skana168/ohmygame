@@ -4,6 +4,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -17,7 +18,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const destination = process.argv[2] && path.resolve(process.argv[2]);
 if (!destination)
   throw new Error("Usage: bun run export:template /absolute/new-directory");
-if (destination === root || destination.startsWith(`${root}${path.sep}`))
+const canonicalRoot = await realpath(root);
+const canonicalDestination = path.join(
+  await realpath(path.dirname(destination)),
+  path.basename(destination),
+);
+if (
+  canonicalDestination === canonicalRoot ||
+  canonicalDestination.startsWith(`${canonicalRoot}${path.sep}`)
+)
   throw new Error("Export outside the source checkout to a new directory.");
 // Atomic refusal also protects an existing empty directory. Never merge exports.
 await mkdir(destination);
