@@ -265,6 +265,12 @@ bun run dev:desktop    # Electron 桌面应用
 从 `dev` 分支开始。本地开发不需要任何云端配置即可启动；可选的集成配置见
 [CONTRIBUTING.md](CONTRIBUTING.md#configuration)。
 
+## 复用工作台
+
+安装依赖后，运行 `bun run export:template /absolute/new-directory` 可导出非游戏应用。
+独立目录包含现有核心、示例工具与节点模块、独立身份、锁文件和开发命令。
+请阅读导出目录内对齐的中英文 README 或[导出指南](docs/runtime.md#standalone-template-export)。
+
 ## 隐私
 
 你的项目和密钥都留在你自己的电脑上。提示词和生成请求直接发送给你选择的模型服务商。

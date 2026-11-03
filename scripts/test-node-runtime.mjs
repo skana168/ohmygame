@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { createServer } from "node:http";
 import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ExtensionHosts } from "../dist/daemon/extension-hosts.js";
 import { startDaemon } from "../dist/desktop/daemon-process.js";
-import { checkStoryWeb } from "./check-story-web.mjs";
 
 assert(
   !process.versions.bun,
@@ -37,7 +37,7 @@ try {
     if (route === "/projects") assert.deepEqual(body, []);
   }
   if (nonGame) await checkNonGame(daemon.runtime, path.join(directory, "data"));
-  else await checkStoryWeb(daemon.runtime);
+  else await (await import("./check-story-web.mjs")).checkStoryWeb(daemon.runtime);
   const headers = { authorization: `Bearer ${daemon.runtime.token}`, "content-type": "application/json" };
   const projects = await fetch(`${daemon.runtime.url}/projects`, { headers }).then(response => response.json());
   const story = projects.find(project => project.type === (nonGame ? "general" : "interactive-story"));
@@ -106,6 +106,7 @@ async function checkNonGame(runtime, dataDirectory) {
   });
   assert.equal((await request("/settings/models/providers/openai/images")).configured, true);
   const project = await request("/projects", "POST", { name: "Non-game runtime notes" });
+  await checkConversation(request, project.id);
   assert.equal(project.type, "general");
   assert.equal(project.gameCapability, false);
   assert.equal(project.storyCapability, false);
@@ -244,4 +245,49 @@ async function checkApplicationIdentity(folder) {
     assert(projects[0].workspacePath.startsWith(path.join(await realpath(folder), "notes-state")), "Standalone startup must honor configured storage");
     assert.equal((await request(running, "/settings/models/providers/meshy")).configured, true);
   } finally { await running.stop(); }
+}
+
+
+// A deterministic provider at the actual HTTP boundary exercises Pi, rather than
+// replacing the conversation manager or its persisted-session implementation.
+async function checkConversation(request, projectId) {
+  let calls = 0;
+  const provider = createServer(async (incoming, response) => {
+    const chunks = [];
+    for await (const chunk of incoming) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString());
+    assert(incoming.url.endsWith("/chat/completions"));
+    assert.equal(body.model, "template-fixture");
+    calls++;
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    const chunk = (delta, finish_reason = null) => `data: ${JSON.stringify({ id: "template-fixture", object: "chat.completion.chunk", created: 1, model: "template-fixture", choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
+    response.end(chunk({ role: "assistant", content: "Independent workbench conversation verified." }) + chunk({}, "stop") + "data: [DONE]\n\n");
+  });
+  provider.listen(0, "127.0.0.1");
+  await once(provider, "listening");
+  try {
+    const configured = await request("/settings/models/providers/custom", "POST", {
+      name: "Deterministic local provider", baseUrl: `http://127.0.0.1:${provider.address().port}/v1`,
+      api: "openai-completions", authentication: "none",
+      models: [{ id: "template-fixture", name: "Template fixture", contextWindow: 32000, maxTokens: 1000, reasoning: false, supportsImages: false }],
+    });
+    const conversation = await request(`/projects/${projectId}/conversations`, "POST", { model: { provider: configured.id, id: "template-fixture" } });
+    const route = `/projects/${projectId}/conversations/${conversation.id}`;
+    await request(`${route}/turns`, "POST", { prompt: "Reply with the independent workbench confirmation." });
+    let detail;
+    const deadline = Date.now() + 20000;
+    do {
+      detail = await request(route);
+      if (detail.turns.some(turn => turn.status === "completed" || turn.status === "failed")) break;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    } while (Date.now() < deadline);
+    assert.equal(calls, 1, "The real Pi conversation must reach the configured local provider once");
+    assert(JSON.stringify(detail.turns).includes("Independent workbench conversation verified."), JSON.stringify(detail));
+    assert.equal(detail.turns.at(-1).status, "completed", JSON.stringify(detail));
+    assert(JSON.stringify((await request(route)).turns).includes("Independent workbench conversation verified."));
+    console.log("Configured local provider: actual Pi conversation and persisted history passed");
+  } finally {
+    provider.closeAllConnections();
+    await new Promise(resolve => provider.close(resolve));
+  }
 }

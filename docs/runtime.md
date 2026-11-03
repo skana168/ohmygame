@@ -1111,3 +1111,34 @@ and save/quit cleanup. The fixture and its exact exclusion inventory and desktop
 evidence are retained at the printed path. Dependencies are linked from the
 checkout for this composition test; independent installation is a separate export
 acceptance check. No game runtime, account service or alternate UI is substituted.
+
+
+## Standalone template export
+
+After installing source dependencies, run `bun run export:template /absolute/new-directory`
+outside this checkout. The destination must not exist. This materializes an
+independent OhMyTemplate application, not another checkout or a symlink tree.
+Root OhMyGame identity and behavior stay unchanged. Ticket 13's naming initializer
+is separate; edit the exported `application.json` and rebuild for a different identity.
+
+The exporter uses the existing selected host assembly and business-source exclusion
+policy. It follows executable imports plus the compiler's type closure; dependencies
+used only as contracts ship compiler-generated declarations rather than dormant
+business implementations. It copies no source metadata, credentials, user data,
+prepared resources, output, installed dependencies, or environment files. The pinned
+plugin and its licensed assets are prepared in the destination. Apache license,
+source attribution, resource notices and dependency patches remain included.
+
+Follow the exported English/Chinese README: frozen install, plugin preparation,
+strict selected typecheck, lint, core tests, host/renderer build and authenticated
+Node runtime check. `dev` runs the source-watching host with Vite; `dev:desktop` and
+`start:desktop` retain the actual Electron workbench. Source host selection is bound
+to the same real non-game provider used for builds. Game preparation and tests that
+require omitted source are not mandatory template checks. The included Node check
+uses a local deterministic OpenAI-compatible provider to exercise real Pi turns;
+it does not need paid credentials. Real generation still uses configured providers.
+
+The template's baseline setup and source-module extension instructions live in
+[the English README](../templates/standalone/README.md) and
+[the Chinese README](../templates/standalone/README.zh-CN.md). Native platform,
+release-signing and live provider validation remain separate from local export checks.
