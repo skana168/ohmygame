@@ -5,6 +5,9 @@ function loadIdentity(root = __dirname) {
   const value = JSON.parse(
     readFileSync(path.join(root, "application.json"), "utf8"),
   );
+  return validateIdentity(value);
+}
+function validateIdentity(value) {
   const fail = (field, reason) => {
     throw new Error(`Invalid application.json ${field}: ${reason}`);
   };
@@ -57,4 +60,4 @@ function dataDirectory(
         : path.resolve(desktopUserData ?? root, identity.dataDirectory)),
   );
 }
-module.exports = { loadIdentity, dataDirectory };
+module.exports = { loadIdentity, validateIdentity, dataDirectory };
