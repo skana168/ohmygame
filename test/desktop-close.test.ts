@@ -28,7 +28,7 @@ vi.mock("electron", () => ({
     on: (name: string, fn: (...args: any[]) => void) => host.ipcEvents.set(name, fn),
   },
   nativeImage: { createFromBitmap: () => ({}) }, nativeTheme: {}, session: { fromPartition: () => ({ setProxy: async () => {} }), defaultSession: { setProxy: async () => {} } },
-  BrowserWindow: { getAllWindows: () => [] }, clipboard: {}, dialog: { showErrorBox: vi.fn() }, Menu: {}, shell: {},
+  BrowserWindow: { getAllWindows: () => [] }, clipboard: {}, dialog: { showErrorBox: vi.fn() }, Menu: {}, shell: { openExternal: vi.fn(async () => {}) },
 }));
 vi.mock("undici/index.js", () => ({ setGlobalDispatcher: vi.fn() }));
 vi.doMock(path.resolve("src/daemon/environment.ts"), () => ({ loadEnvironmentFiles: vi.fn() }));
@@ -87,7 +87,7 @@ beforeEach(async () => {
   host.thumbnails.length = 0;
   process.argv.push("--built-renderer");
   host.quit.mockImplementation(() => host.appEvents.get("before-quit")!({ preventDefault() {} }));
-  await import("../src/desktop/main.js");
+  await import("../src/desktop/ohmygame-main.js");
   expect(host.options?.rendererFile).toMatch(/[\\/]renderer[\\/]index\.html$/);
 });
 afterEach(() => { process.argv.splice(process.argv.lastIndexOf("--built-renderer"), 1); vi.useRealTimers(); });
@@ -230,4 +230,11 @@ it("blocks hidden game thumbnail windows for a workspace without game selection"
     warn.mockRestore();
     vi.unstubAllGlobals();
   }
+});
+
+it("keeps provider authorization browser links available through the core desktop shell", async () => {
+  const open = host.handlers.get("ohmygame:open-external");
+  expect(open).toBeDefined();
+  await expect(open!({ sender: host.sender }, "https://provider.example/authorize")).resolves.toBeUndefined();
+  await expect(open!({ sender: host.sender }, "file:///tmp/private")).rejects.toThrow("Invalid external URL");
 });

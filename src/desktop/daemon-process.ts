@@ -50,9 +50,9 @@ export async function startDaemon(options: StartDaemonOptions): Promise<ManagedD
   const pluginUiPort = await availablePort();
   const runtime = { url: `http://127.0.0.1:${port}`, token: options.token, pluginUiUrl: `http://127.0.0.1:${pluginUiPort}` };
   const environment = { ...(options.environment ?? process.env) };
-  // Also discard inherited tokens, including case variants on Windows.
+  // Availability belongs to this host; discard inherited credentials and playtest flags, including case variants on Windows.
   for (const name of Object.keys(environment)) {
-    if (name.toUpperCase() === "OHMYGAME_DAEMON_TOKEN") delete environment[name];
+    if (["OHMYGAME_DAEMON_TOKEN", "OHMYGAME_PLAYTEST_IPC"].includes(name.toUpperCase())) delete environment[name];
   }
   if (options.runtimeBin) {
     const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path") ?? "PATH";

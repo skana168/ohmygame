@@ -54,7 +54,7 @@ if (process.isMainFrame) {
       popup: (label: string, x: number, y: number) =>
         ipcRenderer.invoke("ohmygame:popup-window-menu", label, x, y) as Promise<void>,
     }),
-    openExternal: (url: string) => ipcRenderer.invoke("ohmygame:open-auth-url", url) as Promise<void>,
+    openExternal: (url: string) => ipcRenderer.invoke("ohmygame:open-external", url) as Promise<void>,
     openProjectFile: (projectId: string, filePath: string, mode: ProjectFileOpenMode = "default") =>
       ipcRenderer.invoke("ohmygame:open-project-file", projectId, filePath, mode) as Promise<void>,
     browsePluginDirectory: (pluginId: string) => ipcRenderer.invoke("ohmygame:browse-plugin-directory", pluginId) as Promise<void>,

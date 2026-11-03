@@ -160,7 +160,7 @@ describe("desktop daemon process", () => {
       for await (const chunk of process.stdin) token += chunk;
       const server = createServer((request, response) => {
         response.statusCode = request.url === "/health" && request.headers.authorization === "Bearer " + token ? 200 : 401;
-        response.end(JSON.stringify({ development: process.argv.includes("--dev"), tokenInEnvironment: Object.keys(process.env).some((name) => name.toUpperCase() === "OHMYGAME_DAEMON_TOKEN") }));
+        response.end(JSON.stringify({ playtestAdvertised: Object.keys(process.env).some((name) => name.toUpperCase() === "OHMYGAME_PLAYTEST_IPC"), development: process.argv.includes("--dev"), tokenInEnvironment: Object.keys(process.env).some((name) => name.toUpperCase() === "OHMYGAME_DAEMON_TOKEN") }));
       });
       server.listen(Number(process.env.DAEMON_PORT), "127.0.0.1");
       process.on("message", (message) => { if (message?.channel === "ohmygame:shutdown") server.close(() => process.exit(0)); });
@@ -173,7 +173,7 @@ describe("desktop daemon process", () => {
       token: "test-token",
       allowedOrigins: ["null"],
       executable: process.execPath,
-      environment: { OHMYGAME_DAEMON_TOKEN: "stale-desktop-token", ohmygame_daemon_token: "stale-desktop-token" },
+      environment: { OHMYGAME_DAEMON_TOKEN: "stale-desktop-token", ohmygame_daemon_token: "stale-desktop-token", OHMYGAME_PLAYTEST_IPC: "1", ohmygame_playtest_ipc: "1" },
       development,
       healthTimeoutMs: 2_000,
     });
@@ -187,7 +187,7 @@ describe("desktop daemon process", () => {
       expect(daemon.runtime.token).toBe("test-token");
       expect(await (await fetch(`${daemon.runtime.url}/health`, {
         headers: { authorization: "Bearer test-token" },
-      })).json()).toEqual({ development, tokenInEnvironment: false });
+      })).json()).toEqual({ development, tokenInEnvironment: false, playtestAdvertised: false });
     } finally {
       await daemon.stop();
     }
