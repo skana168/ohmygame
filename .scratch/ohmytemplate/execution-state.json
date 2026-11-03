@@ -269,11 +269,7 @@
       ]
     },
     "13": {
-      "status": "ready-for-agent",
-      "claimed": false,
-      "started": false,
-      "blocked_by": [],
-      "note": "Unblocked by resolved ticket12; not started. Full template completion requires this ticket plus review."
+      "status": "launching"
     }
   },
   "notes": [

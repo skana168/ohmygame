@@ -4,7 +4,7 @@
 
 **Blocked by:** 12 — Export a standalone buildable workbench template.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Provide a local initialization script that accepts destination, application name, package name, desktop application ID, and data-directory configuration using the existing template identity mechanism.
 - [ ] Validate inputs before generating an unusable application, and reject an existing destination without changing its contents, including when it is empty.
