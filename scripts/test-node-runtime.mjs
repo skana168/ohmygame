@@ -7,7 +7,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ExtensionHosts } from "../dist/daemon/extension-hosts.js";
 import { startDaemon } from "../dist/desktop/daemon-process.js";
-import { checkStoryWeb } from "./check-story-web.mjs";
 
 assert(
   !process.versions.bun,
@@ -37,7 +36,7 @@ try {
     if (route === "/projects") assert.deepEqual(body, []);
   }
   if (nonGame) await checkNonGame(daemon.runtime, path.join(directory, "data"));
-  else await checkStoryWeb(daemon.runtime);
+  else await (await import("./check-story-web.mjs")).checkStoryWeb(daemon.runtime);
   const headers = { authorization: `Bearer ${daemon.runtime.token}`, "content-type": "application/json" };
   const projects = await fetch(`${daemon.runtime.url}/projects`, { headers }).then(response => response.json());
   const story = projects.find(project => project.type === (nonGame ? "general" : "interactive-story"));

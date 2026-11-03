@@ -1,4 +1,5 @@
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, readFile, lstat } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
@@ -115,4 +116,46 @@ it("uses independent desktop identifiers and writable storage without changing d
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+it("exports an independent selected workbench without overwriting an existing destination", async () => {
+  const parent = await mkdtemp(path.join(tmpdir(), "template-export-"));
+  const destination = path.join(parent, "template");
+  const run = () =>
+    spawnSync(process.execPath, ["scripts/export-template.mjs", destination], {
+      encoding: "utf8",
+    });
+  const result = run();
+  expect(result.stderr, result.stdout).toBe("");
+  expect(result.status).toBe(0);
+  expect(
+    JSON.parse(
+      await readFile(path.join(destination, "application.json"), "utf8"),
+    ).name,
+  ).toBe("OhMyTemplate");
+  expect(
+    await readFile(
+      path.join(destination, "src/daemon/host-business.ts"),
+      "utf8",
+    ),
+  ).toContain("./non-game-host.js");
+  for (const file of [
+    ".git",
+    "node_modules",
+    ".data",
+    ".runtime",
+    "src/daemon/ohmygame-host.ts",
+    "src/story-web",
+    "src/renderer/auth.tsx",
+    "scripts/prepare-game-examples.ts",
+  ]) {
+    await expect(lstat(path.join(destination, file))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  }
+  expect(await readFile(path.join(destination, "LICENSE"), "utf8")).toContain(
+    "Apache License",
+  );
+  expect(run().status).not.toBe(0);
+  expect(identity.loadIdentity().name).toBe("OhMyGame");
 });

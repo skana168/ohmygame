@@ -6,13 +6,24 @@ import path from "node:path";
 export function excluded(root, file) {
   const relative = path.relative(root, file).replaceAll(path.sep, "/");
   if (
+    relative === "src/story-web" ||
     relative.startsWith("src/story-web/") ||
+    relative === "src/daemon/assets/story-templates" ||
     relative.startsWith("src/daemon/assets/story-templates/") ||
+    relative === "src/daemon/assets/scene-templates" ||
     relative.startsWith("src/daemon/assets/scene-templates/")
   )
     return true;
-  if (relative.startsWith("src/daemon/publish/")) return true;
-  if (/^src\/desktop\/(?:ohmygame-main|account-contribution|oauth)\./.test(relative))
+  if (
+    relative === "src/daemon/publish" ||
+    relative.startsWith("src/daemon/publish/")
+  )
+    return true;
+  if (
+    /^src\/desktop\/(?:ohmygame-main|account-contribution|oauth)\./.test(
+      relative,
+    )
+  )
     return true;
   if (
     /^src\/(?:daemon|desktop|renderer)\/(?:playable-|story-|game-|web-game-|playtest(?:[.-])|owned-playtest|ohmygame-agent-tools)/.test(
