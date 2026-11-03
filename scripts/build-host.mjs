@@ -20,6 +20,12 @@ if (!nonGame) {
   if (result.status !== 0) process.exit(result.status ?? 1);
   await import("./build-story-resources.mjs");
 } else {
+  const desktop = spawnSync(
+    process.execPath,
+    ["node_modules/typescript/bin/tsc", "-p", "src/desktop/tsconfig.core.json"],
+    { cwd: root, stdio: "inherit" },
+  );
+  if (desktop.status !== 0) process.exit(desktop.status ?? 1);
   // Discover the selected full daemon graph, then compile its modules separately.
   // Separate modules preserve import.meta.url, used by worker and resource paths.
   const graph = await build({

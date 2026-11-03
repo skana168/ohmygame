@@ -3189,37 +3189,39 @@ export function createApp(options: AppOptions = {}) {
       return reply.code(204).send();
     },
   );
-  app.get<{ Params: { projectId: string } }>("/projects/:projectId/tuning", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
-    return gameTuning.state(project);
-  });
-  // Changes reach the game at once and stay drafts until saved; null goes back to what is saved. A value of
-  // the wrong type is dropped against the file's entry, which knows the type.
-  app.put<{ Params: { projectId: string }; Body: { values: Record<string, GameTuningScalar | null> } }>(
-    "/projects/:projectId/tuning/draft",
-    { schema: { body: { type: "object", additionalProperties: false, required: ["values"], properties: { values: { type: "object", maxProperties: 100 } } } } },
-    async (request, reply) => {
+  if (composition.game && hostBusiness) {
+    app.get<{ Params: { projectId: string } }>("/projects/:projectId/tuning", async (request, reply) => {
       const project = projects.get(request.params.projectId);
       if (!project) return reply.code(404).send({ error: "Project not found" });
       if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
-      return gameTuning.setDraft(project, request.body.values);
-    },
-  );
-  app.post<{ Params: { projectId: string } }>("/projects/:projectId/tuning/save", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
-    try {
-      // Its own undoable change, kept with the changes plugins make outside a turn.
-      const { change } = await gameTuning.save(project, (operation) => pluginWrites.run(project, { plugin: "ohmygame/tuning", action: "tuning:save", title: "Save tuning values", inPlace: true }, operation));
-      return { state: await gameTuning.state(project), ...(change ? { changeId: change.id } : {}) };
-    } catch (cause) {
-      if ((hostBusiness && cause instanceof hostBusiness.GameTuningError)) return reply.code(409).send({ error: cause.message });
-      return pluginChangeReply(reply, cause);
-    }
-  });
+      return gameTuning.state(project);
+    });
+    // Changes reach the game at once and stay drafts until saved; null goes back to what is saved. A value of
+    // the wrong type is dropped against the file's entry, which knows the type.
+    app.put<{ Params: { projectId: string }; Body: { values: Record<string, GameTuningScalar | null> } }>(
+      "/projects/:projectId/tuning/draft",
+      { schema: { body: { type: "object", additionalProperties: false, required: ["values"], properties: { values: { type: "object", maxProperties: 100 } } } } },
+      async (request, reply) => {
+        const project = projects.get(request.params.projectId);
+        if (!project) return reply.code(404).send({ error: "Project not found" });
+        if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
+        return gameTuning.setDraft(project, request.body.values);
+      },
+    );
+    app.post<{ Params: { projectId: string } }>("/projects/:projectId/tuning/save", async (request, reply) => {
+      const project = projects.get(request.params.projectId);
+      if (!project) return reply.code(404).send({ error: "Project not found" });
+      if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
+      try {
+        // Its own undoable change, kept with the changes plugins make outside a turn.
+        const { change } = await gameTuning.save(project, (operation) => pluginWrites.run(project, { plugin: "ohmygame/tuning", action: "tuning:save", title: "Save tuning values", inPlace: true }, operation));
+        return { state: await gameTuning.state(project), ...(change ? { changeId: change.id } : {}) };
+      } catch (cause) {
+        if ((hostBusiness && cause instanceof hostBusiness.GameTuningError)) return reply.code(409).send({ error: cause.message });
+        return pluginChangeReply(reply, cause);
+      }
+    });
+  }
   app.delete<{ Params: { projectId: string; leaseId: string } }>("/projects/:projectId/preview/leases/:leaseId", async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });

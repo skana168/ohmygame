@@ -37,6 +37,9 @@ describe("daemon", () => {
     expect((await app.inject("/project-types")).json().map((type: { id: string }) => type.id)).toEqual(["general"]);
     expect((await app.inject("/community/games")).statusCode).toBe(404);
     expect((await app.inject("/cloud/session")).statusCode).toBe(404);
+    for (const [method, suffix, payload] of [["GET", "", undefined], ["PUT", "/draft", { values: {} }], ["POST", "/save", undefined]] as const) {
+      expect((await app.inject({ method, url: `/projects/${project.id}/tuning${suffix}`, payload })).statusCode).toBe(404);
+    }
     const instructions = await readFile(path.join(project.workspacePath, "AGENTS.md"), "utf8");
     expect(instructions).toContain("example_note");
     expect(instructions).not.toContain("playable_check");

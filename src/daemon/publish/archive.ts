@@ -1,19 +1,18 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { access, cp, mkdir, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Readable } from "node:stream";
-import { ZipFile } from "yazl";
 import type { ProjectState } from "../../shared/contracts.js";
 import { isWebRuntimeProjectType } from "../../shared/project-runtime.js";
-import { PUBLISH_ARTIFACT_MAX_BYTES, PUBLISH_GAME_COVER_PATH } from "../../shared/publish-v1.js";
+import { PUBLISH_ARTIFACT_MAX_BYTES } from "../../shared/publish-v1.js";
 import { packageManagerCommand, packageManagerRunArguments, resolvePackageManager } from "../package-manager.js";
 import { ensureProjectDependencies } from "../project-dependencies.js";
 import { projectProcessEnvironment } from "../project-process.js";
 import { resolveStartupDirectory } from "../projects.js";
 import { buildPlayableProject } from "../playable-project.js";
 import { isWebStory, publishableWebStoryFiles } from "../story-web-project.js";
-import { compressArchiveFile } from "../archive-compression.js";
+import { createZip, ArchiveError as PublishError } from "../archive-writer.js";
+export { ArchiveError as PublishError } from "../archive-writer.js";
 import { PublishMediaOptimizer } from "./media.js";
 
 interface PackageJson {
@@ -24,12 +23,6 @@ interface PackageJson {
 
 /** Why a story made before web stories cannot be built or published yet. */
 const STORY_NEEDS_UPGRADE = "This story was made before stories played as their own web page. Open it in the Story editor, which upgrades it, then try again.";
-
-export class PublishError extends Error {
-  constructor(message: string, readonly statusCode = 409) {
-    super(message);
-  }
-}
 
 export class ArtifactBuilder {
   readonly #running = new Map<string, ChildProcess>();
@@ -115,9 +108,7 @@ async function prepareWebStory(project: ProjectState): Promise<string> {
   }
 }
 
-export async function createPluginArchive(source: string, maxBytes = 25 * 1024 * 1024, preserveExecutable = false): Promise<Buffer> {
-  return createZip(source, true, undefined, maxBytes, preserveExecutable);
-}
+export { createPluginArchive } from "../archive-writer.js";
 
 async function prepareSource(workspacePath: string, track: (child: ChildProcess) => void, project?: ProjectState): Promise<string> {
   const packageJson = await readPackageJson(workspacePath);
@@ -138,60 +129,6 @@ async function prepareSource(workspacePath: string, track: (child: ChildProcess)
   }
   if (await exists(path.join(workspacePath, "index.html"))) return workspacePath;
   throw new PublishError("Project has no build script or static index.html yet");
-}
-
-async function createZip(source: string, plugin = false, cover?: Buffer, maxBytes?: number, preserveExecutable = false, media?: PublishMediaOptimizer): Promise<Buffer> {
-  const zip = new ZipFile();
-  const files = await filesIn(source, "", plugin);
-  const zipOptions = {
-    mtime: new Date(1980, 0, 2),
-    forceDosTimestamp: true,
-    // Deflate output differs between zlib builds, so Plugin entries are stored
-    // to keep the archive's checksum the same on every runtime.
-    ...(plugin ? { mode: 0o100644, compress: false } : {}),
-  } as const;
-  if (cover !== undefined && files.includes(PUBLISH_GAME_COVER_PATH)) {
-    throw new PublishError(`Publish output uses reserved path: ${PUBLISH_GAME_COVER_PATH}`);
-  }
-  for (const file of files) {
-    const original = path.join(source, ...file.split("/"));
-    const filename = media ? await media.optimize(original) : original;
-    const executable = preserveExecutable && ((await stat(filename)).mode & 0o111) !== 0;
-    const options = { ...zipOptions, compress: !plugin && compressArchiveFile(file) };
-    zip.addFile(filename, file, executable ? { ...options, mode: 0o100755 } : options);
-  }
-  if (cover !== undefined) zip.addBuffer(cover, PUBLISH_GAME_COVER_PATH, { ...zipOptions, compress: false });
-  const chunks: Buffer[] = [];
-  const output = zip.outputStream as Readable;
-  const completed = new Promise<Buffer>((resolve, reject) => {
-    let bytes = 0;
-    output.on("data", (chunk: Buffer) => {
-      bytes += chunk.length;
-      if (maxBytes !== undefined && bytes > maxBytes) {
-        output.destroy(new PublishError(`Publish artifact exceeds ${maxBytes / (1024 * 1024)} MB`, 413));
-        return;
-      }
-      chunks.push(chunk);
-    });
-    output.once("error", reject);
-    // yazl reports a file it cannot stat or read on the ZipFile, possibly once per file, and then never ends the output.
-    zip.on("error", reject);
-    output.once("end", () => resolve(Buffer.concat(chunks)));
-  });
-  zip.end();
-  return completed;
-}
-
-async function filesIn(root: string, relative = "", plugin = false): Promise<string[]> {
-  const files: string[] = [];
-  const directory = path.join(root, relative);
-  for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
-    if (ignored(entry.name, relative, plugin) || entry.isSymbolicLink()) continue;
-    const child = relative ? `${relative}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) files.push(...await filesIn(root, child, plugin));
-    else if (entry.isFile()) files.push(child);
-  }
-  return files;
 }
 
 async function readPackageJson(workspacePath: string): Promise<PackageJson | undefined> {
@@ -233,12 +170,6 @@ async function run(command: string, args: string[], cwd: string, track: (child: 
       ? resolve()
       : reject(new PublishError(stderr.trim() || `${command} exited with ${code}`)));
   });
-}
-
-function ignored(name: string, relative: string, plugin: boolean): boolean {
-  if (name === "node_modules" || name === ".git" || name === ".data" || (!plugin && name === "AGENTS.md")) return true;
-  if (!name.startsWith(".")) return false;
-  return !(plugin && !relative && name === ".ohmygame-plugin");
 }
 
 async function exists(target: string): Promise<boolean> {

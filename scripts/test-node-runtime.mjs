@@ -95,6 +95,16 @@ async function checkNonGame(runtime, dataDirectory) {
     assert(response.ok, `${method} ${route}: ${await response.clone().text()}`);
     return response.json();
   };
+  await request("/settings/onboarding", "PUT", { status: "skipped", step: "connect" });
+  assert.equal((await request("/settings/onboarding")).status, "skipped");
+  for (const provider of ["meshy", "volcengine-tts", "volcengine-seed-audio"]) {
+    await request(`/settings/models/providers/${provider}`, "PUT", { apiKey: "local-runtime-fixture-key" });
+    assert.equal((await request(`/settings/models/providers/${provider}`)).configured, true);
+  }
+  await request("/settings/models/providers/openai/images", "PUT", {
+    mode: "separate", baseUrl: "https://example.invalid/v1", apiKey: "local-runtime-fixture-key", models: [],
+  });
+  assert.equal((await request("/settings/models/providers/openai/images")).configured, true);
   const project = await request("/projects", "POST", { name: "Non-game runtime notes" });
   assert.equal(project.type, "general");
   assert.equal(project.gameCapability, false);

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createPluginArchive } from "../src/daemon/publish/archive.js";
+import { createPluginArchive } from "../src/daemon/archive-writer.js";
 import { packageSkills, type SkillsSource } from "../src/daemon/plugin-conversion.js";
 import { isAppWidePlugin } from "../src/shared/plugin-manifest.js";
 import type { PluginCategory } from "../src/shared/plugin-manifest.js";

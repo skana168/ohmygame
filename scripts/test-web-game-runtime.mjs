@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const require = createRequire(import.meta.url);
-const modes = process.argv.filter((arg) => ["--non-game", "--core-desktop"].includes(arg));
+const modes = process.argv.filter((arg) => ["--non-game", "--core-desktop", "--reopen"].includes(arg));
 const capabilities = process.argv.includes("--capabilities") || modes.length > 0;
 const directory = process.env.OHMYGAME_SMOKE_DIRECTORY ?? await mkdtemp(path.join(tmpdir(), "ohmygame-desktop-game-"));
 const environment = { ...process.env };

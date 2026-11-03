@@ -71,7 +71,38 @@ const deadline = setTimeout(() => {
     status: "skipped",
     step: "connect",
   });
-  const notes = await api("/projects", "POST", {
+  if (nonGame && process.argv.includes("--reopen")) {
+    const saved = JSON.parse(await readFile(path.join(directory, "reopen.json"), "utf8"));
+    await js(`localStorage.setItem('canvas-active:${saved.projectId}', '${saved.boardId}'); location.hash = '#/projects/${saved.projectId}/design'`);
+    await eventually(() => js(`document.querySelector('.react-flow__node-custom textarea')?.value === 'Desktop persisted custom note' && document.body.innerText.includes('Desktop renamed title')`), "custom node after complete application restart");
+    await writeFile(path.join(directory, "shutdown-targets.json"), JSON.stringify([runtime.daemonUrl]));
+    console.log("Selected application full process restart retained custom node and document edits");
+    clearTimeout(deadline);
+    app.quit();
+    return;
+  }
+  let createdInDialog;
+  if (nonGame) {
+    await js("location.hash = '#/'");
+    editor.webContents.reload();
+    await eventually(() => js(`!!document.querySelector('.home-hero')`), "selected Home");
+    await js(`[...document.querySelectorAll('.home-hero button')].find(b => /Blank project|空白项目/.test(b.textContent)).click()`);
+    await eventually(() => js(`!!document.querySelector('.new-project-form input')`), "actual creation dialog");
+    await js(`(() => {
+      const input = document.querySelector('.new-project-form input');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'Desktop capability notes');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    await eventually(() => js(`!!document.querySelector('[role="dialog"] .ui-button-primary:not(:disabled)')`) , "creation ready");
+    await js(`document.querySelector('.new-project-form').requestSubmit()`);
+    await eventually(async () => {
+      createdInDialog = (await api("/projects")).find(p => p.name === "Desktop capability notes");
+      return !!createdInDialog;
+    }, "project created through dialog");
+    assert.equal(createdInDialog.type, "general");
+    console.log("Selected Electron actual creation dialog created a general workspace");
+  }
+  const notes = createdInDialog ?? await api("/projects", "POST", {
     name: "Desktop capability notes",
     type: "general",
     ...(nonGame ? {} : { workspaceManifest: { version: 1, modules: [] } }),
@@ -127,6 +158,7 @@ const deadline = setTimeout(() => {
   const frame = editor.webContents.mainFrame.frames.find((frame) =>
     frame.url.startsWith(started.url),
   );
+  await eventually(() => frame.executeJavaScript("window.smokeReady === true"), "reusable preview document ready");
   assert.equal(await frame.executeJavaScript("window.smokeReady"), true);
   assert.equal(
     await frame.executeJavaScript("typeof window.ohMyGameDesktop"),
@@ -441,6 +473,7 @@ const deadline = setTimeout(() => {
     { headers: { authorization: `Bearer ${runtime.token}` } },
   );
   assert.equal(tuning.status, nonGame ? 404 : 409);
+  if (nonGame) await writeFile(path.join(directory, "reopen.json"), JSON.stringify({ projectId: notes.id, boardId }));
   await writeFile(
     path.join(directory, "shutdown-targets.json"),
     JSON.stringify([

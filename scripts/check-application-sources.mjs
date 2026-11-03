@@ -1,3 +1,4 @@
+import { typecheckHost } from "./typecheck-host.mjs";
 import { hostAssemblyPlugin } from "./application-host-build.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,6 +89,13 @@ const results = await Promise.allSettled(
     );
     if (requiredExcluded.length)
       throw new Error(`Excluded inputs remain: ${requiredExcluded.join(", ")}`);
+    if (process.argv.includes("--typecheck")) {
+      const inputs = Object.keys(result.metafile.inputs).filter((file) =>
+        /^src\/.*\.(?:ts|tsx|cts)$/.test(file),
+      );
+      if (entry.includes("renderer")) inputs.push("src/vite-env.d.ts");
+      typecheckHost(root, inputs, entry);
+    }
     console.log(
       `PASS ${entry}: ${Object.keys(result.metafile.inputs).length} source inputs; no excluded implementation`,
     );

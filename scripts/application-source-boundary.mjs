@@ -12,6 +12,8 @@ export function excluded(root, file) {
   )
     return true;
   if (relative.startsWith("src/daemon/publish/")) return true;
+  if (/^src\/desktop\/(?:ohmygame-main|account-contribution|oauth)\./.test(relative))
+    return true;
   if (
     /^src\/(?:daemon|desktop|renderer)\/(?:playable-|story-|game-|web-game-|playtest(?:[.-])|owned-playtest|ohmygame-agent-tools)/.test(
       relative,

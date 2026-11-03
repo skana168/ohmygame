@@ -1057,20 +1057,28 @@ suite. Any external renderer graph audit must apply the same Vite provider
 selection; directly bundling `main.tsx` without it uses the default OhMyGame
 assembly. This renderer check complements the host and desktop acceptance checks.
 
-Full application source exclusion still requires the combined host, renderer and
-desktop acceptance checks. A passing surface check alone does not establish the
-independent template export.
+The combined unavailable-source application check below verifies all three
+surfaces together. A passing composition check does not establish the independent
+template export or installation workflow.
 
 `build:host` preserves the default TypeScript build and story preparation for
-OhMyGame. For non-game it compiles the selected daemon dependency graph without
+OhMyGame. For non-game it emits the core Electron bootstrap, main, preload and
+external MCP entry points using `src/desktop/tsconfig.core.json`, then compiles
+the selected daemon dependency graph without
 loading game, story, publishing or account implementations or story resources.
 Modules remain separate so worker and resource paths using `import.meta.url`
 keep working. `node --import tsx scripts/build-host.mjs --non-game` explicitly
-selects this host target without changing the renderer or desktop selection.
+selects this build target without editing the source selector; select and rebuild
+the renderer together for a coherent application.
 This command checks the selected TypeScript program, rejecting excluded type
 inputs, before emitting JavaScript with esbuild. Run the repository's separate
 `typecheck` command as well to verify the default application. Use a fresh output directory when auditing
 shipped contents after switching composition; builds do not delete old output.
+
+The non-game application omits game tuning routes entirely. OhMyGame retains
+those routes and their existing capability errors for disabled workspaces.
+Pinned plugin preparation uses the core archive writer, so preparing reusable
+plugins does not load publishing or story implementations.
 
 Run `node scripts/check-application-sources.mjs --core` to audit the core tools
 and reusable preview graph with business implementations rejected. Use
@@ -1089,3 +1097,17 @@ external MCP, rejected game tools, archive import/export, native MCP, extension
 hosts, and independent-identity process restart. It rejects a game build.
 Direct source development still uses the default host provider; selected source
 development and complete Electron packaging remain integration work.
+
+Add `--application` to `scripts/test-non-game-host.mjs` for the combined fixture:
+it physically omits the union of daemon, renderer and native desktop business
+implementations plus story/scene resources, writes non-game selection only in
+that disposable copy, and uses a separate test cache and desktop profile. It
+runs pinned plugin preparation, skipped game/story preparation, the strict
+all-target source/type audit, selected host and core desktop emission, compiled
+Node runtime checks, the production Vite build and retained core interaction
+suites. The actual selected Electron bootstrap then exercises dialog creation,
+reusable preview, custom-node editing/autosave/reload, complete process restart
+and save/quit cleanup. The fixture and its exact exclusion inventory and desktop
+evidence are retained at the printed path. Dependencies are linked from the
+checkout for this composition test; independent installation is a separate export
+acceptance check. No game runtime, account service or alternate UI is substituted.

@@ -4,7 +4,7 @@ import { excluded } from "./application-source-boundary.mjs";
 
 /** Check the selected source program with the same source-owned host seam as
  * compilation. Required imports retain ordinary TypeScript resolution. */
-export function typecheckHost(root, inputs) {
+export function typecheckHost(root, inputs, target = "host") {
   const configPath = path.join(root, "tsconfig.json");
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
   if (config.error)
@@ -14,15 +14,40 @@ export function typecheckHost(root, inputs) {
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
   const options = { ...parsed.options, noEmit: true };
   const host = ts.createCompilerHost(options);
-  host.resolveModuleNames = (names, containingFile) =>
-    names.map((name) => {
-      if (name.endsWith("/host-business.js"))
+  host.resolveModuleNameLiterals = (
+    literals,
+    containingFile,
+    redirectedReference,
+    compilerOptions,
+    containingSourceFile,
+  ) =>
+    literals.map((literal) => {
+      const name = literal.text;
+      const selected = name.endsWith("/host-business.js")
+        ? "src/daemon/non-game-host.ts"
+        : name.endsWith("/business-contributions.js")
+          ? "src/renderer/core-contributions.ts"
+          : undefined;
+      if (selected)
         return {
-          resolvedFileName: path.join(root, "src/daemon/non-game-host.ts"),
-          extension: ts.Extension.Ts,
+          resolvedModule: {
+            resolvedFileName: path.join(root, selected),
+            extension: ts.Extension.Ts,
+          },
         };
-      return ts.resolveModuleName(name, containingFile, options, host)
-        .resolvedModule;
+      return ts.resolveModuleName(
+        name,
+        containingFile,
+        compilerOptions,
+        host,
+        undefined,
+        redirectedReference,
+        ts.getModeForUsageLocation(
+          containingSourceFile,
+          literal,
+          compilerOptions,
+        ),
+      );
     });
   const readFile = host.readFile.bind(host);
   host.readFile = (file) =>
@@ -51,10 +76,10 @@ export function typecheckHost(root, inputs) {
       }),
     );
     throw new Error(
-      `Selected host typecheck failed: ${diagnostics.length} diagnostics`,
+      `Selected ${target} typecheck failed: ${diagnostics.length} diagnostics`,
     );
   }
   console.log(
-    `Selected host typecheck passed: ${program.getSourceFiles().filter((file) => file.fileName.startsWith(path.join(root, "src/"))).length} source files.`,
+    `Selected ${target} typecheck passed: ${program.getSourceFiles().filter((file) => file.fileName.startsWith(path.join(root, "src/"))).length} source files.`,
   );
 }
