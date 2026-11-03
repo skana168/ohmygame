@@ -51,6 +51,13 @@ Execution details are recorded in [execution-state.json](execution-state.json).
   exclusions and retained native resize/provider/platform/source-watch/browser
   limitations. Ticket 12 is ready, not started; full template remains incomplete.
 
+- [Ticket 12](issues/12-export-standalone-template.md) resolved at `fd71bfaa3805b747beb782efe50e05d00d0921fc`;
+  source-destination alias guard/regression `664b55ed8fd5e7618a891104dd667c317bcc44a4`. Fresh exporter/root
+  boundary checks and independently installed core checks/build/Node Pi smoke passed.
+  [Report](reports/12-export-standalone-template.md#integration-acceptance-2026-11-03)
+  records artifact and inherited browser/source-watch/Electron limits. Ticket13
+  is ready and unclaimed, not started; full template awaits13 plus review.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction

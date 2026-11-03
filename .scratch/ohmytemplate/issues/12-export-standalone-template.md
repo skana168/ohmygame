@@ -4,7 +4,7 @@
 
 **Blocked by:** 10 — Compose complete applications and retire legacy business assembly; 11 — Configure independent application identity and data storage.
 
-Status: claimed
+Status: resolved
 
 - [x] Produce a clean standalone template directory with the selected core, compiled non-game example, dependency/build configuration, and required licensed resources/notices.
 - [x] Exclude game-only modules and resource preparation, local credentials, application data, generated caches, source-repository metadata, and environment-specific state.
@@ -18,7 +18,6 @@ Status: claimed
 
 **Context:** The template initially supports new workspaces and does not promise historical OhMyGame project import. A published npm CLI and a full OhMyApp product are outside scope. Follow the [parent specification](../spec.md), [glossary](../../../GLOSSARY.md), and [accepted ADR](../../../docs/adr/0001-extract-a-reusable-workbench.md).
 
-
 ## Implementation evidence (2026-11-03)
 
 Status remains **claimed** pending merger. Local export, frozen independent
@@ -28,3 +27,14 @@ shutdown passed. Actual artifact: `/tmp/ohmytemplate-12-verified`.
 See [the ticket 12 report](../reports/12-export-standalone-template.md) for exact
 commands, logs, corrections, source regressions and remaining platform/provider/
 private-service limits. No ticket 13 initializer is included.
+
+## Answer
+
+Merged at `fd71bfaa3805b747beb782efe50e05d00d0921fc`; destination-alias safety regression fixed at
+`664b55ed8fd5e7618a891104dd667c317bcc44a4`. Fresh root identity/export tests (6), renderer regressions (2),
+typecheck, lint and selected-source boundary checks passed. Fresh standalone frozen
+install, plugin preparation, strict typecheck, lint, 56 core tests, build and
+compiled Node/Pi runtime passed in `/tmp/ohmytemplate-12-integrated-1793674922361`.
+See [report](../reports/12-export-standalone-template.md#integration-acceptance-2026-11-03)
+for exact commands, inherited browser/source-watch/Electron evidence and limits.
+Ticket 13 is ready, unclaimed and not started; full delivery awaits 13 and review.

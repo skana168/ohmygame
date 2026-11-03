@@ -1,7 +1,8 @@
 # Ticket 12: standalone template export evidence
 
-Status: claimed; locally verified implementation, awaiting merger. Ticket 13 is
-unchanged. No other ticket or execution-state file was edited.
+Status: resolved after integration. Ticket 13 is ready and unclaimed.
+The implementation evidence below is retained from the source branch; fresh merger
+evidence and tracker changes are recorded at the end.
 
 Branch: `t3/export-standalone-template`.
 Worktree: `/Users/yoyun/.t3/worktrees/ohmygame/t3-1505f79c`.
@@ -217,3 +218,71 @@ game playback/fullscreen assertions are not covered by this export task. None of
 these limitations is represented as passing. No subagents, new worktrees/checkout
 setup, push/PR/watch, removal or destructive cleanup was performed. Existing
 verification scripts retain their normal disposal of their own temporary fixtures.
+
+## Integration acceptance (2026-11-03)
+
+Merged source branch `t3/export-standalone-template` at
+`82a232a756853f8da9a12edb5dfba49a3c9499bb` from
+`/Users/yoyun/.t3/worktrees/ohmygame/t3-1505f79c` conflict-free with
+`git merge --no-ff 82a232a756853f8da9a12edb5dfba49a3c9499bb -m "feat(template): merge standalone workbench export"`.
+Merge: `fd71bfaa3805b747beb782efe50e05d00d0921fc`. Integration branch:
+`refactor/ohmytemplate-integration`, actual shared worktree
+`/Users/yoyun/ohmygame` (the supplied branch-appended directory does not exist).
+
+Narrow safety fix `664b55ed8fd5e7618a891104dd667c317bcc44a4` resolves the existing destination parent
+and checkout through realpath before creating output. This prevents a symlinked
+parent from bypassing the source-tree refusal. Added regression checks for an
+existing empty destination (contents unchanged), direct source root/child and
+aliased source child (no output created). Existing populated-destination refusal
+and real standalone export remain covered. Atomic mkdir still refuses existing
+destinations; this is not protection against hostile concurrent filesystem changes.
+Export uses explicit selected graph/files, never a recursive copy of the checkout.
+
+Fresh merger checks, all passed (PATH prefixed with
+`/tmp/ohmytemplate-tools/node_modules/.bin`; Node smoke additionally includes
+`/Users/yoyun/.nvm/versions/node/v24.20.0/bin`):
+
+- Root: `bun run test -- test/application-identity.test.ts` (6 passed),
+  `bun run test -- test/renderer-composition.test.ts` (2 passed, including
+  unavailable-business-source production Vite fixture), `bun run typecheck`,
+  `bun run lint`, `bun scripts/check-application-sources.mjs --non-game --typecheck`,
+  `git diff --check`. Initial direct Node boundary launch failed solely because
+  the restricted command PATH omitted Node; the Bun invocation above passed.
+- Fresh export: `bun run export:template /tmp/ohmytemplate-12-integrated-1793674922361`; from that directory:
+  `bun install --frozen-lockfile` (781 packages),
+  `bun run prepare:preinstalled-plugins` (one pinned public plugin),
+  `bun run typecheck`, `bun run lint`, `bun run test` (4 files / 56 passed),
+  `bun run build`, `node scripts/test-node-runtime.mjs --non-game`.
+  The latter freshly passes the real Pi turn against a local deterministic
+  provider and completed persisted history, authenticated APIs, custom canvas,
+  files, absent business routes, native MCP/extensions, independent identity
+  restart and graceful shutdown. Renderer retains its chunk-size advisory.
+
+Fresh artifact: `/tmp/ohmytemplate-12-integrated-1793674922361`. Earlier fully UI-verified
+artifact `/tmp/ohmytemplate-12-verified` is preserved. Audit of both found no
+source symlinks, excluded executable sources or source-checkout references.
+The earlier artifact's 70 installed dependency symlinks all resolve internally;
+fresh installation also has zero external dependency links. Fresh frozen lock
+exactly equals root lock with only workspace name changed. LICENSE/NOTICE/font
+licenses, compiled example/core architecture, English/Chinese guides and own
+identity/dev/build/check scripts were inspected. No credentials, local application
+data, repository metadata, source checkout or private services are required.
+Runtime/build/dependency directories in installed artifacts were generated locally.
+Root application.json, application selection and bun.lock equal pre-merge versions.
+Logs: `/tmp/ohmytemplate-12-merge-*.log` (focused-final, typecheck-final, lint,
+renderer-regression, boundary-final, export, install, core-plugins, core-typecheck,
+core-lint, core-tests, core-build, core-node).
+
+Browser/source-watch and actual Electron commands/results/limits above remain
+**inherited**, with retained log tails inspected, not fresh merger UI runs. The
+source full public suite is likewise inherited; only focused/root checks listed
+here were rerun. Paid/live media generation, private cloud/OAuth, engines/encoders,
+other platforms, installers/signing/notarization and native game window assertions
+remain unverified. Original fractional resize remains unchanged and NONPASSING
+(expected 549x309, observed 667x375), not rerun or weakened.
+
+Ticket 12 is resolved; ticket 13 is ready, unclaimed and not started. No initializer
+or full-template completion is claimed before ticket 13 plus review. No subagents,
+new worktrees, push/PR/watch, removals or destructive cleanup were performed.
+Existing .codegraph and all worktrees are preserved; root's only pre-existing
+untracked entry was .codegraph/. Tracker commit follows this evidence update.
