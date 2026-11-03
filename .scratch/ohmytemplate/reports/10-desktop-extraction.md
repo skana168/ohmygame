@@ -1,3 +1,8 @@
+Current root integration status: ticket 10 is resolved after the combined
+all-target physical-absence proof. See the [final root report](10-compose-independent-applications.md)
+and the final integration section below. Earlier incomplete statements are
+historical subslice checkpoints; template export/initialization remains pending.
+
 # Ticket 10 desktop extraction subslice
 
 Desktop source extraction is implemented and its native boundary is verified.
@@ -187,3 +192,19 @@ recording encoders, live providers and private hosted services remain unverified
   tickets 12/13 are unchanged. Root after merge had no tracked changes and only
   preserved untracked `.codegraph/`. No subagents, new worktrees, push, PR,
   watch, removal or destructive cleanup was performed.
+
+
+## Final combined root integration (2026-11-03)
+
+Host merge `dc53a0cc` and integration fix/test `7729fee5` combine this subslice
+with real Host, Renderer and Desktop contributions. The combined 117-path
+physical-absence fixture passes all-target source/type audits, preparation,
+fresh host/core-desktop/Vite builds, authenticated compiled Node runtime and
+actual selected Electron creation/custom-node edit/reload/full process restart/
+shutdown. Tuning returns the retained 404 through true omitted route registration.
+See [the final root report](10-compose-independent-applications.md) and
+[exact exclusions](10-excluded-sources.json) for commands, counts, logs and limits.
+Earlier subslice-only and 409-blocker statements are historical checkpoints.
+The native fractional resize baseline remains nonpassing and unchanged; export/
+initialization, standalone browser/source-watch and platform/provider/private-
+service verification remain required before full template delivery.

@@ -1,3 +1,126 @@
+## Final root composition acceptance (2026-11-03)
+
+Status: resolved (ticket 10 only).
+
+This section supersedes the historical incomplete checkpoints below. The source
+composition milestone is verified; standalone template export/initialization is
+not delivered by ticket 10.
+
+### Integrated revisions and corrections
+
+- Host `f7e81efb04c7397da4d0ab14f41c840f71096589` merged conflict-free at
+  `dc53a0cc08da7e3deac5d11e2eed770572cee38c` onto Desktop tracker `985582d7`.
+  Renderer merge `2cfedfd3`, Desktop merge `d1153eed`, and shared foundation
+  `ba371b5d` remain ancestors. Their actual contributions and Vite selection are
+  retained; no fake/noop game implementation, import suppression, string stripping
+  or alternate application replaces the real workbench.
+- Integration fix/test commit `7729fee515bd6d1f9dd2337d8c2606e8d397fc6a` emits
+  core Electron roots from the selected host build, combines all exclusion sets,
+  and runs one disposable application fixture. Core ZIP writing moved out of
+  publishing so pinned-plugin preparation works with publishing physically absent;
+  the existing publishing exports and archive behavior remain compatible.
+- The real combined Electron run reproduced tuning **409 != 404**. Core route
+  registration was still unconditional. The selected non-game application now
+  omits all three tuning routes; OhMyGame's existing disabled-workspace/host
+  capability errors remain 409. Existing tests were preserved. New API assertions
+  failed before the fix; final app/tuning suites passed **141 tests**. Archive,
+  story publishing and pinned-plugin suites passed **24 tests**.
+- Dialog-created workspaces exposed a preview document readiness race. The smoke
+  now waits for the actual iframe's ready marker before its original assertion;
+  it does not replace or relax the assertion. The selected type auditor uses the
+  same real core renderer binding as Vite and preserves NodeNext resolution modes.
+  No TypeScript diagnostic suppression or excluded type input is permitted.
+
+### One combined physical-absence proof
+
+Command (Bun 1.4.2 on the requested PATH; Node 24.20.0, Electron 43.3.0):
+
+```sh
+PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH node scripts/test-non-game-host.mjs --application
+```
+
+**Passed**, log `/tmp/ohmytemplate-10-combined-acceptance-final.log`.
+Retained fixture: `/var/folders/cd/4754c7cd73g1twx1yj5hgql40000gn/T/ohmytemplate-host-unavailable-YuIB1V`.
+This is an ordinary disposable copy, not a checkout/worktree. Its source-owned
+selector is non-game; the shared root selector remains OhMyGame. Dependencies are
+linked from root for this composition test, not represented as independent export.
+No prior dist tree is copied. Its own test cache and Electron profile/data prevent
+mixing selections.
+
+All **117** paths in [the exact exclusion inventory](10-excluded-sources.json)
+are physically absent simultaneously. They include daemon game/playtest/playable/
+story implementations, `story-web`, story and scene template resource trees,
+publishing, cloud account models and OhMyGame host assembly; renderer account,
+quota, business contribution entry, community, publishing, game/player/recording/
+story/editor UI; native Desktop game/driver/player/recorder, OhMyGame entry and
+account/OAuth contribution sources. Shared persisted/protocol contracts remain.
+The fixture explicitly asserts absence before compilation. A post-run emitted
+file audit also passed: no excluded business JS/CJS, story resources or prepared
+game examples appeared in fresh output.
+
+In this **same fixture**, without restoring excluded sources/resources:
+
+- All-target strict source audit passed: Host **239**, Renderer **287**, Desktop
+  **30** inputs. Selected TypeScript programs passed: Host server **248**,
+  Renderer **284**, Desktop main **52** source files, with excluded type inputs
+  rejected. Core desktop bootstrap/main/preload/external-MCP TypeScript emission
+  passed. The host worker/process build separately typechecked **252** files and
+  compiled **241** graph inputs.
+- Actual pinned-plugin preparation passed (verified/reused its pinned artifact);
+  game examples and story preparation skipped without importing their absent
+  implementations. Production Vite built the complete selected renderer.
+- The real compiled authenticated Node daemon passed unauthorized rejection,
+  core files/traversal protection, example workspace/manifest defaults and missing
+  module diagnostics, canvas/custom-node persistence and invalid-input preservation,
+  actual example tool invocation over external MCP, forbidden game tools, media
+  tool availability, onboarding and image/audio/3D provider credential setup,
+  archives, native MCP connection, native extension hosts, independent identity/
+  storage, process restart and graceful shutdown. No paid generation is claimed.
+- The unchanged selected core interaction suites passed **4 files / 56 tests**.
+- Actual selected Electron bootstrap started its own authenticated compiled daemon
+  and real production UI. Its **creation dialog** created a general workspace;
+  reusable iframe, sandbox boundary, absent native game/account IPC rejection,
+  two-board document title/Markdown editing, custom example-node editing/autosave/
+  reload, unchanged tuning **404**, and save/quit owned-process cleanup passed.
+  A **second complete Electron/daemon process launch** with the same isolated data
+  reopened the edited custom node and document, then passed save/quit cleanup.
+  Screenshots are retained under `/var/folders/cd/4754c7cd73g1twx1yj5hgql40000gn/T/ohmytemplate-host-unavailable-YuIB1V/evidence/desktop/`; the canvas screenshot
+  was visually inspected (the custom node is partly beyond the viewport).
+
+### Default checks and delivery limits
+
+The complete required default public sequence passed on the integrated tree:
+`prepare:preinstalled-plugins`, `changelog:check`, `typecheck`, `lint`, `test`,
+`build:renderer`, and `test:node-runtime`. Final full suite: **353 passed files,
+3 skipped; 4354 passed tests, 41 skipped**. Logs:
+`/tmp/ohmytemplate-10-final-{plugins,changelog,typecheck,lint,tests,renderer,node}.log`.
+The production renderer retains its existing chunk-size advisory. Existing
+private-cloud/platform skips remain unverified. New-file formatting, script
+syntax and `git diff --check` passed. Default real Node story creation/upgrade/
+preview, archives, MCP, extensions, independent restart and shutdown all passed.
+Default Electron capability smoke also passed with real enabled native windows,
+agent ownership/cleanup, reusable preview/canvas and save/quit:
+`/tmp/ohmytemplate-10-final-electron-default.log`.
+
+The original fractional native resize baseline remains **NONPASSING**: expected
+549x309, observed 667x375. Its original assertion is unchanged and was not rerun;
+this is not a full native game smoke pass. Later playback/fullscreen assertions,
+real engines, paid providers, encoder runs, private hosted cloud/OAuth, other OSes,
+installers/signing remain unverified.
+
+Ticket04/05's selected Electron creation, document/custom-node edit/reopen and
+full process-restart gaps are closed by the combined fixture. A fresh standalone
+browser walkthrough (including browser title editing), selected source-watch
+host-provider wiring, independent dependency installation/export and generated
+application browser/Electron validation remain **required in tickets12/13 before
+full template delivery**. The fixture proves compiled application composition,
+not the still-unimplemented export/initialization workflow. Ticket12 is ready,
+not claimed or started; ticket13 is not started. No subagents, new worktrees,
+push, PR, watch, removal or destructive cleanup were performed. Recovery files,
+all existing worktrees and untracked `.codegraph/` are preserved.
+
+---
+
 # Ticket 10 implementation progress
 
 Status: claimed, incomplete; pending implementation and merger. No acceptance

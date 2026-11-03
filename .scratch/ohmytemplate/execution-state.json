@@ -170,11 +170,11 @@
       ]
     },
     "10": {
-      "status": "split_continuation_retry_pending",
+      "status": "resolved",
       "progress_branch": "t3/extract-nongame-dependencies",
       "progress_sha": "ba371b5d2a12ba83fe464bb5f64c6927f2e9f5be",
       "progress_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-d9b8f7ee",
-      "unmet_acceptance": "Host/renderer/desktop full source graphs still depend on game implementations; non-game compiled startup eagerly loads story templates.",
+      "unmet_acceptance": null,
       "internal_subslices": [
         "host",
         "renderer",
@@ -182,12 +182,19 @@
       ],
       "subtasks": {
         "host": {
-          "status": "retry_pending",
+          "status": "merged",
           "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-896731ed",
           "previous_branch": "t3/host-nongame-extraction",
           "previous_sha": "52ca66de673ec42c90139bf319d1ebe15c8b3399",
           "recovery_patch": "/tmp/ohmytemplate-recovery-10-host/working.patch",
-          "previous_failure": "provider quota; user requested retry"
+          "previous_failure": "provider quota; user requested retry",
+          "merged": true,
+          "implementation_branch": "t3/host-source-boundaries",
+          "implementation_sha": "f7e81efb04c7397da4d0ab14f41c840f71096589",
+          "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-0470e7fe",
+          "merge_sha": "dc53a0cc08da7e3deac5d11e2eed770572cee38c",
+          "merge_result": "Conflict-free; combined source/type/compiled runtime proof passed after integration corrections at 7729fee5.",
+          "remaining_validation": "Independent export/install/source-watch provider wiring and standalone browser/generated-app checks required in 12/13 before full template delivery. Original native fractional resize remains nonpassing (549x309 expected, 667x375 observed), unchanged; later playback/fullscreen, actual engines/encoders, paid providers, private cloud/OAuth, other OSes and signing remain unverified."
         },
         "renderer": {
           "status": "merged",
@@ -202,7 +209,8 @@
           "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-4523cbea",
           "merge_sha": "2cfedfd3f232bb34623904e2f16f086f3545bff5",
           "merge_result": "Conflict-free; shared ba371b5d foundation retained; fresh 10 renderer suites / 190 tests passed, including renderer-only esbuild graph, production Vite build with business UI sources physically absent and nested unchanged core interaction suites; typecheck, default renderer build and diff check passed.",
-          "remaining_validation": "Renderer subslice only. Ticket10 remains claimed with all parent acceptance pending combined host/renderer/desktop source/resource exclusion and build/startup proof. No daemon/desktop exclusion claimed; live browser/Electron, providers/private cloud/platform/packaging checks remain unverified."
+          "remaining_validation": "Independent export/install/source-watch provider wiring and standalone browser/generated-app checks required in 12/13 before full template delivery. Original native fractional resize remains nonpassing (549x309 expected, 667x375 observed), unchanged; later playback/fullscreen, actual engines/encoders, paid providers, private cloud/OAuth, other OSes and signing remain unverified.",
+          "combined_verification": "Passed in one 117-path physical-absence fixture; see final ticket10 report."
         },
         "desktop": {
           "status": "merged",
@@ -227,9 +235,27 @@
             "/tmp/desktop-merge-default-smoke.log",
             "/tmp/desktop-merge-core-smoke.log"
           ],
-          "remaining_validation": "Desktop internal subslice only; ticket10 remains claimed and all parent acceptance pending. Selected full smoke remains nonpassing: daemon tuning returns 409 vs expected 404 while Host absent-business assembly is pending; selected save/quit and combined all-target absent-source/resource build/startup require Host integration and fresh validation. Prior selected custom-node edit/autosave/reload evidence retained, not rerun here. Original native fractional resize assertion unchanged; baseline nonpassing (expected 549x309, observed 667x375), later playback/fullscreen unverified. Full public sequence inherited, not rerun; other platforms, packaging/signing, real engines/encoders/providers/private cloud remain unverified."
+          "remaining_validation": "Independent export/install/source-watch provider wiring and standalone browser/generated-app checks required in 12/13 before full template delivery. Original native fractional resize remains nonpassing (549x309 expected, 667x375 observed), unchanged; later playback/fullscreen, actual engines/encoders, paid providers, private cloud/OAuth, other OSes and signing remain unverified.",
+          "combined_verification": "Passed in one 117-path physical-absence fixture; see final ticket10 report."
         }
-      }
+      },
+      "merged": true,
+      "merge_sha": "dc53a0cc08da7e3deac5d11e2eed770572cee38c",
+      "integration_sha": "7729fee515bd6d1f9dd2337d8c2606e8d397fc6a",
+      "merge_result": "All three real targets composed; combined 117-path physical-absence source/type/build/Node/Electron creation, custom-node edit/reload/full restart and shutdown passed. Final default public checks passed: 4354 tests, 41 skips; lint included.",
+      "combined_fixture": "/var/folders/cd/4754c7cd73g1twx1yj5hgql40000gn/T/ohmytemplate-host-unavailable-YuIB1V",
+      "combined_log": "/tmp/ohmytemplate-10-combined-acceptance-final.log",
+      "report": "reports/10-compose-independent-applications.md",
+      "unblocked_tickets": [
+        "12"
+      ],
+      "remaining_validation": "Independent export/install/source-watch provider wiring and standalone browser/generated-app checks required in 12/13 before full template delivery. Original native fractional resize remains nonpassing (549x309 expected, 667x375 observed), unchanged; later playback/fullscreen, actual engines/encoders, paid providers, private cloud/OAuth, other OSes and signing remain unverified."
+    },
+    "12": {
+      "status": "ready-for-agent",
+      "started": false,
+      "blocked_by": [],
+      "note": "Unblocked by resolved 10 and 11; not claimed or started. Export/independent install and source-watch/browser/generated-application validation remain required."
     }
   },
   "notes": [
@@ -238,6 +264,6 @@
     "Planning stash retained as backup; .codegraph stays untracked."
   ],
   "next_ready_queue": [
-    "10"
+    "12"
   ]
 }

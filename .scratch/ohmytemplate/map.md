@@ -42,6 +42,15 @@ Execution details are recorded in [execution-state.json](execution-state.json).
 
 - [Ticket 07](issues/07-isolate-interactive-stories.md) resolved at `046168bfa471edf95b2ef7d6389793e620f5c162`; 678 affected tests, typecheck and Node runtime passed. Legacy daemon-reopen/codebase/byte-preservation regression `02d5ad63102bf6fc695079ba0a202dd13ae515b4` passed (123 final app tests). Browser iframe start/reload is inherited; visual playback/Electron/platform/provider/private-cloud gaps remain explicit in the report. Ticket10 is ready for root scheduling and remains unclaimed.
 
+- [Ticket 10](issues/10-compose-independent-applications.md) is resolved: Host
+  merge `dc53a0cc`, integration fix/test `7729fee5`, preserved Renderer `2cfedfd3`
+  and Desktop `d1153eed`. One combined fixture with 117 business/resource paths
+  physically absent passed source/type/build/compiled Node/actual Electron
+  dialog/custom-node edit/reload/full restart/shutdown. Default public checks
+  passed (4354 tests, 41 skips), including lint. See the final report for exact
+  exclusions and retained native resize/provider/platform/source-watch/browser
+  limitations. Ticket 12 is ready, not started; full template remains incomplete.
+
 ## Fog
 
 Remaining tickets retain their existing scope and status. Full template extraction
