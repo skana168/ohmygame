@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
+import { act, createElement, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { CustomCanvasNodeRenderer } from "../src/renderer/custom-canvas-node.js";
+import type { ProjectState } from "../src/shared/contracts.js";
+import { describe, expect, it, vi } from "vitest";
 import { createAssetCanvasDocument, isAssetCanvasDocument, validateAssetCanvasDocument, withoutContentNodeSizes } from "../src/shared/asset-canvas.js";
 import { canvasHistoryKey, model3DViewLabels, toAssetCanvasNode } from "../src/renderer/asset-canvas-workspace.js";
 import type { Model3DModel } from "../src/shared/contracts.js";
@@ -8,6 +14,61 @@ import { buildModel3DToolRequest } from "../src/shared/generation-config.js";
 import { MODEL3D_CONNECTION_ID } from "../src/shared/model3d-operations.js";
 
 describe("Asset Canvas node serialization", () => {
+  it("renders registered nodes, preserves payloads during serialization and restores disabled modules", () => {
+    const value = { text: "Release notes", done: true };
+    const data = { module: "example", kind: "note", value, customRuntime: { project: { type: "general", workspaceManifest: { version: 1, modules: [{ id: "example", config: {} }] } } as ProjectState, onChange: () => {} } };
+    const render = () => renderToStaticMarkup(createElement(CustomCanvasNodeRenderer, { data }));
+    expect(render()).toContain("Release notes</textarea>");
+    expect(render()).toContain('checked=""');
+    expect(toAssetCanvasNode({ id: "note", type: "custom", position: { x: 5, y: 6 }, data })).toEqual({ id: "note", type: "custom", position: { x: 5, y: 6 }, data: { module: "example", kind: "note", value } });
+    data.customRuntime.project.workspaceManifest!.modules = [];
+    expect(render()).toContain("Restore module example/note");
+    expect(render()).not.toContain("textarea");
+    data.customRuntime.project.workspaceManifest!.modules = [{ id: "example", config: {} }];
+    expect(render()).toContain("Release notes</textarea>");
+    data.value = { text: "Preserve me", done: "bad" } as unknown as typeof value;
+    expect(render()).toContain("Invalid example/note data");
+    expect(toAssetCanvasNode({ id: "note", type: "custom", position: { x: 5, y: 6 }, data }).data).toMatchObject({ value: { text: "Preserve me", done: "bad" } });
+  });
+
+  it("edits an example custom note without account services and reopens its serialized value", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    let root = createRoot(container);
+    let saved = { text: "Release notes", done: false };
+    function Note() {
+      const [value, setValue] = useState(saved);
+      return createElement(CustomCanvasNodeRenderer, { data: {
+        module: "example", kind: "note", value,
+        customRuntime: {
+          project: { type: "general", workspaceManifest: { version: 1, modules: [{ id: "example", config: {} }] } } as ProjectState,
+          onChange: (next: Record<string, unknown>) => {
+            const serialized = toAssetCanvasNode({ id: "note", type: "custom", position: { x: 5, y: 6 }, data: { module: "example", kind: "note", value: next } });
+            if (serialized.type !== "custom") throw new Error("Expected a custom note");
+            saved = JSON.parse(JSON.stringify(serialized.data.value));
+            setValue(saved);
+          },
+        },
+      } });
+    }
+    try {
+      await act(async () => root.render(createElement(Note)));
+      expect(container.querySelector("textarea")?.value).toBe("Release notes");
+      await act(async () => container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+      expect(saved).toEqual({ text: "Release notes", done: true });
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await act(async () => root.render(createElement(Note)));
+      expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
+      expect(container.querySelector("textarea")?.value).toBe("Release notes");
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("keeps resize history and serialization while rejecting invalid node dimensions", () => {
     const canvas = createAssetCanvasDocument();
     const node = toAssetCanvasNode({ id: "notes", type: "text", position: { x: 0, y: 0 }, width: 600, height: 400, data: { text: "Notes" } });

@@ -1,3 +1,4 @@
+import { composeToolContributions } from "./tool-contributions.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -15,6 +16,7 @@ import {
   EXTERNAL_MCP_CONTRACT_VERSION,
   EXTERNAL_MCP_SERVER_NAME,
   type ExternalMcpCatalog,
+  type ExternalMcpClientActivity,
   type ExternalMcpEndpoint,
 } from "../shared/external-mcp.js";
 import { matchesBearerToken } from "./access.js";
@@ -23,7 +25,7 @@ import { ToolBridge, type BridgeTool } from "./agent-runtimes/tool-bridge.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 
-/** Project tools external agents may call. Their names and schemas are the public contract. */
+/** Legacy OhMyGame project tool names; the source-contributed catalog may add tools. */
 export const EXTERNAL_PROJECT_TOOLS = [
   "generate_image",
   "generate_video",
@@ -151,7 +153,18 @@ interface Session {
   /** Chosen with open_project; roots no longer change it. */
   explicit: boolean;
   usedAt: number;
+  /** The `clientInfo.name` the client sent with `initialize`. */
+  client?: string;
 }
+
+/** Remembered while the daemon runs, for Settings → MCP Server's recent connections. */
+interface ClientActivity {
+  name: string;
+  usedAt: number;
+  calls: number;
+}
+
+const RECENT_CLIENT_LIMIT = 8;
 
 type JobStatus = "running" | "succeeded" | "failed" | "cancelled";
 
@@ -187,6 +200,11 @@ export interface ExternalMcpOptions {
   tools: (project: ProjectState, sessionId: string) => ToolDefinition[];
   /** Every public project tool, for listing before a project is chosen. */
   catalog: () => ToolDefinition[];
+  /**
+   * The tools of the project's plugins, named `publisher__name__tool`. They
+   * are listed for the project a session uses when it asks for its tools.
+   */
+  pluginTools?: (project: ProjectState) => Promise<ToolDefinition[]>;
   /** A session ended or moved to another project. */
   release?: (projectId: string, sessionId: string) => Promise<void> | void;
   waitMs?: number;
@@ -203,6 +221,7 @@ export class ExternalMcpService {
   readonly #directory: string;
   readonly #sessions = new Map<string, Session>();
   readonly #jobs = new Map<string, Job>();
+  readonly #clients = new Map<string, ClientActivity>();
   #enabled = false;
   #token?: string;
   #url?: string;
@@ -265,7 +284,8 @@ export class ExternalMcpService {
     );
     let session: Session | undefined;
     if (initializing) {
-      session = { id: randomUUID(), explicit: false, usedAt: this.#now() };
+      const client = clientName(messages.find((message) => method(message) === "initialize"));
+      session = { id: randomUUID(), explicit: false, usedAt: this.#now(), ...(client ? { client } : {}) };
       this.#sessions.set(session.id, session);
     } else {
       if (!request.sessionId)
@@ -281,6 +301,8 @@ export class ExternalMcpService {
         };
     }
     session.usedAt = this.#now();
+    const calls = messages.filter((message) => method(message) === "tools/call").length;
+    if (session.client) this.#noteClient(session.client, calls);
     await this.#bindRoots(session, request.roots);
     const answers: unknown[] = [];
     for (const message of messages) {
@@ -294,6 +316,23 @@ export class ExternalMcpService {
       headers,
       body: Array.isArray(request.body) ? answers : answers[0],
     };
+  }
+
+  /** Clients that connected since the daemon started, most recent first. */
+  recentClients(): ExternalMcpClientActivity[] {
+    this.#prune();
+    const open = new Set([...this.#sessions.values()].map((session) => session.client));
+    return [...this.#clients.values()]
+      .sort((left, right) => right.usedAt - left.usedAt)
+      .map((client) => ({ name: client.name, lastUsedAt: new Date(client.usedAt).toISOString(), calls: client.calls, active: open.has(client.name) }));
+  }
+
+  #noteClient(name: string, calls: number): void {
+    const known = this.#clients.get(name);
+    this.#clients.delete(name);
+    this.#clients.set(name, { name, usedAt: this.#now(), calls: (known?.calls ?? 0) + calls });
+    // The oldest is first in insertion order.
+    if (this.#clients.size > RECENT_CLIENT_LIMIT) this.#clients.delete(this.#clients.keys().next().value!);
   }
 
   /** Ends a session the client closed with DELETE. */
@@ -485,7 +524,16 @@ export class ExternalMcpService {
       case "ping":
         return { jsonrpc: "2.0", id, result: {} };
       case "tools/list":
-        return { jsonrpc: "2.0", id, result: { tools: this.tools() } };
+        return {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            tools: composeToolContributions<BridgeTool>([
+              { id: "application", tools: this.tools(this.#project(session), session.id) },
+              { id: "plugins", tools: await this.#pluginTools(session) },
+            ]),
+          },
+        };
       case "tools/call": {
         const name = typeof params.name === "string" ? params.name : "";
         const outcome = await this.#call(
@@ -500,6 +548,9 @@ export class ExternalMcpService {
           id,
           result: {
             content: outcome.result.content,
+            ...(outcome.result.structuredContent !== undefined
+              ? { structuredContent: outcome.result.structuredContent }
+              : {}),
             ...(outcome.isError ? { isError: true } : {}),
           },
         };
@@ -520,12 +571,25 @@ export class ExternalMcpService {
     }
   }
 
-  /** The public tool list: the same for every session, whichever project it uses. */
-  tools(): BridgeTool[] {
-    const catalog = new ToolBridge(publicTools(this.#options.catalog())).list(
+  /** The session's project's plugin tools; none before it uses a project. */
+  async #pluginTools(session: Session): Promise<BridgeTool[]> {
+    const project = this.#project(session);
+    if (!project || !this.#options.pluginTools) return [];
+    const tools = await this.#options.pluginTools(project).catch(() => []);
+    return new ToolBridge(tools)
+      .list("all")
+      .map(({ _meta: _, ...tool }) => tool);
+  }
+
+  /** Before binding, advertise the application catalog; afterwards honor workspace selection. */
+  tools(project?: ProjectState, sessionId = "catalog"): BridgeTool[] {
+    const catalog = new ToolBridge(publicTools(project ? this.#options.tools(project, sessionId) : this.#options.catalog())).list(
       "all",
     );
-    return [...OWN_TOOLS, ...catalog.map(({ _meta: _, ...tool }) => tool)];
+    return composeToolContributions<BridgeTool>([
+      { id: "external-mcp", tools: OWN_TOOLS },
+      { id: "application", tools: catalog.map(({ _meta: _, ...tool }) => tool) },
+    ]);
   }
 
   async #call(
@@ -573,7 +637,20 @@ export class ExternalMcpService {
       case "cancel_job":
         return this.#jobCall(name, input);
     }
-    if (!(EXTERNAL_PROJECT_TOOLS as readonly string[]).includes(name))
+    if (isPluginToolName(name) && this.#options.pluginTools) {
+      const project = this.#project(session);
+      if (!project) return failure(noProject());
+      const tools = composeToolContributions([
+        { id: "application", tools: publicTools(this.#options.tools(project, session.id)) },
+        { id: "plugins", tools: await this.#options.pluginTools(project) },
+      ]);
+      if (!tools.some((tool) => tool.name === name))
+        return failure(
+          `Tool ${name} is not available for project ${project.name}. Its plugin may be off, not allowed in this project, or not installed.`,
+        );
+      return new ToolBridge(tools).call(name, input, callId, signal);
+    }
+    if (!publicTools(this.#options.catalog()).some((tool) => tool.name === name))
       return failure(`Tool ${name} is not available`);
     const project = this.#project(session);
     if (!project) return failure(noProject());
@@ -664,10 +741,16 @@ export class ExternalMcpService {
   }
 }
 
+/** Plugin tools are `publisher__name__tool`; OhMyGame's own never contain `__`. */
+function isPluginToolName(name: string): boolean {
+  return /^[a-z0-9-]+__[a-z0-9-]+__[a-z0-9_]+$/.test(name);
+}
+
 function publicTools(tools: readonly ToolDefinition[]): ToolDefinition[] {
-  return tools.filter((tool) =>
-    (EXTERNAL_PROJECT_TOOLS as readonly string[]).includes(tool.name),
-  );
+  // Interactive host tools need an in-app conversation or consent flow. All
+  // other source contributions use the same project binding and ToolBridge.
+  const conversationTools = new Set(["questionnaire", "update_plan", "install_plugin", "web_search"]);
+  return tools.filter((tool) => !conversationTools.has(tool.name));
 }
 
 function describe(project: ProjectState) {
@@ -677,6 +760,13 @@ function describe(project: ProjectState) {
     type: project.type,
     workspacePath: project.workspacePath,
   };
+}
+
+function clientName(message: unknown): string | undefined {
+  const params = message && typeof message === "object" ? (message as { params?: unknown }).params : undefined;
+  const info = params && typeof params === "object" ? (params as { clientInfo?: unknown }).clientInfo : undefined;
+  const name = info && typeof info === "object" ? (info as { name?: unknown }).name : undefined;
+  return typeof name === "string" && name.trim() ? name.trim().slice(0, 80) : undefined;
 }
 
 function method(message: unknown): unknown {

@@ -1,3 +1,4 @@
+import { storyCapabilityEnabled } from "../shared/project-runtime.js";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,6 +9,7 @@ import { ZipFile } from "yazl";
 import type { ProjectCoverMode, ProjectState } from "../shared/contracts.js";
 import {
   PROJECT_ARCHIVE_COVER,
+  PROJECT_ARCHIVE_LOGO,
   PROJECT_ARCHIVE_FORMAT,
   PROJECT_ARCHIVE_MANIFEST,
   PROJECT_ARCHIVE_MAX_BYTES,
@@ -34,8 +36,8 @@ import {
   type PackedLibraryAsset,
 } from "./library-asset-packing.js";
 import { sniffImageType } from "./image-format.js";
-import { ensureNodeCodebaseContract } from "./playable-codebase.js";
-import { MAX_PROJECT_COVER_BYTES } from "./project-covers.js";
+import { requireHostBusiness } from "./host-business.js";
+import { MAX_PROJECT_COVER_BYTES, MAX_PROJECT_LOGO_BYTES } from "./project-covers.js";
 import type { ProjectManager } from "./projects.js";
 
 const GRAPH_FILE = "graph.json";
@@ -141,6 +143,7 @@ export async function exportProjectArchive(
   options: {
     library?: AssetLibrary;
     cover?: { contents: Buffer; mode: ProjectCoverMode };
+    logo?: Buffer;
     limits?: ProjectArchiveLimits;
   } = {},
 ): Promise<Readable> {
@@ -172,6 +175,9 @@ export async function exportProjectArchive(
       path: PROJECT_ARCHIVE_COVER,
       source: options.cover.contents,
     });
+  }
+  if (options.logo) {
+    entries.push({ path: PROJECT_ARCHIVE_LOGO, source: options.logo });
   }
   for (const file of files) {
     entries.push({
@@ -353,12 +359,14 @@ export async function importProjectArchive(
     /** Names a project from an archive without a manifest, usually after its file. */
     name?: string;
     limits?: ProjectArchiveLimits;
+    storyEnabled?: (project: ProjectState) => boolean;
   } = {},
 ): Promise<ProjectState> {
   const limits = options.limits ?? DEFAULT_LIMITS;
   const staging = await projects.createImportStaging();
   let project: ProjectState;
   let cover: { contents: Buffer; mode: ProjectCoverMode } | undefined;
+  let logo: Buffer | undefined;
   try {
     const archivePath = path.join(staging, "upload.zip");
     await writeUpload(upload, archivePath, limits.maxBytes);
@@ -368,7 +376,7 @@ export async function importProjectArchive(
       ...limits,
       include: (relative) => {
         if (relative === PROJECT_ARCHIVE_MANIFEST) return true;
-        if (relative === PROJECT_ARCHIVE_COVER) return true;
+        if (relative === PROJECT_ARCHIVE_COVER || relative === PROJECT_ARCHIVE_LOGO) return true;
         const [top, ...rest] = relative.split("/");
         if (top === PROJECT_ARCHIVE_WORKSPACE)
           return !skippedOnImport(rest.join("/"));
@@ -402,6 +410,9 @@ export async function importProjectArchive(
         cover = { contents, mode: manifest.cover.mode };
       }
     }
+    if (manifest.project.appearance?.logo) {
+      logo = await readArchiveImage(path.join(root, PROJECT_ARCHIVE_LOGO), MAX_PROJECT_LOGO_BYTES);
+    }
     project = await projects.import(workspace, manifest.project);
   } finally {
     // The project may already exist, so a failed cleanup must not fail the
@@ -410,10 +421,12 @@ export async function importProjectArchive(
   }
   try {
     // Agent instructions and schemas follow this app version, not the archive.
-    if (project.type === "interactive-story") {
-      await ensureNodeCodebaseContract(project.workspacePath);
+    if ((options.storyEnabled ?? storyCapabilityEnabled)(project)) {
+      await requireHostBusiness().ensureNodeCodebaseContract(project.workspacePath);
     }
     if (cover) await projects.setCover(project.id, cover.contents, cover.mode);
+    // A logo the archive names but does not hold falls back to the default icon.
+    if (project.appearance?.logo) await projects.setLogo(project.id, logo);
     return await projects.refreshPreviewReadiness(project.id);
   } catch (error) {
     await projects.delete(project.id);
@@ -539,4 +552,12 @@ function byteLimit(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** A WebP image packed with the project, or undefined when it is missing, too large or damaged. */
+async function readArchiveImage(file: string, maxBytes: number): Promise<Buffer | undefined> {
+  const size = await stat(file).then((stats) => (stats.isFile() ? stats.size : Infinity), () => Infinity);
+  if (size > maxBytes) return undefined;
+  const contents = await readFile(file);
+  return sniffImageType(contents) === "image/webp" ? contents : undefined;
 }

@@ -8,7 +8,7 @@ import { isNative3DProvider, model3DPreset, normalizeNativeModel3D, MODEL_3D_CAT
 import { supportedReasoningLevels } from "../shared/reasoning.js";
 import type { AgentManager } from "./agent.js";
 import { AudioGenerationError } from "./audio-generation.js";
-import type { CloudModelsClient } from "./cloud-models.js";
+import type { CloudModelsClient } from "./host-business-contract.js";
 import { customModelCatalog } from "./custom-model-capabilities.js";
 import type { MediaProviderKeyStore } from "./media-provider-settings.js";
 import { isMinimaxProviderId } from "./minimax-models.js";
@@ -84,11 +84,11 @@ export interface ProviderSettingsRouteOptions {
   volcengineTtsProvider: VolcengineTtsProvider;
   volcengineSeedAudioProvider: VolcengineSeedAudioProvider;
   providerEnabled: (id: string) => boolean;
-  cloudModels: CloudModelsClient;
+  cloudModels?: CloudModelsClient;
   modelAuth: ModelAuthManager;
 }
 
-/** Settings → Providers & Models: provider connections, keys, custom providers, model lists, and sign-in. */
+/** Settings → Providers: provider connections, keys, custom providers, model lists, and sign-in. */
 export function registerProviderSettingsRoutes(app: FastifyInstance, options: ProviderSettingsRouteOptions): void {
   const {
     providerSummaries,
@@ -119,7 +119,7 @@ export function registerProviderSettingsRoutes(app: FastifyInstance, options: Pr
     if (!provider) return reply.code(404).send({ error: "Provider not found" });
     const hyper3d = provider.id === "hyper3d" || provider.id === "cloud-hyper3d";
     if (!provider.configured && provider.id !== "codex-cli" && !hyper3d && !("managed" in provider && provider.managed)) return reply.code(400).send({ error: "Connect the provider before enabling it" });
-    await providerModelSettings.setEnabled(hyper3d ? ["hyper3d", "cloud-hyper3d"] : provider.id, request.body.enabled);
+    await providerModelSettings.setEnabled(hyper3d && cloudModels ? ["hyper3d", "cloud-hyper3d"] : provider.id, request.body.enabled);
     catalogRefresh.invalidate(provider.id);
     return { ...provider, enabled: request.body.enabled };
   });
@@ -345,7 +345,7 @@ export function registerProviderSettingsRoutes(app: FastifyInstance, options: Pr
   });
 
   const hasModelProvider = async (runtime: ModelRuntime, id: string) => isNative3DProvider(id) || Boolean(runtime.getProvider(id))
-    || id.startsWith("cloud-") && cloudModels.hasProvider(id);
+    || id.startsWith("cloud-") && Boolean(cloudModels?.hasProvider(id));
   const providerModels = async (runtime: ModelRuntime, providerId: string): Promise<ProviderModelSettings> => {
     if (isNative3DProvider(providerId)) {
       const native = native3DProviders.find(([id]) => id === providerId)!;
@@ -357,7 +357,7 @@ export function registerProviderSettingsRoutes(app: FastifyInstance, options: Pr
       catalogNotice: `Official presets · reviewed ${MODEL_3D_CATALOG_REVIEWED}. No model-list API; new versions arrive with app updates or can be added manually. Key access is determined by the provider.`,
       catalogDocsUrl: MODEL_3D_CATALOG_DOCS[providerId] };
     }
-    if (providerId.startsWith("cloud-")) {
+    if (providerId.startsWith("cloud-") && cloudModels) {
       void cloudModels.refresh();
       const catalog = cloudModels.catalogSnapshot();
       const provider = catalog.providers.find((provider) => provider.id === providerId);

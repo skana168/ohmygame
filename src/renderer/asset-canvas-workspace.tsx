@@ -1,3 +1,4 @@
+import { CustomCanvasNodeRenderer } from "./custom-canvas-node.js";
 import { workspaceVersion } from "./workspace-version.js";
 import { CanvasTableNode, type CanvasTables } from "./canvas-table-node.js";
 import {
@@ -67,7 +68,7 @@ import {
   type VideoGenerationReference,
 } from "../shared/contracts.js";
 import { createAssetGenerationNode, isTextGenerationReferenceNode, preferredImageOption, validateAssetCanvasDocument } from "../shared/asset-canvas.js";
-import { audioCanvasSettings, audioNodeHasSettings, audioSettings, isAudioNodeType, type AudioCanvasSettings, type AudioModel, type AudioProviderCatalogStatus } from "../shared/audio.js";
+import { audioCanvasSettings, audioNodeHasSettings, audioSettings, type AudioCanvasSettings, type AudioModel, type AudioProviderCatalogStatus } from "../shared/audio.js";
 import { createLibraryImage, getLibraryAsset, getWorkspaceAsset, getProjectCover, getProjectCoverState, listAudioModelCatalog, listImageModelCatalog, listModel3DOperations, listModel3DCatalog, listVideoModelCatalog, MODELS_CHANGED_EVENT, setProjectCover, uploadLibraryAsset, importCanvasFile, createCanvasImportFolder } from "./api.js";
 import { canvasAssetDownloadName, downloadAssetBlob, loadLibraryAssets, type LibraryAsset } from "./library-assets.js";
 import { SendToProjectDialog } from "./send-to-project-dialog.js";
@@ -156,6 +157,7 @@ function canvasCreationGroups(documents: CanvasDocuments, tables: CanvasTables):
 }
 
 const STORY_NODE_TYPES: NodeTypes = {
+  custom: CustomCanvasNodeRenderer,
   table: CanvasTableNode,
   document: CanvasDocumentNode,
   text: TextNode,
@@ -409,7 +411,9 @@ export function CanvasBoardEditor({ project, initialNodeId, onInitialNodeHandled
           const nodeId = job.context?.nodeId;
           if (nodeId && !latestJobs.has(nodeId)) latestJobs.set(nodeId, job);
         }
-        setCanvasJobs(Object.fromEntries(latestJobs));
+        // Most polls find nothing new; keep the same object so the canvas does not re-render.
+        const nextJobs = Object.fromEntries(latestJobs);
+        setCanvasJobs((current) => JSON.stringify(current) === JSON.stringify(nextJobs) ? current : nextJobs);
         const completedAssetIds: string[] = [];
         let completedCover: AssetCanvasCoverSource | undefined;
         // Jobs arrive newest first; the daemon persists outputs to the current board.
@@ -735,7 +739,7 @@ export function CanvasBoardEditor({ project, initialNodeId, onInitialNodeHandled
       else if (queuedCanvas.current === JSON.stringify(latestCanvas.current)) onStatusChange?.("saved");
     });
     operationChain.current = operation;
-    void operation.catch((cause) => {
+    void operation.catch(() => {
       if (!mounted.current || isDesktopClosing()) return;
       syncFailed.current = true;
       if (!saveFailed.current) onStatusChange?.("sync-error");
@@ -1332,7 +1336,6 @@ export function CanvasBoardEditor({ project, initialNodeId, onInitialNodeHandled
     // A render can arrive before React Flow publishes its first dimensions.
     // An empty measurement keeps it from clearing freshly measured handle bounds.
     const node = { ...original, measured: original.measured ?? {}, ...(size ? { style: { ...original.style, width: original.width ?? size.width, height: original.height ?? size.height } } : {}), data: { ...original.data,
-      audioAsset: libraryAssets.find((asset) => asset.id === original.data.assetId)?.audio,
       ...(size ? { resizeRuntime: {
         start: beginHistoryGesture, end: finishHistoryGesture,
         reset: () => { beginHistoryGesture(); setNodes((current) => current.map((node) => { if (node.id !== original.id) return node; const { width: _width, height: _height, ...rest } = node; return rest; })); finishHistoryGesture(); },
@@ -1340,6 +1343,10 @@ export function CanvasBoardEditor({ project, initialNodeId, onInitialNodeHandled
       } } : {}), assetAspectRatio: mediaAspectRatio(libraryAssets.find((asset) => asset.id === original.data.assetId)), panelOpen: original.selected === true && !marqueeActive && !marqueeSelectedIds.has(original.id), nodeDetails: {
       title: original.title?.trim(), label: canvasNodeTitle(toAssetCanvasNode(original, model3DModels), documents.documents, libraryAssets, tableContents), description: original.description,
       edit: () => setNodeDetails({ id: original.id, title: original.title ?? "", description: original.description ?? "" }),
+    } } };
+    if (node.type === "custom") return { ...node, data: { ...node.data, customRuntime: {
+      project,
+      onChange: (value: Record<string, unknown>) => setNodes((current) => current.map((candidate) => candidate.id === node.id ? { ...candidate, data: { ...candidate.data, value } } : candidate)),
     } } };
     if (node.type === "table") {
       const session = tables.storage.sessions.get(node.data.tableId ?? "");
@@ -1491,7 +1498,6 @@ export function CanvasBoardEditor({ project, initialNodeId, onInitialNodeHandled
             },
             models: audioModels.filter((model) => model.capabilities.operations.includes(operation)),
             providers: audioProviders,
-            audio: node.data.audioAsset,
           } satisfies AudioNodeRuntime,
         },
       };
@@ -2012,7 +2018,7 @@ function toFlowNode(node: AssetCanvasNode, imageModels: ImageModel[], videoModel
   return { ...flowNodeData(node, imageModels, videoModels), ...(measured ? { measured } : {}), ...(node.width !== undefined ? { width: node.width } : {}), ...(node.height !== undefined ? { height: node.height } : {}), ...(node.title !== undefined ? { title: node.title } : {}), ...(node.description !== undefined ? { description: node.description } : {}) };
 }
 function flowNodeData(node: AssetCanvasNode, imageModels: ImageModel[], videoModels: VideoModel[]): AssetCanvasFlowNode {
-  if (node.type === "asset" || node.type === "file") return { ...node, deletable: true };
+  if (node.type === "custom" || node.type === "asset" || node.type === "file") return { ...node, deletable: true };
   if (node.type === "text") return {
     id: node.id,
     type: "text",
@@ -2301,6 +2307,7 @@ function assetCanvasNodeData(node: AssetCanvasFlowNode, model3DModels?: readonly
       },
     };
   }
+  if (node.type === "custom") return { id: node.id, type: "custom", position: node.position, data: { module: String(node.data.module), kind: String(node.data.kind), value: node.data.value as Record<string, unknown> } };
   if (node.type === "table") return { id: node.id, type: "table", position: node.position, data: { tableId: node.data.tableId ?? "" } };
   if (node.type === "file") return { id: node.id, type: "file", position: node.position, data: { path: node.data.path ?? "", ...(node.data.directory ? { directory: true as const } : {}) } };
   if (node.type === "document") return { id: node.id, type: "document", position: node.position, data: { documentId: node.data.documentId ?? "", ...(node.data.references ? { references: textNodeReferences(node) } : {}) } };

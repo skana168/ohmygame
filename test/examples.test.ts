@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { cp, symlink, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -68,6 +69,23 @@ async function startApp(examplesDirectory?: string) {
 }
 
 describe("examples", () => {
+  it("omits story examples and rejects direct creation and play without the module", async () => {
+    const app = createApp({ dataDirectory: await mkdtemp(path.join(tmpdir(), "optional-story-examples-")), examplesDirectory: await writeExamples(), businessTools: { story: false } });
+    apps.push(app);
+    expect((await app.inject("/examples")).json().map((example: { id: string }) => example.id)).toEqual(["pond"]);
+    expect((await app.inject({ method: "POST", url: "/examples/train/play" })).statusCode).toBe(409);
+    expect((await app.inject({ method: "POST", url: "/projects", payload: { exampleId: "train" } })).statusCode).toBe(409);
+    expect((await app.inject("/projects")).json()).toEqual([]);
+  });
+
+  it("retains an explicit module declaration when copying an example", async () => {
+    const app = await startApp(await writeExamples());
+    const workspaceManifest = { version: 1, modules: [] };
+    const response = await app.inject({ method: "POST", url: "/projects", payload: { exampleId: "pond", workspaceManifest } });
+    expect(response.statusCode, response.body).toBe(201);
+    expect(response.json().workspaceManifest).toEqual(workspaceManifest);
+  });
+
   it("preserves remixed node positions and the original viewport until explicitly edited", async () => {
     const directory = await writeExamples();
     const canvas = path.join(directory, "pond/files/canvas");
@@ -250,7 +268,7 @@ describe("examples", () => {
     await writeFile(path.join(empty, ".DS_Store"), "");
     const created = await app.inject({ method: "POST", url: "/projects", payload: { type: "web-game", exampleId: "pond", workspacePath: empty } });
     expect(created.statusCode).toBe(201);
-    expect((await readdir(empty)).sort()).toEqual([".DS_Store", "package.json", "src"]);
+    expect((await readdir(empty)).sort()).toEqual([".DS_Store", "AGENTS.md", "package.json", "src", "workspace.json"]);
   });
 
   it("validates prepared catalogs", () => {
@@ -268,4 +286,29 @@ describe("examples", () => {
     expect(isPreparedExampleCatalog({ ...valid, examples: [{ ...withoutPlay, type: "interactive-story" }] })).toBe(true);
     expect(isPreparedExampleCatalog({ ...valid, examples: [{ ...valid.examples[0], type: "interactive-story" }] })).toBe(false);
   });
+});
+
+it("skips game preparation with its implementations and resources unavailable", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "non-game-preparation-"));
+  const root = path.resolve(import.meta.dirname, "..");
+  const inputs = [
+    "scripts/prepare-examples.ts", "scripts/build-story-web.mjs",
+    "src/shared/application-composition.ts", "src/shared/application-selection.ts",
+    "src/shared/workspace-manifest.ts", "src/modules/example/manifest.ts",
+  ];
+  for (const input of inputs) {
+    await mkdir(path.dirname(path.join(directory, input)), { recursive: true });
+    await cp(path.join(root, input), path.join(directory, input));
+  }
+  await writeFile(path.join(directory, "package.json"), '{"type":"module"}');
+  await writeFile(path.join(directory, "src/shared/application-selection.ts"), 'export const applicationCompositionId = "non-game";');
+  await symlink(path.join(root, "node_modules"), path.join(directory, "node_modules"), process.platform === "win32" ? "junction" : "dir");
+  // Deliberately no story/compiler/example preparation implementations, assets,
+  // lock files, runtime cache or game sources in the fixture.
+  for (const script of inputs.slice(0, 2)) {
+    const output = execFileSync("node", ["--import", "tsx", script], { cwd: directory, encoding: "utf8", timeout: 10_000 });
+    expect(output).toContain("Skipped");
+  }
+  expect(await readdir(directory)).not.toContain(".runtime");
+  expect(await readdir(directory)).not.toContain("dist");
 });

@@ -1,38 +1,24 @@
+import { accountServicesEnabled } from "../shared/application-services.js";
+import { applicationStorageKey } from "./application-identity.js";
 import { createClient, type User } from "@supabase/supabase-js";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SignInDialog, type SignInProvider } from "./sign-in-dialog.js";
 import { syncCloudSession } from "./api.js";
 import { useReadyRuntimeGeneration } from "./runtime-connection.js";
 import { isLocalDebugEnabled, isLoopbackHostname, LOCAL_DEBUG_ACCESS_TOKEN, LOCAL_DEBUG_USER } from "../shared/local-debug.js";
 import { t } from "./i18n.js";
+import { setAnalyticsAccount } from "./analytics.js";
 
-export type AuthState =
-  | { status: "loading" }
-  | { status: "signed-out" }
-  | { status: "signed-in"; user: AuthUser };
+import { AuthContext, type AuthState, type AuthUser, type AuthContextValue } from "./account-context.js";
+export type { AuthState, AuthUser } from "./account-context.js";
 
-export interface AuthUser {
-  id: string;
-  name: string;
-  email?: string;
-  avatarUrl?: string;
-}
-
-interface AuthContextValue {
-  state: AuthState;
-  openSignIn: () => void;
-  requestAccessToken: () => Promise<string | undefined>;
-  signOut: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const supabase = createSupabaseClient();
-export const localDebug = isLocalDebugEnabled(
+export const localDebug = accountServicesEnabled && isLocalDebugEnabled(
   import.meta.env.DEV && typeof window !== "undefined" && isLoopbackHostname(window.location.hostname),
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
 );
-const LOCAL_SESSION_KEY = "ohmygame-local-debug-session";
+const LOCAL_SESSION_KEY = applicationStorageKey("ohmygame-local-debug-session");
 
 interface AuthClient {
   auth: Pick<ReturnType<typeof createClient>["auth"], "exchangeCodeForSession" | "getSession" | "onAuthStateChange" | "signInWithOAuth" | "signOut">;
@@ -57,12 +43,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const cloudSync = useRef(Promise.resolve());
   const cloudSyncRevision = useRef(0);
   function synchronizeCloud(session: { access_token: string; user: User } | null): void {
+    if (!accountServicesEnabled) return;
     const revision = ++cloudSyncRevision.current;
     cloudSync.current = cloudSync.current.catch(() => {}).then(async () => {
       if (revision !== cloudSyncRevision.current) return;
       await syncCloudSession(session ? { accessToken: session.access_token, userId: session.user.id } : null);
     }).catch(() => { /* Login remains available if the local daemon is restarting. */ });
   }
+
+  useEffect(() => {
+    if (state.status !== "loading") setAnalyticsAccount(state.status === "signed-in" ? state.user.id : null);
+  }, [state]);
 
   useEffect(() => {
     if (!supabase) { synchronizeCloud(null); return; }
@@ -133,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     state,
     openSignIn: () => {
+      if (!accountServicesEnabled) return;
       if (localDebug) {
         signInLocally();
         return;
@@ -155,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }), [state]);
 
   async function requestAccessToken(): Promise<string | undefined> {
+    if (!accountServicesEnabled) return undefined;
     if (localDebug) {
       signInLocally();
       return LOCAL_DEBUG_ACCESS_TOKEN;
@@ -323,10 +316,11 @@ export function createSupabaseClient(
   configuredUrl = import.meta.env.VITE_SUPABASE_URL,
   configuredKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
 ): AuthClient | undefined {
+  if (!accountServicesEnabled) return undefined;
   const url = configuredUrl?.trim();
   const key = configuredKey?.trim();
   if (!url || !key) return undefined;
-  return createClient(url, key, { auth: { flowType: "pkce" } });
+  return createClient(url, key, { auth: { flowType: "pkce", ...(applicationStorageKey("ohmygame") === "ohmygame" ? {} : { storageKey: applicationStorageKey("ohmygame:auth") }) } });
 }
 
 function stringValue(value: unknown): string | undefined {

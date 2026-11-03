@@ -10,7 +10,7 @@ const api = { balance: vi.fn(), providers: vi.fn(), custom: vi.fn() };
 vi.doMock(path.resolve("src/renderer/api.ts"), () => ({
   model3DBalance: api.balance, listProviders: api.providers, getCustomProvider: api.custom, MODELS_CHANGED_EVENT: "ohmygame-models-changed",
 }));
-vi.doMock(path.resolve("src/renderer/auth.tsx"), () => ({ useAuth: () => ({ state: { status: "signed-in", user: { id: "u", name: "Player" } }, openSignIn: vi.fn() }) }));
+vi.doMock(path.resolve("src/renderer/account-context.ts"), () => ({ useOptionalAccount: () => ({ state: { status: "signed-in", user: { id: "u", name: "Player" } }, openSignIn: vi.fn() }) }));
 vi.doMock(path.resolve("src/renderer/provider-models.tsx"), () => ({ ProviderModels: () => <div>Models</div> }));
 const { ModelsSettings } = await import("../src/renderer/models-settings.js");
 
@@ -64,4 +64,14 @@ it("deduplicates custom balances while keeping distinct model-level endpoints se
   expect(api.balance).toHaveBeenCalledWith({ provider: "studio", id: "other" });
   expect(container.querySelector('[aria-label="API balance · First"]')).not.toBeNull();
   expect(container.querySelector('[aria-label="API balance · Other account"]')).not.toBeNull();
+});
+
+it("configures Hyper3D API access without an account connection or daily quota", async () => {
+  const hyper3d = provider("hyper3d");
+  api.providers.mockResolvedValue([hyper3d]);
+  await render(hyper3d);
+  expect(container.querySelector('[aria-label="Daily quota"]')).toBeNull();
+  expect(container.textContent).not.toContain("OhMyGame account");
+  expect(container.querySelector('[aria-label="API balance"]')?.textContent).toContain("10 credits");
+  expect(api.balance).toHaveBeenCalledWith({ provider: "hyper3d", id: "connection" });
 });

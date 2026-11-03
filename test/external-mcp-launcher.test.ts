@@ -37,7 +37,7 @@ async function temporaryDirectory() {
 }
 
 /** A daemon's MCP service, reached through `fetch` as the launcher reaches the real one. */
-async function fixture() {
+async function fixture(selectTools = false) {
   const root = await temporaryDirectory();
   const game = path.join(root, "game");
   await mkdir(game);
@@ -96,7 +96,7 @@ async function fixture() {
   const service = new ExternalMcpService({
     dataDirectory: root,
     projects: () => projects,
-    tools,
+    tools: (project) => tools(project).filter((tool) => !selectTools || project.id === "game" || tool.name !== "generate_image"),
     catalog: () => tools(projects[0]!),
     waitMs: 1,
   });
@@ -247,6 +247,22 @@ it("answers the handshake and tool list itself, without starting OhMyGame", asyn
   expect(starts()).toBe(0);
 });
 
+it("refreshes the bound workspace catalog instead of advertising cached disabled tools", async () => {
+  const { service, create, ask, call } = await fixture(true);
+  await service.listening("http://127.0.0.1:1/external-mcp");
+  await service.setEnabled(true);
+  const launcher = create();
+  await ask(launcher, "initialize");
+  await call(launcher, "open_project", { project: "other" });
+  const names = async () => ((await ask(launcher, "tools/list"))!.result as { tools: { name: string }[] }).tools.map((tool) => tool.name);
+  expect(await names()).not.toContain("generate_image");
+  expect(await call(launcher, "generate_image")).toMatchObject({ isError: true });
+  await service.setEnabled(false); await service.setEnabled(true);
+  expect(await names()).not.toContain("generate_image");
+  await call(launcher, "open_project", { project: "game" });
+  expect(await names()).toContain("generate_image");
+});
+
 it("explains how to turn the feature on instead of starting the app", async () => {
   const { create, ask, call, starts } = await fixture();
   const launcher = create();
@@ -254,7 +270,7 @@ it("explains how to turn the feature on instead of starting the app", async () =
   expect(await call(launcher, "canvas_check")).toEqual({
     isError: true,
     text: expect.stringContaining(
-      "Settings → MCP Server → Allow other agents to use OhMyGame",
+      "turn on the MCP Server switch in Settings → MCP Server",
     ),
   });
   expect(starts()).toBe(0);

@@ -1,0 +1,9 @@
+OhMyTemplate derives from OhMyGame
+Copyright WhiteTowerAI and OhMyGame contributors
+Source: https://github.com/WhiteTowerAI/ohmygame
+Licensed under Apache License 2.0; see LICENSE.
+
+Original source headers and resource notices are retained. Dependency packages
+retain their own licenses in node_modules. The pinned Image to Three.js plugin
+is fetched separately from img2threejs/img2threejs at the revision recorded in
+config/preinstalled-plugins.json; its source notices accompany preparation.

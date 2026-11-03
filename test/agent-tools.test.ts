@@ -1,9 +1,18 @@
+import { createAgentTools as createCoreAgentTools } from "../src/daemon/agent-tools.js";
+import { build } from "esbuild";
+import { CanvasStore, readCanvasBoard, readCanvasIndex } from "../src/daemon/canvas-workspace.js";
+import { OHMYGAME_WORKSPACE_MODULES } from "../src/shared/workspace-manifest.js";
+import { createExampleToolContribution } from "../src/daemon/example-tools.js";
+import { ToolBridge } from "../src/daemon/agent-runtimes/tool-bridge.js";
+import { defineTool } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { indexPluginPackage } from "../src/daemon/plugin-index.js";
 import { TEST_GLB } from "./model3d-fixture.js";
-import { mkdir, mkdtemp, readFile, readdir, realpath, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
-import { activePiToolNames, createAgentTools, planningPiToolNames, projectPiToolNames } from "../src/daemon/agent-tools.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { activePiToolNames, createAgentTools, planningPiToolNames, projectPiToolNames } from "../src/daemon/ohmygame-agent-tools.js";
 import { AssetLibrary } from "../src/daemon/asset-library.js";
 import type { ImageGenerator } from "../src/daemon/openai-image.js";
 import { ProjectManager } from "../src/daemon/projects.js";
@@ -13,9 +22,150 @@ import type { VideoGenerator } from "../src/daemon/video-generation.js";
 import { WEB_GAME_USE_CAPABILITIES, type GameRuntimeAdapter } from "../src/shared/playtest.js";
 import { createNodeCodebase, createPlayableStarterCodebase } from "../src/daemon/playable-codebase.js";
 
+const contributionModules = [...OHMYGAME_WORKSPACE_MODULES, ...["example", "test-business"].map((id) => ({ id, configSchema: { type: "object" } }))];
+const contributionDirectories: string[] = [];
+afterEach(async () => {
+  await Promise.all(contributionDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
 const TEST_VIDEO_MODEL = { provider: "openrouter", id: "example/video-model" } as const;
 
 describe("agent tools", () => {
+  it("builds the core agent catalog with business implementations unavailable", async () => {
+    const result = await build({
+      entryPoints: [path.resolve("src/daemon/agent-tools.ts")],
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      packages: "external",
+      write: false,
+      metafile: true,
+      plugins: [{
+        name: "unavailable-business-implementations",
+        setup(builder) {
+          builder.onResolve({ filter: /(?:playable-|story-web|playtest-tools)/ }, (args) => {
+            if (args.importer.includes(`${path.sep}src${path.sep}`)) {
+              return { errors: [{ text: `Business implementation unavailable: ${args.path} from ${args.importer}` }] };
+            }
+          });
+        },
+      }],
+    });
+    expect(result.outputFiles[0]?.text).toContain("canvas_check");
+    expect(result.outputFiles[0]?.text).toContain("generate_image");
+  });
+
+  it("discovers and invokes source contributions alongside the default tools", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-contributions-"));
+    contributionDirectories.push(directory);
+    const projects = new ProjectManager(directory, undefined, contributionModules);
+    await projects.load();
+    const project = await projects.create("Contributions", "general", undefined, undefined, { version: 1, modules: [{ id: "test-business", config: {} }] });
+    const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
+    const contribution = { id: "test-business", tools: [defineTool({
+      name: "business_echo", label: "Echo", description: "Echo a value",
+      parameters: Type.Object({ value: Type.String() }),
+      execute: async (_id, input) => ({ content: [{ type: "text" as const, text: `${project.id}: ${input.value}` }], details: {} }),
+    })] };
+    const tools = createAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, undefined, [contribution]);
+    expect(projectPiToolNames("normal", [], tools.map((tool) => tool.name))).toContain("business_echo");
+    expect(projectPiToolNames("planning", [], tools.map((tool) => tool.name))).not.toContain("business_echo");
+    const echo = tools.find((tool) => tool.name === "business_echo")!;
+    expect(await echo.execute("echo", { value: "hello" }, undefined, undefined, {} as never)).toMatchObject({ content: [{ text: `${project.id}: hello` }] });
+    expect(() => createAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, undefined, [contribution, contribution])).toThrow(/Duplicate tool.*business_echo.*test-business/);
+  });
+
+  it("rejects disabled business tools at the shared agent invocation boundary", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-selection-"));
+    contributionDirectories.push(directory);
+    const projects = new ProjectManager(directory, undefined, contributionModules);
+    await projects.load();
+    const project = await projects.create("Story", "interactive-story");
+    const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
+    const driver: GameRuntimeAdapter = { available: true, capabilities: WEB_GAME_USE_CAPABILITIES, request: async () => ({ operation: "closeAll" }), close: () => {} };
+    const playtest = { driver, resolveOpenTarget: async () => ({ runtime: "web" as const, url: "http://localhost/" }) };
+    for (const selection of [{ game: false }, { story: false }, { game: false, story: false }]) {
+      const tools = createAgentTools(project, runner, projects, undefined, undefined, playtest, undefined, undefined, [], selection);
+      const names = tools.map((tool) => tool.name);
+      const bridge = new ToolBridge(tools);
+      for (const name of [...(selection.game === false ? ["game_use"] : []), ...(selection.story === false ? ["playable_add_node", "playable_check"] : [])]) {
+        expect(projectPiToolNames("normal", [], names)).not.toContain(name);
+        expect(bridge.list("all").map((tool) => tool.name)).not.toContain(name);
+        expect(await bridge.call(name, {}, "disabled")).toMatchObject({ isError: true });
+      }
+      expect(names).toContain("canvas_check");
+      if (selection.story !== false) expect(names).toContain("playable_check");
+      if (selection.game !== false) expect(names).toContain("game_use");
+    }
+  });
+
+  it("uses persisted workspace modules for Pi and coding-agent catalogs and execution", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "workspace-tools-"));
+    contributionDirectories.push(directory);
+    const projects = new ProjectManager(directory, undefined, contributionModules);
+    await projects.load();
+    const project = await projects.create("Notes", "interactive-story", undefined, undefined, { version: 1, modules: [{ id: "example", config: {} }] });
+    const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
+    const tools = createAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, undefined, [createExampleToolContribution(project)]);
+    const bridge = new ToolBridge(tools);
+    expect(tools.map((tool) => tool.name)).not.toContain("playable_check");
+    expect(await bridge.call("playable_add_node", {}, "disabled")).toMatchObject({ isError: true });
+    expect(await bridge.call("example_echo", { message: "notes" }, "echo")).toMatchObject({ result: { content: [{ text: "notes" }] } });
+  });
+
+  it("does not advertise or invoke game_use for a workspace without game selection", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-nongame-tools-"));
+    contributionDirectories.push(directory);
+    const projects = new ProjectManager(directory);
+    await projects.load();
+    const project = await projects.create("Notes", "general", undefined, undefined, { version: 1, modules: [] });
+    project.webPreviewEnabled = true;
+    const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
+    const driver: GameRuntimeAdapter = { available: true, capabilities: WEB_GAME_USE_CAPABILITIES, request: async () => { throw new Error("must not start a driver"); }, close: () => {} };
+    const tools = createAgentTools(project, runner, projects, undefined, undefined, { driver, resolveOpenTarget: async () => ({ runtime: "web", url: "http://localhost/" }) });
+    expect(tools.map((tool) => tool.name)).not.toContain("game_use");
+    expect(await new ToolBridge(tools).call("game_use", { operation: "open" }, "blocked")).toMatchObject({ isError: true });
+    expect(tools.map((tool) => tool.name)).toContain("canvas_check");
+  });
+
+  it("runs the shipped example through Pi and the coding-agent bridge without widening planning permissions", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-example-"));
+    contributionDirectories.push(directory);
+    const projects = new ProjectManager(directory, undefined, contributionModules);
+    await projects.load();
+    const project = await projects.create("Example", "general", undefined, undefined, { version: 1, modules: [{ id: "example", config: {} }] });
+    const runner = new ToolRunner(directory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
+    const tools = createCoreAgentTools(project, runner, projects, undefined, undefined, undefined, undefined, [createExampleToolContribution(project)]);
+    const names = tools.map((tool) => tool.name);
+    const canvas = new CanvasStore(projects, new AssetLibrary(directory), runner);
+    await canvas.workspace(project.id);
+    await canvas.close();
+    const boardId = (await readCanvasIndex(project.workspacePath))!.boards[0]!.id;
+    const beforeNote = (await readCanvasBoard(project.workspacePath, boardId))!;
+    const noteBridge = new ToolBridge(tools);
+    expect(await noteBridge.call("example_note", { boardId, nodeId: "note", revision: beforeNote.revision, text: "Ship extension", done: false }, "note")).toMatchObject({ isError: false });
+    const savedNote = (await readCanvasBoard(project.workspacePath, boardId))!;
+    expect(savedNote.board.nodes).toContainEqual(expect.objectContaining({ id: "note", type: "custom", data: { module: "example", kind: "note", value: { text: "Ship extension", done: false } } }));
+    expect(await noteBridge.call("example_note", { boardId, nodeId: "note", revision: beforeNote.revision, text: "stale", done: true }, "stale")).toMatchObject({ isError: true });
+    expect(await noteBridge.call("example_note", { boardId, nodeId: "note", revision: savedNote.revision, text: 42, done: false }, "invalid-note")).toMatchObject({ isError: true });
+    expect(projectPiToolNames("normal", [], names)).toContain("example_echo");
+    expect(projectPiToolNames("planning", [], names)).not.toContain("example_echo");
+    const echo = tools.find((tool) => tool.name === "example_echo")!;
+    expect(await echo.execute("pi", { message: "hello" }, undefined, undefined, {} as never)).toMatchObject({ content: [{ text: "hello" }], details: { workspaceId: project.id } });
+    const otherProject = await projects.create("Other example", "general", undefined, undefined, { version: 1, modules: [{ id: "example", config: {} }] });
+    const otherTools = createCoreAgentTools(otherProject, runner, projects, undefined, undefined, undefined, undefined, [createExampleToolContribution(otherProject)]);
+    const otherBridge = new ToolBridge(otherTools);
+    expect(await otherBridge.call("example_echo", { message: "other workspace" }, "other")).toMatchObject({ result: { details: { workspaceId: otherProject.id } } });
+    expect(otherProject.id).not.toBe(project.id);
+    const bridge = new ToolBridge(tools);
+    expect(await bridge.call("example_echo", { message: "bridge" }, "native")).toMatchObject({ isError: false, result: { content: [{ text: "bridge" }], details: { workspaceId: project.id } } });
+    expect(await bridge.call("example_echo", { message: 42 }, "invalid")).toMatchObject({ isError: true });
+    expect(await bridge.call("example_echo", { message: "cancelled" }, "cancel", AbortSignal.abort())).toMatchObject({ isError: true });
+    bridge.setActive(projectPiToolNames("planning", [], names));
+    expect(bridge.list().map((tool) => tool.name)).not.toContain("example_echo");
+    expect(await bridge.call("example_echo", { message: "blocked" }, "plan")).toMatchObject({ isError: true });
+  });
+
   it("maps enabled product tools to Pi tool names", () => {
     expect(planningPiToolNames()).toEqual(["read", "grep", "find", "ls", "web_search", "questionnaire", "update_plan"]);
     expect(activePiToolNames([])).toEqual(["read", "write", "edit", "bash", "web_search", "update_plan", "install_plugin"]);
@@ -106,9 +256,9 @@ describe("agent tools", () => {
   });
 
   it.each([
-    { skills: [{ id: "skills/character/SKILL.md", name: "Character", enabled: true }], mcpServers: [], count: "1 Skill" },
-    { skills: [], mcpServers: [{ id: "api", name: "API", enabled: true }], count: "1 MCP service" },
-  ])("reports installed capabilities and only installs from the current workspace ($count)", async ({ skills, mcpServers, count }) => {
+    { skills: true, count: "1 Skill", next: "applies by itself" },
+    { skills: false, count: "1 MCP service", next: "approve what it asks for" },
+  ])("reports what it installed and only installs from the current workspace ($count)", async ({ skills, count, next }) => {
     const dataDirectory = await mkdtemp(path.join(tmpdir(), "ohmygame-agent-tool-"));
     const projects = new ProjectManager(dataDirectory);
     await projects.load();
@@ -119,29 +269,28 @@ describe("agent tools", () => {
     await symlink(outsideDirectory, path.join(project.workspacePath, "linked-plugin"));
     await mkdir(path.join(pluginDirectory, ".ohmygame-plugin"));
     await writeFile(path.join(pluginDirectory, ".ohmygame-plugin/plugin.json"), JSON.stringify({
-      name: "character-workflow", version: "0.1.0", description: "Characters",
-      ...(skills.length ? { skills: "./skills/" } : { mcpServers: "./mcp.json" }),
+      id: "personal/character-workflow", version: "0.1.0", engines: { "ohmygame-api": "^2.0.0" },
+      displayName: "Character Workflow", description: "Characters",
+      ...(skills
+        ? { contributes: { skills: "./skills/" } }
+        : { capabilities: { network: ["example.com"] }, contributes: { mcpServers: [{ id: "api", title: "API", url: "https://example.com/mcp", tools: ["search"] }] } }),
     }));
-    if (skills.length) await mkdir(path.join(pluginDirectory, "skills/character"), { recursive: true });
-    else await writeFile(path.join(pluginDirectory, "mcp.json"), JSON.stringify({ mcpServers: { api: { url: "https://example.com/mcp" } } }));
+    if (skills) await mkdir(path.join(pluginDirectory, "skills/character"), { recursive: true });
     const runner = new ToolRunner(dataDirectory, { generate: async () => ({ bytes: Buffer.from("image"), mediaType: "image/webp" }) });
     await runner.load();
     let installedPath = "";
-    const plugin = {
-      id: "personal:character-workflow", name: "character-workflow", displayName: "Character Workflow", description: "Characters", version: "0.1.0",
-      marketplace: { id: "personal", displayName: "Personal" }, source: { type: "directory" as const }, installed: true, enabled: true,
-      skills, mcpServers, connections: [],
-    };
     const tool = createAgentTools(project, runner, projects, undefined, async (sourcePath) => {
       installedPath = sourcePath;
-      return plugin;
-    }).find(({ name }) => name === "install_plugin");
+      const indexed = await indexPluginPackage(sourcePath);
+      if (!indexed.ok) throw new Error("Expected a valid package");
+      return indexed.entry;
+    }, undefined, undefined, undefined, [], { game: false, story: false }).find(({ name }) => name === "install_plugin");
     if (!tool) throw new Error("Expected install plugin tool");
 
-    if (skills.length) {
+    if (skills) {
       const skillFile = path.join(pluginDirectory, "skills/character/SKILL.md");
       await writeFile(skillFile, "# Character\nCreate a game character.");
-      await expect(tool.execute("invalid-skill", { path: "character-workflow" }, undefined, undefined, {} as never)).rejects.toThrow("frontmatter");
+      await expect(tool.execute("invalid-skill", { path: "character-workflow" }, undefined, undefined, {} as never)).rejects.toThrow("/contributes/skills/character");
       expect(installedPath).toBe("");
       await writeFile(skillFile, "---\nname: character\ndescription: Create a game character.\n---\n\nUse the project's character brief.");
     }
@@ -150,6 +299,7 @@ describe("agent tools", () => {
     expect(installedPath).toBe(await realpath(pluginDirectory));
     expect(result.content).toEqual([{ type: "text", text: expect.stringContaining("Created and installed Character Workflow") }]);
     expect(result.content).toEqual([{ type: "text", text: expect.stringContaining(count) }]);
+    expect(result.content).toEqual([{ type: "text", text: expect.stringContaining(next) }]);
     await expect(tool.execute("call-outside", { path: "../outside" }, undefined, undefined, {} as never))
       .rejects.toThrow("inside the current workspace");
     await expect(tool.execute("call-linked", { path: "linked-plugin" }, undefined, undefined, {} as never))

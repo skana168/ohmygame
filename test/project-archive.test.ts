@@ -102,10 +102,12 @@ describe("project archive export", () => {
       "workspace/.data/asset-previews/hero.png",
       "workspace/.data/assets.json",
       "workspace/.gitignore",
+      "workspace/AGENTS.md",
       "workspace/canvas/board.json",
       "workspace/index.html",
       "workspace/levels/build/keep.txt",
       "workspace/src/main.js",
+      "workspace/workspace.json",
     ]);
     expect(archive["cover.webp"]).toEqual(webp("cover"));
     expect(JSON.parse(archive["ohmygame-project.json"]!.toString())).toEqual({
@@ -253,6 +255,56 @@ describe("project archive export", () => {
     ).toBe(404);
   });
 
+  it("carries the chosen icon, template cover and uploaded logo through export, import and duplication", async () => {
+    const app = createApp({ dataDirectory: await temporaryDirectory() });
+    apps.push(app);
+    const project = (
+      await app.inject({ method: "POST", url: "/projects", payload: { type: "web-game", name: "Logo game" } })
+    ).json();
+    await app.inject({
+      method: "PUT",
+      url: `/projects/${project.id}/cover?source=auto`,
+      headers: { "content-type": "image/webp" },
+      payload: webp("automatic"),
+    });
+    await app.inject({ method: "PUT", url: `/projects/${project.id}/appearance`, payload: { icon: "rocket", tone: 2, cover: "template" } });
+    await app.inject({
+      method: "PUT",
+      url: `/projects/${project.id}/logo`,
+      headers: { "content-type": "image/webp" },
+      payload: webp("logo"),
+    });
+
+    const archive = await readArchive((await app.inject({ method: "POST", url: `/projects/${project.id}/export` })).rawPayload);
+    expect(archive["logo.webp"]).toEqual(webp("logo"));
+    // The template replaces the cover, so there is none to pack.
+    expect(archive["cover.webp"]).toBeUndefined();
+    expect(JSON.parse(archive["ohmygame-project.json"]!.toString()).project.appearance)
+      .toEqual({ icon: "rocket", tone: 2, cover: "template", logo: true });
+
+    const imported = (await app.inject({
+      method: "POST",
+      url: "/projects/import",
+      headers: { "content-type": PROJECT_ARCHIVE_CONTENT_TYPE },
+      payload: await zipArchive(archive),
+    })).json();
+    const duplicate = (await app.inject({ method: "POST", url: `/projects/${project.id}/duplicate` })).json();
+    for (const copy of [imported, duplicate]) {
+      expect(copy.appearance).toEqual({ icon: "rocket", tone: 2, cover: "template", logo: true });
+      expect((await app.inject({ method: "GET", url: `/projects/${copy.id}/logo` })).rawPayload).toEqual(webp("logo"));
+    }
+
+    // An archive that names a logo without holding one falls back to the icon.
+    const { "logo.webp": _logo, ...withoutLogo } = archive;
+    const missing = (await app.inject({
+      method: "POST",
+      url: "/projects/import",
+      headers: { "content-type": PROJECT_ARCHIVE_CONTENT_TYPE },
+      payload: await zipArchive(withoutLogo),
+    })).json();
+    expect(missing.appearance).toEqual({ icon: "rocket", tone: 2, cover: "template" });
+  });
+
   it("counts the manifest even when the workspace is empty", async () => {
     const projects = new ProjectManager(await temporaryDirectory());
     const project = await projects.create("Empty project");
@@ -381,8 +433,8 @@ describe("project archive export", () => {
 
 describe("project archive import", () => {
   it.each(["fit", "mobile", "mobile-landscape"])("imports an exported project as a new project with the %s preset", async (previewViewport) => {
-    const source = createApp({ dataDirectory: await temporaryDirectory() });
-    const target = createApp({ dataDirectory: await temporaryDirectory() });
+    const source = createApp({ dataDirectory: await temporaryDirectory(), publishing: false, community: false, accountServices: false });
+    const target = createApp({ dataDirectory: await temporaryDirectory(), publishing: false, community: false, accountServices: false });
     apps.push(source, target);
     const original = (
       await source.inject({
@@ -893,12 +945,12 @@ async function listFiles(root: string, relative = ""): Promise<string[]> {
 }
 
 function zipArchive(
-  entries: Record<string, string | { contents: string; mode: number }>,
+  entries: Record<string, string | Buffer | { contents: string; mode: number }>,
 ): Promise<Buffer> {
   const zip = new ZipFile();
   for (const [name, entry] of Object.entries(entries)) {
     const { contents, mode } =
-      typeof entry === "string" ? { contents: entry, mode: 0o100644 } : entry;
+      typeof entry === "string" || Buffer.isBuffer(entry) ? { contents: entry, mode: 0o100644 } : entry;
     zip.addBuffer(Buffer.from(contents), name, { mode, compress: false });
   }
   return new Promise((resolve, reject) => {

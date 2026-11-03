@@ -1,3 +1,4 @@
+import { composeToolContributions } from "../tool-contributions.js";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Check, Errors } from "typebox/value";
 import type { NativeToolResult } from "./native-session.js";
@@ -21,6 +22,8 @@ export interface BridgeTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** For tools whose results carry `structuredContent`, such as plugin tools. */
+  outputSchema?: Record<string, unknown>;
   _meta?: Record<string, unknown>;
 }
 
@@ -38,7 +41,7 @@ export class ToolBridge {
 
   constructor(tools: readonly ToolDefinition[]) {
     this.#tools = new Map(
-      tools
+      composeToolContributions([{ id: "agent", tools }])
         .filter((tool) => !AGENT_OWN_TOOLS.has(tool.name))
         .map((tool) => [tool.name, tool]),
     );
@@ -68,6 +71,9 @@ export class ToolBridge {
         name: tool.name,
         description: tool.description,
         inputSchema: jsonSchema(tool.parameters),
+        ...(tool.outputSchema
+          ? { outputSchema: jsonSchema(tool.outputSchema) }
+          : {}),
         // Claude Code otherwise defers MCP tools behind its tool search, where
         // the model may never find update_plan or the media tools.
         _meta: { "anthropic/alwaysLoad": true },
@@ -105,6 +111,9 @@ export class ToolBridge {
         result: {
           content: output.content as NativeToolResult["content"],
           ...(output.details !== undefined ? { details: output.details } : {}),
+          ...(output.structuredContent !== undefined
+            ? { structuredContent: output.structuredContent }
+            : {}),
         },
         isError: false,
       };
@@ -173,6 +182,9 @@ export class ToolBridge {
           id,
           result: {
             content: outcome.result.content,
+            ...(outcome.result.structuredContent !== undefined
+              ? { structuredContent: outcome.result.structuredContent }
+              : {}),
             ...(outcome.isError ? { isError: true } : {}),
           },
         };

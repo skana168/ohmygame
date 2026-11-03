@@ -1,4 +1,6 @@
 /// <reference types="vitest/config" />
+import { applicationComposition } from "./src/shared/application-composition.js";
+import identity from "./application-identity.cjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
@@ -11,16 +13,23 @@ const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.met
   version: string;
 };
 // Release builds upload hidden source maps to Sentry and delete them, so packages never ship them.
+const application = identity.loadIdentity();
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
 
 export default defineConfig({
   base: "./",
+  resolve: {
+    alias: applicationComposition.id === "non-game" ? [{ find: /^.*\/business-contributions\.js$/, replacement: path.resolve(import.meta.dirname, "src/renderer/core-contributions.ts") }] : [],
+  },
   define: {
+    __APP_NAME__: JSON.stringify(application.name),
+    __APP_PACKAGE_NAME__: JSON.stringify(application.packageName),
     __APP_VERSION__: JSON.stringify(packageJson.version),
     __APP_CHANGELOG__: JSON.stringify(parseChangelog(readFileSync(new URL("./CHANGELOG.md", import.meta.url), "utf8"))),
   },
   plugins: [
     react(),
+    { name: "application-title", transformIndexHtml: (html) => html.replace(/<title>.*?<\/title>/, `<title>${application.name}</title>`) },
     sentryAuthToken
       ? sentryVitePlugin({
           org: "whitetower-hk-limited",
@@ -28,7 +37,7 @@ export default defineConfig({
           authToken: sentryAuthToken,
           telemetry: false,
           // Matches the release @sentry/electron reports by default.
-          release: { name: `${packageJson.name}@${packageJson.version}`, inject: false },
+          release: { name: `${application.packageName}@${packageJson.version}`, inject: false },
           sourcemaps: { filesToDeleteAfterUpload: ["dist/renderer/**/*.map"] },
         })
       : undefined,
@@ -40,7 +49,10 @@ export default defineConfig({
     rolldownOptions: {
       input: {
         main: path.resolve(import.meta.dirname, "index.html"),
-        webGameHost: path.resolve(import.meta.dirname, "web-game-host.html"),
+        ...(applicationComposition.game ? {
+          webGameHost: path.resolve(import.meta.dirname, "web-game-host.html"),
+          gameRecorder: path.resolve(import.meta.dirname, "game-recorder.html"),
+        } : {}),
       },
     },
   },
@@ -53,6 +65,10 @@ export default defineConfig({
     testTimeout: 30_000,
     // Polls that wait for spawned processes need more than the 1s default under parallel load.
     expect: { poll: { timeout: 10_000 } },
+  },
+  optimizeDeps: {
+    // Only a lazy import reaches model-viewer, so the startup scan misses it and the mid-session re-optimize can leave the dev server answering 504.
+    include: ["@google/model-viewer"],
   },
   server: {
     strictPort: true,

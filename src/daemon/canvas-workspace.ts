@@ -1,3 +1,5 @@
+import { canvasNodeContributions, customCanvasNodeIssue } from "../shared/custom-canvas-nodes.js";
+import { canvasPolicy, workspaceHasModule } from "../shared/workspace-policy.js";
 import { audioSettings } from "../shared/audio.js";
 import { CANVAS_TABLE_SCHEMA, createCanvasTable, isCanvasTable, canvasTablePath, type CanvasTable, type CanvasTableDetail } from "../shared/canvas-table.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -19,6 +21,7 @@ import type { ProjectManager } from "./projects.js";
 import type { ToolRunner } from "./tools.js";
 import { CanvasError, canvasPath, parseCanvasJson, readCanvasFile, writeCanvasFile as writeAtomic, writeCanvasJson as writeJson } from "./canvas-files.js";
 import { canvasAssetCatalog, canvasLibraryAsset, ensureCanvasAssets, inspectCanvasAssets, readCanvasAssets } from "./canvas-assets.js";
+import { sameJson } from "../shared/same-json.js";
 export { CanvasError } from "./canvas-files.js";
 
 const locks = new Map<string, Promise<unknown>>();
@@ -32,13 +35,12 @@ const validId = (id: string) => { if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) throw 
 const revision = (value: unknown) => createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
 const CANVAS_INSTRUCTIONS = `# Canvas workspace
 
-Canvas files are the source of truth in both Design and Asset Canvas. Use normal read, edit, and write tools to create and change boards, nodes, documents, and references.
+Canvas files are the source of truth for boards, documents, tables, and assets. Use normal read, edit, and write tools to create and change boards, nodes, documents, and references.
 
 - Read README.md and schemas/ before changing a contract. Run canvas_check after editing.
 - index.json lists boards, documents, optional tables, and the main document. Keep IDs stable; names and titles may change.
 - boards/<id>.json contains nodes and their content. Every node may have a title and a description of its purpose. Document bodies live in documents/<id>.md, referenced by documentId. Table data lives in tables/<id>.json, referenced by tableId; register tables in index.json. Keep row/column IDs stable and match cells to their column types.
 - Give nodes meaningful titles. Descriptions explain their intended role; do not describe unseen image pixels as verified facts.
-- For game work, identify reference mockups and production assets in node titles/descriptions. Record production assets' intended gameplay use in the design document; reference mockups do not fulfill those requirements.
 - editor/<board-id>.json stores positions, zoom, and width/height for text, document, and table nodes only; media and generation nodes size to their content. fitView requests a one-time fit when a remixed board is first opened; the editor clears it after saving the new viewport. New nodes are placed automatically; layout edits are only needed when the user asks to arrange the canvas.
 - assets.json maps asset IDs to names, workspace-relative paths, optional descriptions and generation prompts. Use the same ID for the same asset across boards. References with type "library" resolve through this manifest. libraryAssetId records provenance; local files remain usable without the Library.
 - Read actual image files with read when judging their appearance. A name, description, or generation prompt is not proof of what the image shows.
@@ -46,7 +48,7 @@ Canvas files are the source of truth in both Design and Asset Canvas. Use normal
 - Speech, sound-effect, music, and audio-scene nodes use the shared audio model contract. Audio references use stable AudioN/ImageN IDs with a node or Library source; mention audio as @AudioN. Use up to three short audio clips, one image, or a Speaker ID as separate modes. Subtitles and generation metadata are saved beside the audio. Keep provider-specific credentials out of canvas files; select models by provider/id and only use options advertised by that model's capabilities.
 - To add local media, register its workspace-relative path in assets.json and reference its ID from an asset node or an existing generation node.
 - A file node points at any other project file by its project-relative path (data.path), such as a source file, font, archive or editor project; with directory: true it points at a folder whose structure matters, such as an asset pack. Files and folders imported on the canvas live under assets/files/. Read or use the files themselves; update the path if you move them.
-- Do not trigger generation merely by editing a prompt or adding a reference. A game-creation request includes its needed media unless the user narrows the scope. Use generate_canvas_media with the saved boardId and nodeId for generation; it uses the node settings and shared generation history.
+- Do not trigger generation merely by editing a prompt or adding a reference. Use generate_canvas_media with the saved boardId and nodeId for generation; it uses the node settings and shared generation history.
 - Removing a node or board keeps its documents, tables, and assets. Remove references to a deleted node from the same board.
 - An editor-context block identifies the current board and selected nodes. Read the referenced files before editing, and preserve other user changes.
 `;
@@ -65,9 +67,16 @@ The canvas edits ordinary project files. Documents are Markdown and media files 
 | schemas/ | Exact persisted file contracts |
 | jobs.json | Generation history managed by the application |
 
+Custom nodes use type "custom" with data {module, kind, value}. Validate value against schemas/custom/<module>-<kind>.schema.json. Preserve unknown or unavailable custom-node payloads. Run canvas_check after agent edits.
+
 Read AGENTS.md for editing conventions. Asset paths are relative to the project root; Markdown image links are relative to the document file. Node IDs need only be unique within their board; asset, document and table IDs are shared across the canvas workspace.
 `;
 export async function ensureCanvasContract(workspace: string, replaceReadme = false): Promise<void> {
+  for (const contribution of canvasNodeContributions) {
+    const name = `schemas/custom/${validId(contribution.module)}-${validId(contribution.kind)}.schema.json`;
+    const text = `${JSON.stringify(contribution.dataSchema, null, 2)}\n`;
+    if (await readCanvasFile(workspace, name) !== text) await writeAtomic(workspace, name, text);
+  }
   for (const [name, value] of [["index", CANVAS_INDEX_SCHEMA], ["board", CANVAS_BOARD_SCHEMA], ["layout", CANVAS_LAYOUT_SCHEMA], ["assets", CANVAS_ASSETS_SCHEMA], ["table", CANVAS_TABLE_SCHEMA]] as const) {
     const file = `schemas/${name}.schema.json`, text = `${JSON.stringify(value, null, 2)}\n`;
     if (await readCanvasFile(workspace, file) !== text) await writeAtomic(workspace, file, text);
@@ -182,15 +191,47 @@ export async function inspectCanvasBoard(workspace: string, id: string): Promise
   if (board.id !== id) throw new CanvasError(`canvas/${name}: board ID does not match its file name`);
   return { detail: { board, revision: revision([text, layoutText ?? ""]) }, issues };
 }
+/** A board as its file stores it, without the editor's layout and view. */
+function canvasBoardContent({ editorLayout: _editorLayout, ...content }: CanvasBoard) {
+  return { ...content, nodes: content.nodes.map(canvasNodeContent) };
+}
 async function writeCanvasBoard(workspace: string, board: CanvasBoard): Promise<CanvasBoardDetail> {
   if (!isCanvasBoard(board)) throw new CanvasError("Invalid canvas board");
-  const { editorLayout, ...content } = board;
-  const persisted = { ...content, nodes: board.nodes.map(canvasNodeContent) };
+  const { editorLayout } = board;
+  const persisted = canvasBoardContent(board);
   const text = `${JSON.stringify(persisted, null, 2)}\n`;
   if (Buffer.byteLength(text) > 4 * 1024 * 1024) throw new CanvasError("Canvas board is too large");
   await writeAtomic(workspace, `boards/${validId(board.id)}.json`, text);
   await writeJson(workspace, `editor/${board.id}.json`, editorLayout);
   return (await readCanvasBoard(workspace, board.id))!;
+}
+/** Module tools use the same lock, board revision and atomic persistence as editor saves. */
+export async function updateCustomCanvasNode(
+  project: import("../shared/contracts.js").ProjectState,
+  input: { boardId: string; nodeId: string; revision: string; data: import("../shared/custom-canvas-nodes.js").CustomCanvasNode["data"] },
+  signal?: AbortSignal,
+): Promise<CanvasBoardDetail> {
+  return withCanvasLock(project.workspacePath, async () => {
+    signal?.throwIfAborted();
+    if (!workspaceHasModule(project, input.data.module)) throw new CanvasError(`Missing workspace module ${input.data.module}`);
+    const index = await readCanvasIndex(project.workspacePath);
+    if (!index?.boards.some((entry) => entry.id === input.boardId)) throw new CanvasError("Canvas board not found", 404);
+    const detail = await readCanvasBoard(project.workspacePath, input.boardId);
+    if (!detail || detail.revision !== input.revision) throw new CanvasError("The board changed. Reload the latest board before saving.", 409);
+    const data = input.data;
+    const issue = customCanvasNodeIssue(data);
+    if (issue) throw new CanvasError(issue);
+    const existing = detail.board.nodes.find((node) => node.id === input.nodeId);
+    if (existing && (existing.type !== "custom" || existing.data.module !== data.module || existing.data.kind !== data.kind)) throw new CanvasError("Node ID belongs to a different node");
+    if (existing) existing.data = data;
+    else {
+      const position = { x: 96, y: 96 };
+      detail.board.nodes.push({ id: input.nodeId, type: "custom", position, data });
+      detail.board.editorLayout.nodes[input.nodeId] = position;
+    }
+    signal?.throwIfAborted();
+    return writeCanvasBoard(project.workspacePath, detail.board);
+  });
 }
 export async function canvasReferencesAsset(workspace: string, id: string): Promise<boolean> {
   const index = await readCanvasIndex(workspace);
@@ -334,7 +375,7 @@ export class CanvasStore {
   }
   async createDocument(id: string, title: string) {
     const project = this.#project(id), workspace = project.workspacePath;
-    return withCanvasLock(workspace, () => writeCanvasDocument(workspace, createCanvasDocument(title.trim() || "Untitled document"), project.type !== "asset-canvas"));
+    return withCanvasLock(workspace, () => writeCanvasDocument(workspace, createCanvasDocument(title.trim() || "Untitled document"), canvasPolicy(project).gameDesign));
   }
   async save(id: string, document: CanvasMarkdownDocument, expected: string, documentId?: string) {
     const workspace = this.#project(id).workspacePath;
@@ -343,7 +384,7 @@ export class CanvasStore {
       if (!current) throw new CanvasError("Document not found", 404);
       if (current.revision !== expected) throw new CanvasError("The document changed. Review the latest version before saving.", 409);
       if (current.document.id !== document.id) throw new CanvasError("The document ID must stay unchanged");
-      return writeCanvasDocument(workspace, document, this.#project(id).type !== "asset-canvas");
+      return writeCanvasDocument(workspace, document, canvasPolicy(this.#project(id)).gameDesign);
     });
   }
   async table(id: string, tableId: string): Promise<CanvasTableDetail> {
@@ -364,7 +405,7 @@ export class CanvasStore {
     });
   }
   async setMainDocument(id: string, documentId: string) {
-    if (this.#project(id).type === "asset-canvas") throw new CanvasError("Main game design documents require a game project", 409);
+    if (!canvasPolicy(this.#project(id)).gameDesign) throw new CanvasError("Main game design documents require the game module", 409);
     const workspace = this.#project(id).workspacePath;
     await withCanvasLock(workspace, async () => {
       if (!await readCanvasDocument(workspace, documentId)) throw new CanvasError("Document not found", 404);
@@ -385,6 +426,15 @@ export class CanvasStore {
       const current = await this.board(id, board.id);
       if (current.revision !== expected) throw new CanvasError("The board changed. Reload the latest board before saving.", 409);
       if (!isCanvasBoard(board)) throw new CanvasError("Invalid canvas board");
+      for (const node of board.nodes) {
+        if (node.type !== "custom") continue;
+        const previous = current.board.nodes.find((entry) => entry.id === node.id);
+        // Unknown/invalid saved payloads remain movable and survive unrelated edits.
+        if (previous?.type === "custom" && sameJson(previous.data, node.data)) continue;
+        if (!workspaceHasModule(project, node.data.module)) throw new CanvasError(`Node ${node.id}: missing workspace module ${node.data.module}`);
+        const issue = customCanvasNodeIssue(node.data);
+        if (issue) throw new CanvasError(`Node ${node.id}: ${issue}`);
+      }
       const index = (await readCanvasIndex(workspace))!;
       const documents = index.documents;
       const existingTables = new Set(current.board.nodes.flatMap((node) => node.type === "table" ? [node.data.tableId] : []));
@@ -393,12 +443,13 @@ export class CanvasStore {
       if (board.nodes.some((node) => node.type === "document" && !existingDocuments.has(node.data.documentId) && !documents.some((document) => document.id === node.data.documentId))) throw new CanvasError("Document reference not found", 404);
       await ensureCanvasAssets(project, this.projects, this.library, canvasNodeAssetIds(board.nodes), canvasNodeAssetIds(current.board.nodes));
       const detail = await writeCanvasBoard(workspace, board);
-      await this.projects.touch(id);
+      // Moving the view is not editing the project.
+      if (!sameJson(canvasBoardContent(current.board), canvasBoardContent(board))) await this.projects.touch(id);
       return detail;
     });
   }
   async changeBoards(id: string, action: { type: "create"; name: string } | { type: "rename" | "delete" | "move"; boardId: string; name?: string; direction?: number }) {
-    if (this.#project(id).type === "asset-canvas") throw new CanvasError("Asset Canvas uses one default board", 409);
+    if (canvasPolicy(this.#project(id)).singleBoard) throw new CanvasError("Asset Canvas uses one default board", 409);
     const workspace = this.#project(id).workspacePath;
     return withCanvasLock(workspace, async () => {
       const index = await ensureCanvasIndex(workspace);
@@ -428,9 +479,9 @@ export class CanvasStore {
       if (asset.mediaType !== "image") throw new CanvasError("Choose an image asset");
       const detail = await readCanvasDocument(workspace, documentId);
       if (!detail) throw new CanvasError("Document not found", 404);
-      const label = asset.name.replace(/[\[\]\n]/g, "");
+      const label = asset.name.replace(/[[\]\n]/g, "");
       const link = asset.path.split("/").map(encodeURIComponent).join("/");
-      const saved = await writeCanvasDocument(workspace, { ...detail.document, markdown: `${detail.document.markdown.trimEnd()}\n\n![${label}](../../${link})\n` }, this.#project(id).type !== "asset-canvas");
+      const saved = await writeCanvasDocument(workspace, { ...detail.document, markdown: `${detail.document.markdown.trimEnd()}\n\n![${label}](../../${link})\n` }, canvasPolicy(this.#project(id)).gameDesign);
       if (asset.libraryAssetId && this.library.get(asset.libraryAssetId)) await this.library.save(asset.libraryAssetId);
       return saved;
     });

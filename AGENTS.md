@@ -36,3 +36,20 @@ their code, documentation, and tests.
 - Extend existing tests and guides before adding new ones. Follow
   [focused tests and documentation](CONTRIBUTING.md#keep-tests-and-documentation-focused)
   before merging or removing either.
+
+## Agent skills
+
+### Issue tracker
+
+Track issues and specs as local Markdown under `.scratch/<feature>/`.
+Read `docs/agents/issue-tracker.md` before creating or updating tickets.
+
+### Triage labels
+
+Use the five default triage roles as local issue status values.
+See `docs/agents/triage-labels.md` when triaging issues.
+
+### Domain docs
+
+Use the single-context layout: root `GLOSSARY.md` and `docs/adr/`.
+Read `docs/agents/domain.md` before exploring domain concepts or decisions.

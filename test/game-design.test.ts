@@ -1,3 +1,5 @@
+import { EXAMPLE_WORKSPACE_MODULE } from "../src/modules/example/manifest.js";
+import { OHMYGAME_WORKSPACE_MODULES } from "../src/shared/workspace-manifest.js";
 import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,7 +11,7 @@ import { ProjectManager } from "../src/daemon/projects.js";
 import { ToolRunner } from "../src/daemon/tools.js";
 import { checkCanvasWorkspace } from "../src/daemon/canvas-check.js";
 import { readCanvasAssets } from "../src/daemon/canvas-assets.js";
-import { createAgentTools } from "../src/daemon/agent-tools.js";
+import { createAgentTools } from "../src/daemon/ohmygame-agent-tools.js";
 import { ImageGenerationError, type ImageGenerator } from "../src/daemon/openai-image.js";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { createCanvasDocument, canvasDocumentPath, mergeCanvasDocumentContent } from "../src/shared/canvas-document.js";
@@ -44,6 +46,69 @@ async function waitForJob(store: CanvasStore, projectId: string) {
   return (await store.jobs(projectId))[0]!;
 }
 describe("Markdown design workspace", () => {
+  it("saves and reopens custom data, diagnoses invalid agent edits and preserves missing modules", async () => {
+    const directory = await temp(), library = new AssetLibrary(directory);
+    const projects = new ProjectManager(directory, library, [...OHMYGAME_WORKSPACE_MODULES, EXAMPLE_WORKSPACE_MODULE]);
+    await Promise.all([library.load(), projects.load()]);
+    const tools = new ToolRunner(directory, fakeGenerator);
+    const project = await projects.create("Notes", "general", undefined, undefined, { version: 1, modules: [{ id: "example", config: {} }] });
+    const store = new CanvasStore(projects, library, tools); stores.push(store);
+    const workspace = await store.workspace(project.id), boardId = workspace.boards[0]!.id;
+    const detail = await store.board(project.id, boardId);
+    detail.board.nodes.push({ id: "note", type: "custom", position: { x: 1, y: 2 }, data: { module: "example", kind: "note", value: { text: "Remember", done: false } } });
+    detail.board.nodes.push({ id: "text", type: "text", position: { x: 3, y: 4 }, data: { text: "General", instruction: "" } });
+    detail.board.editorLayout.nodes = { note: { x: 1, y: 2 }, text: { x: 3, y: 4 } };
+    const saved = await store.saveBoard(project.id, detail.board, detail.revision);
+    const restored = new CanvasStore(projects, library, tools); stores.push(restored);
+    expect((await restored.board(project.id, boardId)).board.nodes).toEqual(saved.board.nodes);
+    const file = path.join(project.workspacePath, `canvas/boards/${boardId}.json`);
+    const savedBytes = await readFile(file);
+    const invalid = structuredClone(saved.board);
+    if (invalid.nodes[0]!.type === "custom") invalid.nodes[0]!.data.value.done = "invalid";
+    await expect(store.saveBoard(project.id, invalid, saved.revision)).rejects.toThrow("Invalid example/note data");
+    expect((await store.board(project.id, boardId)).revision).toBe(saved.revision);
+    expect(await readFile(file)).toEqual(savedBytes);
+    const raw = JSON.parse(await readFile(file, "utf8"));
+    raw.nodes[0].data.value.done = "invalid";
+    await writeFile(file, JSON.stringify(raw));
+    expect((await checkCanvasWorkspace(project.workspacePath)).issues).toContainEqual({ file: `canvas/boards/${boardId}.json`, message: expect.stringContaining("Invalid example/note data") });
+    const damaged = await store.board(project.id, boardId);
+    damaged.board.nodes[1]!.title = "Still editable";
+    await store.saveBoard(project.id, damaged.board, damaged.revision);
+    expect((await store.board(project.id, boardId)).board.nodes[0]!.data).toEqual(raw.nodes[0].data);
+    raw.nodes[0].data = { module: "removed", kind: "note", value: { keep: "original" } };
+    await writeFile(file, JSON.stringify(raw));
+    expect((await checkCanvasWorkspace(project.workspacePath)).issues).toContainEqual({ file: `canvas/boards/${boardId}.json`, message: expect.stringContaining("Missing workspace module removed") });
+    const missingBytes = await readFile(file);
+    const missing = await store.board(project.id, boardId);
+    expect(await readFile(file)).toEqual(missingBytes);
+    missing.board.nodes[1]!.title = "Another edit";
+    await store.saveBoard(project.id, missing.board, missing.revision);
+    expect((await store.board(project.id, boardId)).board.nodes[0]!.data).toEqual(raw.nodes[0].data);
+    // Restore the source identity and valid data, as an agent would repair the file.
+    raw.nodes[0].data = { module: "example", kind: "note", value: { text: "Remember", done: true } };
+    await writeFile(file, JSON.stringify(raw));
+    expect((await checkCanvasWorkspace(project.workspacePath)).ok).toBe(true);
+    expect((await restored.board(project.id, boardId)).board.nodes[0]!.data).toEqual(raw.nodes[0].data);
+    project.workspaceManifest!.modules = [];
+    await writeFile(path.join(project.workspacePath, "workspace.json"), JSON.stringify(project.workspaceManifest));
+    expect((await checkCanvasWorkspace(project.workspacePath)).issues).toContainEqual({ file: `canvas/boards/${boardId}.json`, message: expect.stringContaining("Missing workspace module example") });
+    const disabledBytes = await readFile(file);
+    const disabled = await store.board(project.id, boardId);
+    expect(await readFile(file)).toEqual(disabledBytes);
+    const edited = structuredClone(disabled.board);
+    if (edited.nodes[0]!.type === "custom") edited.nodes[0]!.data.value.text = "Blocked edit";
+    await expect(store.saveBoard(project.id, edited, disabled.revision)).rejects.toThrow("missing workspace module example");
+    expect(await readFile(file)).toEqual(disabledBytes);
+    disabled.board.nodes[1]!.title = "Unrelated edit while disabled";
+    const preserved = await store.saveBoard(project.id, disabled.board, disabled.revision);
+    expect(preserved.board.nodes[0]!.data).toEqual(raw.nodes[0].data);
+    project.workspaceManifest!.modules = [{ id: "example", config: {} }];
+    await writeFile(path.join(project.workspacePath, "workspace.json"), JSON.stringify(project.workspaceManifest));
+    expect((await checkCanvasWorkspace(project.workspacePath)).ok).toBe(true);
+
+  });
+
   it("logs Canvas preparation failures once and preserves the error when logging fails", async () => {
     const failure = new ImageGenerationError("Provider is disabled", 400);
     const resolve = vi.fn().mockRejectedValueOnce(failure).mockImplementation(async (_tool, input) => input);
@@ -102,6 +167,48 @@ describe("Markdown design workspace", () => {
     expect(workspace.tables).toEqual([]); expect(workspace.tableIssues?.[0]?.id).toBe(updated.id);
     expect((await store.board(project.id, boardId)).board.nodes.at(-1)?.type).toBe("table");
     expect((await checkCanvasWorkspace(project.workspacePath)).issues.some((issue) => issue.file.endsWith(`${updated.id}.json`))).toBe(true);
+  });
+
+  it("opens a generic multi-board workspace without game document policy and reopens its files", async () => {
+    const directory = await temp();
+    const app = createApp({ dataDirectory: directory }); apps.push(app);
+    const project = (await app.inject({ method: "POST", url: "/projects", payload: { type: "general", workspaceManifest: { version: 1, modules: [] } } })).json();
+    const base = `/projects/${project.id}/canvas`;
+    await app.inject(`${base}/workspace`);
+    const document = (await app.inject({ method: "POST", url: `${base}/documents`, payload: { title: "Research notes" } })).json();
+    expect((await app.inject(`${base}/workspace`)).json().mainDocumentId).toBeUndefined();
+    expect((await app.inject({ method: "PUT", url: `${base}/main-document`, payload: { documentId: document.document.id } })).statusCode).toBe(409);
+    expect((await app.inject({ method: "POST", url: `${base}/boards`, payload: { name: "Research" } })).statusCode).toBe(201);
+    const table = (await app.inject({ method: "POST", url: `${base}/tables`, payload: { title: "Findings" } })).json();
+    const index = (await app.inject(`${base}/workspace`)).json();
+    const boardUrl = `${base}/boards/${index.boards[1].id}`;
+    const board = (await app.inject(boardUrl)).json();
+    board.board.nodes.push(
+      { id: "notes", type: "document", position: { x: 50, y: 70 }, data: { documentId: document.document.id } },
+      { id: "findings", type: "table", position: { x: 500, y: 70 }, data: { tableId: table.table.id } },
+      { id: "summary", type: "text", position: { x: 50, y: 400 }, data: { text: "Research summary", instruction: "" } },
+    );
+    board.board.editorLayout.nodes.notes = { x: 50, y: 70, width: 400, height: 250 };
+    board.board.editorLayout.nodes.findings = { x: 500, y: 70 };
+    board.board.editorLayout.nodes.summary = { x: 50, y: 400 };
+    expect((await app.inject({ method: "PUT", url: boardUrl, payload: board })).statusCode).toBe(200);
+    expect((await app.inject({ method: "PUT", url: boardUrl, payload: board })).statusCode).toBe(409);
+    const invalid = structuredClone(board); invalid.board.nodes[0].data.documentId = "missing";
+    invalid.revision = (await app.inject(boardUrl)).json().revision;
+    expect((await app.inject({ method: "PUT", url: boardUrl, payload: invalid })).statusCode).toBe(404);
+    const instructions = await readFile(path.join(project.workspacePath, "canvas/AGENTS.md"), "utf8");
+    expect(instructions).not.toContain("game");
+    await app.close(); apps.splice(apps.indexOf(app), 1);
+    const reopened = createApp({ dataDirectory: directory }); apps.push(reopened);
+    const workspace = (await reopened.inject(`${base}/workspace`)).json();
+    expect(workspace.boards).toHaveLength(2);
+    expect(workspace.documents[0].title).toBe("Research notes");
+    expect(workspace.mainDocumentId).toBeUndefined();
+    expect(workspace.tables[0].title).toBe("Findings");
+    const saved = (await reopened.inject(boardUrl)).json().board;
+    expect(saved.nodes.map((node: AssetCanvasNode) => node.id)).toEqual(["notes", "findings", "summary"]);
+    expect(saved.editorLayout.nodes.notes).toMatchObject({ x: 50, y: 70, width: 400, height: 250 });
+
   });
 
   it("validates table routes, revisions, identities and unknown board references", async () => {
@@ -398,8 +505,12 @@ describe("Markdown design workspace", () => {
     stopped.abort();
     await expect(abandoned).rejects.toThrow();
     expect((await store.jobs(project.id)).find((job) => job.id === manual.id)).toMatchObject({ status: "running" });
+    // The manual run may finish only once this call has joined it: finishing saves its output to the node.
+    const join = vi.spyOn(store, "generateNode");
     const followed = tool.execute("follow", { boardId, nodeId: node.id }, undefined, undefined, {} as never);
-    await expect.poll(() => generate.mock.calls.length).toBe(1);
+    await expect.poll(() => join.mock.calls.length).toBe(1);
+    expect(await join.mock.results[0]!.value).toMatchObject({ id: manual.id, reused: "running" });
+    join.mockRestore();
     release();
     const first = await followed;
     expect(first.content[0]).toMatchObject({ text: expect.stringContaining("was already generating") });

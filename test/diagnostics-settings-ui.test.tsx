@@ -5,8 +5,8 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const exportDiagnostics = vi.fn();
-vi.doMock(path.resolve("src/renderer/auth.tsx"), () => ({
-  useAuth: () => ({ state: { status: "signed-out" }, openSignIn: vi.fn() }),
+vi.doMock(path.resolve("src/renderer/account-context.ts"), () => ({
+  useOptionalAccount: () => ({ state: { status: "signed-out" }, openSignIn: vi.fn() }),
 }));
 vi.doMock(path.resolve("src/renderer/api.ts"), async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -37,7 +37,7 @@ async function renderAbout(): Promise<HTMLButtonElement> {
     root.render(
       <SettingsPage
         section="about"
-        onBack={() => {}}
+        onNavigate={() => {}}
         onSectionChange={() => {}}
       />,
     ),
@@ -115,4 +115,16 @@ it("opens the logs folder in the desktop app only", async () => {
   } finally {
     Reflect.deleteProperty(window, "ohMyGameDesktop");
   }
+});
+
+it("remembers when usage data is turned off", async () => {
+  localStorage.removeItem("ohmygame:usage-data");
+  await renderAbout();
+  const toggle = container.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Send usage data"]')!;
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  await act(async () => toggle.click());
+
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  expect(localStorage.getItem("ohmygame:usage-data")).toBe("off");
 });

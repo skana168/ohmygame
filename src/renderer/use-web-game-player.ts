@@ -1,6 +1,6 @@
 import { previewPageUrl } from "../shared/preview-page.js";
 import { useEffect, useRef, useState } from "react";
-import { ensureProjectPreview } from "./api.js";
+import { ensureGamePreview } from "./api.js";
 import { webGamePlayerUrl, type WebGamePlayerBridge, type WebGamePlayerRequest, type WebGamePlayerState } from "../shared/web-game-player.js";
 import { t } from "./i18n.js";
 
@@ -42,7 +42,7 @@ export class BrowserGamePlayers implements WebGamePlayerBridge {
         for (const id of this.#players.keys()) void this.state(id);
       }, 500);
       const opening = player;
-      player.ready = ensureProjectPreview(projectId).then(({ url }) => {
+      player.ready = ensureGamePreview(projectId).then(({ url }) => {
         if (opening.window.closed) throw new Error(t("workspace.windowClosed"));
         opening.url = previewPageUrl(webGamePlayerUrl(url, request.path), "player");
         opening.window.location.href = opening.url;
@@ -77,7 +77,7 @@ export class BrowserGamePlayers implements WebGamePlayerBridge {
     const player = this.#players.get(projectId);
     if (!player) return;
     await player.ready;
-    const { url } = await ensureProjectPreview(projectId);
+    const { url } = await ensureGamePreview(projectId);
     if (player.window.closed || !player.url) return;
     // A cross-origin browser popup cannot expose its current route to the editor.
     const current = new URL(player.url);

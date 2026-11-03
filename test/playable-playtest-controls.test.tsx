@@ -31,7 +31,7 @@ const getNodeRuntime = vi.fn();
 vi.doMock(path.resolve("src/renderer/api.ts"), async (original) => ({
   ...(await original<typeof import("../src/renderer/api.js")>()),
   getNodeRuntime,
-  ensureProjectPreview: async () => ({ url: "http://127.0.0.1:5555/index.html", title: "Playtest" }),
+  ensureGamePreview: async () => ({ url: "http://127.0.0.1:5555/index.html", title: "Playtest" }),
 }));
 vi.doMock(
   path.resolve("src/renderer/playable-player.tsx"),

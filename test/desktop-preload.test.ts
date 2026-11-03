@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { transformSync } from "esbuild";
 import { describe, expect, it, vi } from "vitest";
+import { rejectUnavailableDesktopCapabilities } from "../src/desktop/business-registration.js";
 
 // The sandboxed preload is CommonJS that may only require Electron, so it runs
 // here against a stub of the two Electron modules it uses.
@@ -49,6 +50,18 @@ function runPreload(options: {
 }
 
 describe("desktop preload", () => {
+  it("rejects direct game and account requests when the application excludes their contributions", () => {
+    const handlers = new Map<string, Parameters<typeof rejectUnavailableDesktopCapabilities>[0] extends (channel: string, listener: infer T) => void ? T : never>();
+    rejectUnavailableDesktopCapabilities((channel, listener) => handlers.set(channel, listener), { game: false, account: false });
+    for (const channel of ["open-web-game-player", "start-game-recording", "open-playtest", "capture-node-thumbnail", "open-auth-url"]) {
+      const request = handlers.get(`ohmygame:${channel}`);
+      expect(request, channel).toBeDefined();
+      expect(() => request!({} as Electron.IpcMainInvokeEvent, "workspace")).toThrow(/capability is unavailable in this application/);
+    }
+    expect(handlers.has("ohmygame:capture-page")).toBe(false);
+    expect(handlers.has("ohmygame:open-project-file")).toBe(false);
+  });
+
   it("asks the main process for the daemon runtime instead of reading the command line", () => {
     const preload = runPreload({
       runtime: { url: "http://127.0.0.1:43110", token: "secret-token" },

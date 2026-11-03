@@ -1,3 +1,4 @@
+import { mp3Fixture } from "./audio-fixtures.js";
 import { TEST_GLB } from "./model3d-fixture.js";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -22,14 +23,14 @@ const reference = { mediaType: "image/png", data: Buffer.from("reference").toStr
 const model = (id: string, usages: CustomProviderModel["usages"]): CustomProviderModel => ({
   id, name: id, api: "openai-completions", contextWindow: 32_000, maxTokens: 4_000, reasoning: false, supportsImages: false, usages,
 });
-async function fixture(request: typeof fetch = vi.fn(async () => Response.json({ data: [] }))) {
+async function createFixture(request: typeof fetch = vi.fn(async () => Response.json({ data: [] })), accountServices = true) {
   const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-custom-media-"));
   directories.push(directory);
   // This suite exercises only its simulated HTTP providers, regardless of local CLI logins.
   await writeFile(path.join(directory, "agent-runtimes.json"), JSON.stringify({ runtimes: { "codex-cli": { binaryPath: path.join(directory, "missing-codex") } } }));
   const runtime = await ModelRuntime.create({ authPath: path.join(directory, "auth.json"), modelsPath: path.join(directory, "models.json"), modelsStorePath: path.join(directory, "catalog.json"), allowModelNetwork: false });
-  const app = createApp({ dataDirectory: directory, piAgentDirectory: directory, createModelRuntime: async () => runtime,
-    imageFetch: request, videoFetch: request, model3DFetch: request, modelDiscoveryFetch: request });
+  const app = createApp({ accountServices, businessTools: { game: false, story: false }, dataDirectory: directory, piAgentDirectory: directory, createModelRuntime: async () => runtime,
+    audioFetch: request, imageFetch: request, videoFetch: request, model3DFetch: request, modelDiscoveryFetch: request });
   apps.push(app);
   const save = async (models: CustomProviderModel[], overrides: Partial<SaveCustomProviderRequest> = {}) => {
     const result = await app.inject({ method: "POST", url: "/settings/models/providers/custom", payload: { ...connection, modelConfigurationVersion: 2, models, ...overrides } });
@@ -48,7 +49,76 @@ async function generate(app: ReturnType<typeof createApp>, tool: ToolId, payload
   });
 }
 
-describe("unified custom media models", () => {
+describe.each([true, false])("unified custom media models (account services: %s)", (accountServices) => {
+  const fixture = (request?: typeof fetch) => createFixture(request, accountServices);
+  it("cancels waiting and resumes the submitted paid 3D task after daemon restart", async () => {
+    let waiting = false, cancelled = false, pause = true;
+    const request = vi.fn<typeof fetch>(async (url, init) => {
+      if (init?.method === "POST") return Response.json({ result: "paid-task" });
+      if (String(url) === "https://files.test/recovered.glb") return new Response(new Uint8Array(TEST_GLB));
+      if (pause) {
+        waiting = true;
+        await new Promise<void>((_resolve, reject) => init?.signal?.addEventListener("abort", () => {
+          cancelled = true;
+          reject(new DOMException("Aborted", "AbortError"));
+        }, { once: true }));
+      }
+      return Response.json({ status: "SUCCEEDED", model_urls: { glb: "https://files.test/recovered.glb" } });
+    });
+    const { app, save, directory, runtime } = await fixture(request);
+    const { id } = await save([model("recoverable-mesh", { "3d": defaultModel3DSettings() })]);
+    const started = await app.inject({ method: "POST", url: "/tools/image-to-3d/jobs", payload: { images: [reference], model: { provider: id, id: "recoverable-mesh" } } });
+    expect(started.statusCode).toBe(202);
+    await vi.waitFor(() => expect(waiting).toBe(true));
+    expect((await app.inject({ method: "POST", url: `/tool-jobs/${started.json().id}/cancel` })).json().status).toBe("cancelled");
+    await vi.waitFor(() => expect(cancelled).toBe(true));
+    await app.close();
+    pause = false;
+    const reopened = createApp({ accountServices, businessTools: { game: false, story: false }, dataDirectory: directory, piAgentDirectory: directory, createModelRuntime: async () => runtime, model3DFetch: request });
+    apps.push(reopened);
+    expect((await reopened.inject("/tool-jobs")).json()).toContainEqual(expect.objectContaining({ id: started.json().id, status: "cancelled" }));
+    const retried = await reopened.inject({ method: "POST", url: `/tool-jobs/${started.json().id}/retry` });
+    expect(retried.statusCode).toBe(202);
+    await vi.waitFor(async () => {
+      const job = (await reopened.inject("/tool-jobs")).json().find((job: { id: string }) => job.id === retried.json().id);
+      expect(job?.status, job?.error).toBe("succeeded");
+      expect(job.run.files).toContainEqual(expect.objectContaining({ assetId: expect.any(String), mediaType: "model/gltf-binary" }));
+    });
+    expect(request.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  });
+
+  it("distinguishes missing audio credentials, disabled providers and unsupported operations", async () => {
+    const request = vi.fn<typeof fetch>();
+    const { app } = await fixture(request);
+    const selected = { provider: "volcengine-tts", id: "seed-tts-2.0" };
+    const failure = async (message: string) => {
+      const response = await app.inject({ method: "POST", url: "/tools/generate-sound-effect/jobs", payload: { prompt: "Rain", model: selected } });
+      expect(response.statusCode).toBe(202);
+      await vi.waitFor(async () => {
+        const job = (await app.inject("/tool-jobs")).json().find((job: { id: string }) => job.id === response.json().id);
+        expect(job).toMatchObject({ status: "failed", error: message });
+      });
+    };
+    await failure("Connect Doubao Speech before generating audio.");
+    await app.inject({ method: "PUT", url: "/settings/models/providers/volcengine-tts", payload: { apiKey: "my-tts-key" } });
+    await failure("The selected audio model does not support this operation or is unavailable. Choose a compatible model.");
+    await app.inject({ method: "PATCH", url: "/settings/models/providers/volcengine-tts/enabled", payload: { enabled: false } });
+    await failure("The selected audio provider is disabled. Enable it in Providers.");
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("generates and persists audio using a configured key without a game module", async () => {
+    const request = vi.fn<typeof fetch>(async () => Response.json({ code: 0, audio: mp3Fixture(48000).toString("base64") }));
+    const { app } = await fixture(request);
+    const selected = { provider: "volcengine-seed-audio", id: "seed-audio-1.0" };
+    expect((await app.inject({ method: "PUT", url: "/settings/models/providers/volcengine-seed-audio", payload: { apiKey: "my-audio-key" } })).statusCode).toBe(200);
+    await generate(app, "generate-sound-effect", { prompt: "Rain on a roof", durationSeconds: 3, model: selected });
+    const jobs = (await app.inject("/tool-jobs")).json();
+    expect(jobs).toContainEqual(expect.objectContaining({ status: "succeeded", run: expect.objectContaining({ files: expect.arrayContaining([expect.objectContaining({ role: "audio", assetId: expect.any(String) })]) }) }));
+    expect(request.mock.calls[0]?.[1]?.headers).toMatchObject({ "X-Api-Key": "my-audio-key" });
+    expect((await app.inject("/settings/providers")).body).not.toContain("my-audio-key");
+  });
+
   it("saves a GPT Image default and sends all 16 references through the generation route", async () => {
     const request = vi.fn<typeof fetch>(async () => Response.json({ data: [{ b64_json: Buffer.from("generated").toString("base64") }] }));
     const { app, save } = await fixture(request);
@@ -272,9 +342,9 @@ describe("unified custom media models", () => {
   });
 });
 
-it("uses an opted-in hidden custom Meshy connection for animations without forcing a key", async () => {
+it.each([true, false])("uses an opted-in hidden custom Meshy connection for animations without forcing a key (account services: %s)", async (accountServices) => {
   const request = vi.fn<typeof fetch>(async (url) => String(url).endsWith("/animations/library") ? Response.json([{ action_id: 0, name: "Idle" }]) : Response.json({ data: [] }));
-  const { app, save } = await fixture(request);
+  const { app, save } = await createFixture(request, accountServices);
   const base = { ...defaultModel3DSettings(), baseUrl: "http://relay.test/openapi/v1" };
   const disabled = await save([model("geometry-only", { "3d": base })], { authentication: "none", apiKey: undefined });
   const rejected = await app.inject(`/model3d-animations?provider=${disabled.id}&id=geometry-only`);

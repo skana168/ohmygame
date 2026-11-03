@@ -1,4 +1,5 @@
 import path from "node:path";
+import identity from "../../application-identity.cjs";
 import { fileURLToPath } from "node:url";
 import { takeAccessToken } from "./access-token.js";
 import { createApp } from "./app.js";
@@ -7,7 +8,7 @@ import { activateNetworkProxy } from "./proxy.js";
 import { loadEnvironmentFiles } from "./environment.js";
 import { NetworkSettingsService } from "./network-settings.js";
 import { requestSystemProxy } from "./system-proxy-resolver.js";
-import { ProcessPlaytestDriver } from "./playtest-driver.js";
+import { hostBusiness } from "./host-business.js";
 import { isLocalDebugEnabled, isLoopbackHostname } from "../shared/local-debug.js";
 import type { ExternalMcpLauncher } from "../shared/external-mcp.js";
 
@@ -18,13 +19,14 @@ loadEnvironmentFiles(repositoryRoot, mode);
 // Processes the daemon starts inherit its environment, and none of them may call the daemon as the app.
 const accessToken = await takeAccessToken(process.env, process.stdin);
 const host = process.env.DAEMON_HOST ?? "127.0.0.1";
-const dataDirectory = process.env.OHMYGAME_DATA_DIR ?? path.join(repositoryRoot, ".data");
+const application = identity.loadIdentity(repositoryRoot);
+const dataDirectory = identity.dataDirectory(application, repositoryRoot);
 const piAgentDirectory = process.env.PI_CODING_AGENT_DIR ?? path.join(dataDirectory, "pi-agent");
 process.env.PI_CODING_AGENT_DIR = piAgentDirectory;
 let app: ReturnType<typeof createApp> | undefined;
 let shuttingDown = false;
 const playtestDriver = process.env.OHMYGAME_PLAYTEST_IPC === "1" && process.connected
-  ? new ProcessPlaytestDriver()
+  ? hostBusiness ? new hostBusiness.ProcessPlaytestDriver() : undefined
   : undefined;
 const shutdown = async () => {
   if (shuttingDown) return;
@@ -62,6 +64,9 @@ try {
     networkSettings,
     piAgentDirectory,
     bundledPluginsDirectory: process.env.OHMYGAME_BUNDLED_PLUGINS_DIR,
+    pluginUiDirectory: process.env.OHMYGAME_PLUGIN_UI_DIR,
+    ...(process.env.OHMYGAME_PLUGIN_INDEX_URL ? { pluginIndexUrl: process.env.OHMYGAME_PLUGIN_INDEX_URL } : {}),
+    ...(process.env.OHMYGAME_PLUGIN_UI_PORT ? { pluginUiPort: Number(process.env.OHMYGAME_PLUGIN_UI_PORT) } : {}),
     preinstalledPluginsDirectory: process.env.OHMYGAME_PREINSTALLED_PLUGINS_DIR
       ?? path.join(repositoryRoot, ".runtime", "preinstalled-plugins"),
     examplesDirectory: process.env.OHMYGAME_EXAMPLES_DIR ?? path.join(repositoryRoot, ".runtime", "examples"),
@@ -70,6 +75,11 @@ try {
       .split(",")
       .map((origin) => origin.trim())
       .filter(Boolean),
+    // Browser development reaches the daemon through the renderer's proxy,
+    // so no origin is allowed, but the renderer still frames plugin pages.
+    ...(development && !process.env.OHMYGAME_ALLOWED_ORIGINS
+      ? { pluginFrameAncestors: ["http://127.0.0.1:43120", "http://localhost:43120"] }
+      : {}),
     logger: true,
     logDirectory: process.env.OHMYGAME_LOG_DIR,
     publishApiUrl: process.env.CLOUD_API_URL ?? process.env.PUBLISH_API_URL,

@@ -9,6 +9,8 @@ const host = vi.hoisted(() => ({
   sender: { id: 1, send: vi.fn(), on: vi.fn() },
   thumbnails: [] as Array<{ webContents: { id: number }; destroy: ReturnType<typeof vi.fn> }>,
   stopped: vi.fn(async () => {}),
+  playtestRequest: undefined as undefined | ((request: unknown) => Promise<unknown>),
+  driverCreated: vi.fn(),
   quit: vi.fn(), relaunch: vi.fn(), close: vi.fn(),
   install: undefined as (() => Promise<void>) | undefined,
   options: undefined as Record<string, unknown> | undefined,
@@ -19,13 +21,14 @@ vi.mock("electron", () => ({
     on: (name: string, fn: (...args: any[]) => void) => host.appEvents.set(name, fn),
     whenReady: async () => {}, getPath: () => "/tmp/ohmygame-close-test", getVersion: () => "0.0.0",
     isReady: () => true, quit: host.quit, relaunch: host.relaunch, exit: vi.fn(),
+    setName: vi.fn(), setPath: vi.fn(), setAppUserModelId: vi.fn(), setBadgeCount: vi.fn(),
   },
   ipcMain: {
     handle: (name: string, fn: (...args: any[]) => any) => host.handlers.set(name, fn),
     on: (name: string, fn: (...args: any[]) => void) => host.ipcEvents.set(name, fn),
   },
-  nativeTheme: {}, session: { fromPartition: () => ({ setProxy: async () => {} }), defaultSession: { setProxy: async () => {} } },
-  BrowserWindow: { getAllWindows: () => [] }, clipboard: {}, dialog: { showErrorBox: vi.fn() }, Menu: {}, shell: {},
+  nativeImage: { createFromBitmap: () => ({}) }, nativeTheme: {}, session: { fromPartition: () => ({ setProxy: async () => {} }), defaultSession: { setProxy: async () => {} } },
+  BrowserWindow: { getAllWindows: () => [] }, clipboard: {}, dialog: { showErrorBox: vi.fn() }, Menu: {}, shell: { openExternal: vi.fn(async () => {}) },
 }));
 vi.mock("undici/index.js", () => ({ setGlobalDispatcher: vi.fn() }));
 vi.doMock(path.resolve("src/daemon/environment.ts"), () => ({ loadEnvironmentFiles: vi.fn() }));
@@ -34,7 +37,7 @@ vi.doMock(path.resolve("src/desktop/network.ts"), () => ({
   prepareDesktopNetwork: async () => ({ active: {}, environment: {} }), electronProxyConfig: () => ({}), proxyCredentials: vi.fn(),
 }));
 vi.doMock(path.resolve("src/desktop/daemon-process.ts"), () => ({
-  startDaemon: async () => ({ runtime: { url: "http://127.0.0.1:12345", token: "test" }, stop: host.stopped }),
+  startDaemon: async (options: { handlePlaytestRequest: typeof host.playtestRequest }) => { host.playtestRequest = options.handlePlaytestRequest; return { runtime: { url: "http://127.0.0.1:12345", token: "test" }, stop: host.stopped }; },
 }));
 vi.doMock(path.resolve("src/desktop/log-file.ts"), () => ({
   RotatingLogFile: class { line() {} write() {} flush() {} close() {} stream() { return { write() {}, flush() {} }; } },
@@ -46,7 +49,7 @@ vi.doMock(path.resolve("src/desktop/external-mcp-install.ts"), () => ({ installE
 vi.doMock(path.resolve("src/desktop/oauth.ts"), () => ({
   isOAuthAuthorizationUrl: vi.fn(), OAuthCallbackFlow: class { cancel = async () => {}; },
 }));
-vi.doMock(path.resolve("src/desktop/playtest-driver.ts"), () => ({ ElectronPlaytestDriver: class { close() {} } }));
+vi.doMock(path.resolve("src/desktop/playtest-driver.ts"), () => ({ ElectronPlaytestDriver: class { constructor() { host.driverCreated(); } close() {} } }));
 vi.doMock(path.resolve("src/desktop/web-game-player.ts"), () => ({ WebGamePlayerWindows: class { close() {} } }));
 vi.doMock(path.resolve("src/desktop/updater.ts"), () => ({ DesktopUpdater: class {
   constructor(_version: string, install: () => Promise<void>) { host.install = install; }
@@ -68,7 +71,7 @@ vi.doMock(path.resolve("src/desktop/window.ts"), () => ({
       return window;
     }
     const window = {
-      webContents: host.sender, isDestroyed: () => false, close: host.close,
+      webContents: host.sender, isDestroyed: () => false, close: host.close, setOverlayIcon: vi.fn(),
       on: (name: string, fn: (...args: any[]) => void) => host.windowEvents.set(name, fn),
       once: (name: string, fn: (...args: any[]) => void) => host.windowEvents.set(name, fn),
     };
@@ -84,7 +87,7 @@ beforeEach(async () => {
   host.thumbnails.length = 0;
   process.argv.push("--built-renderer");
   host.quit.mockImplementation(() => host.appEvents.get("before-quit")!({ preventDefault() {} }));
-  await import("../src/desktop/main.js");
+  await import("../src/desktop/ohmygame-main.js");
   expect(host.options?.rendererFile).toMatch(/[\\/]renderer[\\/]index\.html$/);
 });
 afterEach(() => { process.argv.splice(process.argv.lastIndexOf("--built-renderer"), 1); vi.useRealTimers(); });
@@ -163,27 +166,75 @@ it("blocks an update when background services cannot stop safely", async () => {
 });
 
 it("cancels active and queued thumbnail captures and frees slots for the next batch", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ enabled: true })));
   const capture = (id: string, batch: string) => host.handlers.get("ohmygame:capture-node-thumbnail")!(
     { sender: host.sender }, "p", id, { width: 1280, height: 720 }, batch,
   ) as Promise<unknown>;
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   try {
     const previous = [capture("a", "old"), capture("b", "old"), capture("c", "old")];
+    await settle();
     expect(host.thumbnails).toHaveLength(2);
     host.handlers.get("ohmygame:cancel-node-thumbnails")!({ sender: host.sender }, "old");
     await expect(Promise.all(previous)).resolves.toEqual(Array(3).fill({ captured: false, error: "The capture was cancelled." }));
     expect(host.thumbnails.every(window => window.destroy.mock.calls.length === 1)).toBe(true);
     expect(warn).not.toHaveBeenCalled();
     const next = capture("next", "new");
+    await settle();
     expect(host.thumbnails).toHaveLength(3);
     host.handlers.get("ohmygame:finish-node-thumbnail")!({ sender: host.thumbnails[2]!.webContents }, true);
     await expect(next).resolves.toEqual({ captured: true });
     // A failure carries the hidden window's reason to the editor and the log.
     const failing = capture("broken", "new");
+    await settle();
     host.handlers.get("ohmygame:finish-node-thumbnail")!({ sender: host.thumbnails[3]!.webContents }, false, "The preview could not start.");
     await expect(failing).resolves.toEqual({ captured: false, error: "The preview could not start." });
     expect(warn).toHaveBeenCalledExactlyOnceWith('Node thumbnail "broken" was not captured: The preview could not start.');
   } finally {
     warn.mockRestore();
+    vi.unstubAllGlobals();
   }
+});
+
+it("rejects direct desktop game entry points before opening windows when game selection is disabled", async () => {
+  const fetcher = vi.fn(async () => new Response(JSON.stringify({ enabled: false }), { status: 200 }));
+  vi.stubGlobal("fetch", fetcher);
+  const initialWindow = host.options;
+  try {
+    for (const [channel, args] of [
+      ["ohmygame:open-playtest", ["notes", { width: 800, height: 600 }]],
+      ["ohmygame:attach-web-game-preview", ["notes", "editor", "http://localhost/", { bounds: { x: 0, y: 0, width: 800, height: 600 }, visible: true }]],
+      ["ohmygame:open-web-game-player", ["notes", { path: "/", viewport: { width: 800, height: 600 } }]],
+      ["ohmygame:start-game-recording", ["notes"]],
+    ] as const) {
+      await expect(host.handlers.get(channel)!({ sender: host.sender }, ...args)).rejects.toThrow(/game capability/i);
+    }
+    await expect(host.playtestRequest!({ operation: "open", projectId: "notes", target: { runtime: "web", url: "http://localhost/" }, viewport: { width: 800, height: 600 } })).rejects.toThrow(/game capability/i);
+    expect(host.driverCreated).not.toHaveBeenCalled();
+    expect(host.options).toBe(initialWindow);
+    expect(host.thumbnails).toHaveLength(0);
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it("blocks hidden game thumbnail windows for a workspace without game selection", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ enabled: false })));
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const pending = host.handlers.get("ohmygame:capture-node-thumbnail")!({ sender: host.sender }, "notes", "scene", { width: 800, height: 600 }, "denied");
+  try {
+    await settle();
+    expect(host.thumbnails).toHaveLength(0);
+    await expect(pending).resolves.toMatchObject({ captured: false, error: expect.stringMatching(/game capability/i) });
+  } finally {
+    host.handlers.get("ohmygame:cancel-node-thumbnails")!({ sender: host.sender }, "denied");
+    await pending;
+    warn.mockRestore();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("keeps provider authorization browser links available through the core desktop shell", async () => {
+  const open = host.handlers.get("ohmygame:open-external");
+  expect(open).toBeDefined();
+  await expect(open!({ sender: host.sender }, "https://provider.example/authorize")).resolves.toBeUndefined();
+  await expect(open!({ sender: host.sender }, "file:///tmp/private")).rejects.toThrow("Invalid external URL");
 });

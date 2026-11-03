@@ -10,6 +10,10 @@ const canvas = (node: object) => ({
 });
 
 describe("Asset Canvas schema diagnostics", () => {
+  it("preserves source module envelopes without accepting malformed identities", () => {
+    expect(Check(ASSET_CANVAS_SCHEMA, canvas({ id: "note", type: "custom", data: { module: "example", kind: "note", value: { text: "Remember" } } }))).toBe(true);
+    expect(Check(ASSET_CANVAS_SCHEMA, canvas({ id: "note", type: "custom", data: { module: "", kind: "note", value: {} } }))).toBe(false);
+  });
   it.each([[16, true], [17, false]] as const)("validates a board with %i image references", (count, accepted) => {
     expect(Check(ASSET_CANVAS_SCHEMA, canvas({ id: "image", type: "image", data: {
       prompt: "Compose references", resolution: "1K", aspectRatio: "1:1",

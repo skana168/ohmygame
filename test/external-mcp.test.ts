@@ -1,4 +1,6 @@
-import { defineTool } from "@earendil-works/pi-coding-agent";
+import { OHMYGAME_WORKSPACE_MODULES } from "../src/shared/workspace-manifest.js";
+import { createExampleToolContribution } from "../src/daemon/example-tools.js";
+import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -40,7 +42,7 @@ function project(
   };
 }
 
-async function fixture() {
+async function fixture(extraTools: ToolDefinition[] = []) {
   const root = await temporaryDirectory();
   const game = path.join(root, "game");
   const story = path.join(root, "story");
@@ -54,6 +56,7 @@ async function fixture() {
   const signals: AbortSignal[] = [];
   let finish: (() => void) | undefined;
   const tools = (current: ProjectState) => [
+    ...extraTools,
     defineTool({
       name: "generate_image",
       label: "Generate Image",
@@ -110,6 +113,21 @@ async function fixture() {
     projects: () => projects,
     tools: (current) => tools(current),
     catalog: () => tools(projects[1]!),
+    pluginTools: async (current) =>
+      current.id === "game"
+        ? [
+            defineTool({
+              name: "acme__tiles__where",
+              label: "Tiles: where",
+              description: "Say which project the plugin runs in",
+              parameters: Type.Object({ detail: Type.Optional(Type.String()) }),
+              execute: async () => ({
+                content: [{ type: "text", text: `tiles in ${current.id}` }],
+                details: {},
+              }),
+            }),
+          ]
+        : [],
     release: (projectId, sessionId) => {
       released.push(`${projectId}:${sessionId}`);
     },
@@ -182,6 +200,14 @@ async function fixture() {
     finish: () => finish?.(),
   };
 }
+
+it("rejects source tools that collide with external MCP session tools", async () => {
+  await expect(fixture([defineTool({
+    name: "get_project", label: "Collision", description: "Must not replace session binding",
+    parameters: Type.Object({}),
+    execute: async () => ({ content: [], details: {} }),
+  })])).rejects.toThrow(/Duplicate tool.*get_project/);
+});
 
 it("publishes a token only while enabled and revokes it when turned off", async () => {
   const { root, service, endpoint, authorization, open, rpc } = await fixture();
@@ -321,6 +347,20 @@ it("refuses tools outside the public list and those the project does not have", 
   ).toMatchObject({ isError: true });
 });
 
+it("remembers which clients connected and how many tools they called", async () => {
+  const { game, rpc, call, service, authorization } = await fixture();
+  const answer = await rpc(undefined, "initialize", { protocolVersion: "2025-06-18", clientInfo: { name: "claude-code", version: "2.1.0" } }, [game]);
+  const session = answer.headers!["mcp-session-id"]!;
+  await call(session, "canvas_check");
+  await call(session, "canvas_check");
+  await rpc(undefined, "initialize", { protocolVersion: "2025-06-18" });
+  expect(service.recentClients()).toEqual([
+    { name: "claude-code", lastUsedAt: expect.any(String), calls: 2, active: true },
+  ]);
+  await service.end(authorization, session);
+  expect(service.recentClients()).toMatchObject([{ name: "claude-code", calls: 2, active: false }]);
+});
+
 it("turns slow generations into jobs that outlive the request", async () => {
   const { game, open, call, signals, finish } = await fixture();
   const session = await open([game]);
@@ -369,12 +409,19 @@ it("releases a session's playtest windows when it ends or changes project", asyn
   expect(await service.end(authorization, session)).toBe(404);
 });
 
-it("serves the public contract from the daemon without the app token", async () => {
+it.each([{}, { game: false }, { story: false }, { game: false, story: false }])("serves the selected public contract without the app token: %j", async (businessTools) => {
   const dataDirectory = await temporaryDirectory();
   const app = createApp({
     dataDirectory,
     piAgentDirectory: path.join(dataDirectory, "pi-agent"),
     accessToken: "app-token",
+    businessTools,
+    workspaceModules: [...OHMYGAME_WORKSPACE_MODULES, ...["example", "test-business"].map((id) => ({ id, configSchema: { type: "object" } }))],
+    toolContributions: (project) => [createExampleToolContribution(project), { id: "test-business", tools: [defineTool({
+      name: "business_echo", label: "Echo", description: "Echo in a workspace",
+      parameters: Type.Object({ value: Type.String() }),
+      execute: async (_id, input) => ({ content: [{ type: "text", text: `${project.id}: ${input.value}` }], details: {} }),
+    })] }],
   });
   cleanup.push(() => app.close());
   await app.listen({ host: "127.0.0.1", port: 0 });
@@ -384,10 +431,7 @@ it("serves the public contract from the daemon without the app token", async () 
     headers: { authorization: "Bearer app-token" },
     payload: { enabled: true },
   });
-  expect(settings.json()).toMatchObject({
-    enabled: true,
-    clients: [{ id: "claude-code" }, { id: "codex" }],
-  });
+  expect(settings.json()).toMatchObject({ enabled: true });
   const endpoint = JSON.parse(
     await readFile(
       path.join(dataDirectory, "external-mcp", "endpoint.json"),
@@ -451,13 +495,44 @@ it("serves the public contract from the daemon without the app token", async () 
     "generate_sound_effect",
     "generate_music",
     "generate_audio",
-    "playable_add_node",
-    "playable_check",
+    ...(businessTools.story === false ? [] : ["playable_add_node", "playable_check"]),
     "canvas_check",
     "canvas_initialize",
     "generate_canvas_media",
-    "game_use",
+    "example_note",
+    "example_echo",
+    "business_echo",
+    ...(businessTools.game === false ? [] : ["game_use"]),
   ]);
+  const project = (await app.inject({ method: "POST", url: "/projects", headers: { authorization: "Bearer app-token" }, payload: { name: "Contributions", workspaceManifest: { version: 1, modules: ["game", "example", "test-business"].map((id) => ({ id, config: {} })) } } })).json() as ProjectState;
+  await post({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "open_project", arguments: { project: project.id } } }, { "mcp-session-id": session });
+  const echoed = await post({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "business_echo", arguments: { value: "hello" } } }, { "mcp-session-id": session });
+  expect(echoed.json()).toMatchObject({ result: { content: [{ text: `${project.id}: hello` }] } });
+  const example = await post({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "example_echo", arguments: { message: "hello" } } }, { "mcp-session-id": session });
+  expect(example.json()).toMatchObject({ result: { content: [{ text: "hello" }] } });
+  const workspace = (await app.inject({ url: `/projects/${project.id}/canvas/workspace`, headers: { authorization: "Bearer app-token" } })).json();
+  const board = (await app.inject({ url: `/projects/${project.id}/canvas/boards/${workspace.boards[0].id}`, headers: { authorization: "Bearer app-token" } })).json();
+  const note = await post({ jsonrpc: "2.0", id: 50, method: "tools/call", params: { name: "example_note", arguments: { boardId: board.board.id, nodeId: "mcp-note", revision: board.revision, text: "From external MCP", done: false } } }, { "mcp-session-id": session });
+  expect(note.json()).toMatchObject({ result: { content: [{ text: "Saved note mcp-note in board " + board.board.id + "." }] } });
+  const persistedNote = (await app.inject({ url: `/projects/${project.id}/canvas/boards/${board.board.id}`, headers: { authorization: "Bearer app-token" } })).json();
+  expect(persistedNote.board.nodes).toContainEqual(expect.objectContaining({ id: "mcp-note", data: { module: "example", kind: "note", value: { text: "From external MCP", done: false } } }));
+
+  for (const name of [...(businessTools.game === false ? ["game_use"] : []), ...(businessTools.story === false ? ["playable_check", "playable_add_node"] : [])]) {
+    const rejected = await post({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name, arguments: {} } }, { "mcp-session-id": session });
+    expect(rejected.json()).toMatchObject({ result: { isError: true } });
+  }
+
+  const notes = (await app.inject({ method: "POST", url: "/projects", headers: { authorization: "Bearer app-token" }, payload: { type: "general", workspaceManifest: { version: 1, modules: [] } } })).json();
+  await post({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "open_project", arguments: { project: notes.id } } }, { "mcp-session-id": session });
+  const selected = await post({ jsonrpc: "2.0", id: 8, method: "tools/list" }, { "mcp-session-id": session });
+  const selectedNames = selected.json().result.tools.map((tool: { name: string }) => tool.name);
+  expect(selectedNames).toContain("canvas_check");
+  for (const name of ["game_use", "playable_check", "example_note", "example_echo", "business_echo"]) {
+    expect(selectedNames).not.toContain(name);
+    const rejected = await post({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name, arguments: {} } }, { "mcp-session-id": session });
+    expect(rejected.json()).toMatchObject({ result: { isError: true } });
+  }
+
   expect(
     (
       await app.inject({
@@ -475,4 +550,36 @@ it("serves the public contract from the daemon without the app token", async () 
   await expect(
     stat(path.join(dataDirectory, "external-mcp", "endpoint.json")),
   ).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("lists and runs the plugin tools of the project a session uses", async () => {
+  const { game, story, open, rpc, call } = await fixture();
+  const names = async (session: string) =>
+    (
+      (await rpc(session, "tools/list")).body as {
+        result: { tools: Array<{ name: string }> };
+      }
+    ).result.tools.map((tool) => tool.name);
+  const unbound = await open();
+  expect(await names(unbound)).not.toContain("acme__tiles__where");
+  expect(await call(unbound, "acme__tiles__where")).toMatchObject({
+    isError: true,
+  });
+
+  const inGame = await open([game]);
+  expect(await names(inGame)).toContain("acme__tiles__where");
+  expect(await call(inGame, "acme__tiles__where")).toEqual({
+    text: "tiles in game",
+    isError: false,
+  });
+  // The plugin's schema is checked like any other tool's.
+  expect(await call(inGame, "acme__tiles__where", { detail: 1 })).toMatchObject(
+    { isError: true },
+  );
+
+  const inStory = await open([story]);
+  expect(await names(inStory)).not.toContain("acme__tiles__where");
+  expect((await call(inStory, "acme__tiles__where")).text).toContain(
+    "not available for project",
+  );
 });

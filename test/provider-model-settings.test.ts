@@ -47,11 +47,11 @@ describe("Pi catalog refresh", () => {
     return { directory, runtime, request, createRuntime };
   }
 
-  it("returns the local list while refreshing, publishes the result and preserves it across restart", async () => {
+  it.each([true, false])("returns the local list while refreshing, publishes the result and preserves it across restart (account services: %s)", async (accountServices) => {
     const { directory, runtime, request, createRuntime } = await catalogFixture();
     let release!: () => void;
     request.mockImplementation(() => new Promise<void>((resolve) => { release = resolve; }));
-    const app = createApp({ dataDirectory: directory, piAgentDirectory: directory, createModelRuntime: async () => runtime });
+    const app = createApp({ accountServices, dataDirectory: directory, piAgentDirectory: directory, createModelRuntime: async () => runtime });
     apps.push(app);
     const first = await app.inject({ method: "GET", url: "/models" });
     expect(first.statusCode).toBe(200);

@@ -11,19 +11,19 @@ accepted tradeoffs, and validation limits.
 
 ## Using one
 
-First-run setup also offers Claude Code, Codex, and OpenCode in one
-horizontally scrolling row. Select an agent after installation and sign-in, choose its model
-on the same connection screen, then save with **Next** and continue to optional
-creative tools. Switching agents retains each selection until it is saved. OhMyGame
+First-run setup also shows Claude Code, Codex, and OpenCode beside OhMyGame
+in its row of agents. Select an agent after installation and sign-in, choose its model
+on the same connection screen, then save with **Next** and continue to choosing
+where to start. Switching agents retains each selection until it is saved. OhMyGame
 (Pi) is always enabled and uses connected model providers. Discovery alone never
 enables a CLI.
 
 **Settings → Agents** lists who can work in a conversation. OhMyGame's own
-agent comes first: it uses the models set up in Providers & Models, and its row
-links there. The coding agent CLIs follow, under **Coding agent CLIs on this
+agent comes first: it uses the models set up in Providers, and its page links
+there, to plugin skills and to the MCP server. The coding agent CLIs follow, under **Coding agent CLIs on this
 computer**; **Rescan** checks for them again. Each row shows whether the CLI
-was found and its version; the detail page provides account and permission
-controls. The agent whose model new conversations start with is marked **Default**.
+was found and its version; its page (`#/settings/agents/<id>`) provides
+account and permission controls. The agent whose model new conversations start with is marked **Default**.
 Agents are off by default. Enabling the switch offers their models in the conversation model picker; the
 detail page signs in, checks again, chooses the executable and permissions, and
 explains that the CLI loads the person's existing configuration.
@@ -102,7 +102,9 @@ report, so it has them before its own first turn. Codex reports them whenever it
 models are checked and while it works; Claude Code reports them during a
 conversation (its `rate_limit_event`), so they appear after its first one.
 The latest report is kept in `agent-runtimes/limits.json`, and a window whose
-reset time has passed shows as empty. OpenCode bills each model provider and
+reset time has passed shows as empty. System default reports saved by earlier
+versions are dropped once, since they may belong to the directory OhMyGame was
+launched with. OpenCode bills each model provider and
 has no quota of its own.
 
 When a turn stops at a usage limit (such as Claude Code's "You've hit your
@@ -133,9 +135,9 @@ In **Settings → Agents → Claude Code/Codex → Accounts**, click **+**, ente
 name and click **Add** to create a private configuration and start the official
 sign-in flow. **Use an existing directory** expands an optional import field for
 an absolute configuration path; importing does not start another sign-in.
-System default's own directory (`CLAUDE_CONFIG_DIR` or `~/.claude`, `CODEX_HOME`
-or `~/.codex`) cannot be imported: naming it explicitly would give Claude a
-separate Keychain entry and global configuration file while sharing its settings.
+System default's own directory (`~/.claude` or `~/.codex`) cannot be imported:
+naming it explicitly would give Claude a separate Keychain entry and global
+configuration file while sharing its settings.
 A managed Codex directory is created before its CLI starts and uses
 `cli_auth_credentials_store = "file"` in its own `config.toml`. The directory is
 private, and Codex manages its sign-in in `auth.json`. Imported configurations
@@ -149,7 +151,12 @@ Completing authorization lets the CLI update credentials in that configuration.
 
 ![Compact account list with a default selection and sign-in actions](assets/coding-agent-accounts.png)
 
-**System default** retains the existing CLI environment and sign-in. New profiles
+**System default** is the CLI's own default directory (`~/.claude` or
+`~/.codex`) and its sign-in. A `CLAUDE_CONFIG_DIR` or `CODEX_HOME` that OhMyGame
+inherits, from a terminal or from a tool that sets it for apps with `launchctl
+setenv`, is not used: it only records whichever account was selected when
+OhMyGame started. To use that directory, import it with **Use an existing
+directory**; it then shares its sign-in and files with the terminal. New profiles
 have independent CLI settings, hooks, MCP servers, Skills and native history.
 Select an account row's radio button to make it the default for new chats. Existing chats retain
 their own selections; switching between Claude Code and Codex in a chat retains
@@ -207,11 +214,11 @@ is permitted by a provider's terms.
 
 ## Codex as an image provider
 
-**Providers & Models → Codex CLI** exposes one image entry, **Codex Image**,
+**Providers → Codex CLI** exposes one image entry, **Codex Image**,
 using the installed CLI and its saved sign-in. Its image switch is independent
 of the Codex conversation-agent switch in Agents. Any chat agent can use it
 through `generate_image`; canvas image nodes and global/project image defaults
-use the same provider. Choose the global image default in the Providers & Models
+use the same provider. Choose the global image default in the Providers
 overview. The Codex CLI detail page shows its image status and model without a
 default-model selector. Closing a terminal does not disconnect the provider.
 
@@ -308,7 +315,7 @@ conversation manager or event database is needed.
 | Codex       | `codex app-server` JSON-RPC; one thread per conversation         | The thread's dynamic tools, answered over the same pipe | App server approval requests                         |
 | OpenCode    | `opencode serve` on loopback with its own password               | Remote MCP on the daemon with a turn token              | `permission.asked` events, answered on the server    |
 
-Each stdin stays open for the session. A CLI that no message has used for ten minutes is stopped; the next message starts a new process that resumes the same native session. Codex conversations with the same executable, environment and staged Skills share one app server, routed by thread; it stops with its last conversation. OpenCode keeps a server per conversation because its MCP servers, and so OhMyGame's tools, are registered for the whole instance. Native queue prioritization means
+Each stdin stays open for the session. A CLI that no message has used for ten minutes is stopped; the next message starts a new process that resumes the same native session. Codex conversations with the same executable, environment and staged Skills share one app server, routed by thread; it stops with its last conversation. OpenCode keeps a server per conversation because its MCP servers, and so OhMyGame's tools, are registered for the whole instance. After **Stop**, once Claude Code has reported that the turn ended, the next message continues the same session and tells it the turn was stopped; other agents build a new context from a handoff. Native queue prioritization means
 **Next**: after the current turn, before ordinary follow-ups. Mid-turn native
 injection is excluded because concurrent file writes cannot provide an
 independent checkpoint before delivery. Processes run in their
@@ -331,6 +338,58 @@ Removing a private folder cancels a pending lease and waits for an active write.
 Configuration and Skills are removed only after the CLI stops. Unverifiable
 identities and subprocesses that escape their group cannot be reclaimed this way.
 
+Source-registered application tools compose through
+`src/daemon/tool-contributions.ts`: each contribution identifies its module with
+an `id` and supplies workspace-bound Pi tool definitions in `tools`.
+`createAgentTools` composes the default core, interactive-story and game tools;
+`createApp({ toolContributions })` adds source contributions for Pi, coding agents
+and external MCP. The callback receives the current project. External MCP also
+calls it with a schema-only placeholder before selecting a project, so construct
+definitions without reading workspace files and defer work to `execute`.
+Duplicate names fail explicitly, including collisions with native plugin tools
+and external MCP's session tools. Definitions keep their schemas and handlers;
+composition adds no execution scheduler or lifecycle. Existing planning limits,
+abort signals and session cleanup still belong to the consumer. External MCP
+excludes conversation-only tools (`questionnaire`, `update_plan`, `install_plugin`
+and `web_search`) and Pi's file/shell tools; other contributions use its existing
+project binding and ToolBridge.
+
+Host composition selects the built-in business tools with
+`createApp({ businessTools: { game: false, story: false } })`. Omitted flags
+are enabled, preserving OhMyGame defaults. `game` contributes `game_use` only
+when the existing runtime and project availability checks pass; `story`
+contributes `playable_add_node` and `playable_check` only for interactive stories.
+The same selection controls story editing, templates, runtime startup and direct
+operations; see [optional interactive stories](workspace-manifests.md#optional-interactive-stories).
+Selection applies to Pi, coding-agent bridges and external MCP catalogs and
+invocation. Disabling game tools also avoids creating agent playtest owners.
+Core canvas/media tools and general-purpose plugins retain their existing behavior.
+The workspace manifest further restricts game tools, ownership and engine plugin
+contributions; see [workspace manifests](workspace-manifests.md) and [optional game ownership](preview-runtime.md#optional-game-ownership).
+This does not remove game dependencies from the build. Additional source contributions are
+trusted application code and should not re-register a disabled module's tools.
+
+A shipped non-game example is opt-in:
+
+```ts
+import { createExampleToolContribution } from "./example-tools.js";
+
+createApp({
+  businessTools: { game: false, story: false },
+  workspaceModules: [{ id: "example", configSchema: { type: "object", additionalProperties: false } }],
+  toolContributions: (project) => [createExampleToolContribution(project)],
+});
+```
+
+Create the workspace with `workspaceManifest: { version: 1, modules: [{ id: "example", config: {} }] }` to select it.
+
+`example_echo` validates `{ message: string }`, returns that message, and reports
+the bound workspace ID in execution details without accessing workspace files.
+It checks cancellation and uses the ordinary execution contract. Like other
+business contributions it is unavailable in planning mode. The example adds no
+persistence or canvas node contract; applications can replace it with their own
+source-registered module.
+
 OhMyGame's tools are the handlers Pi uses (`createAgentTools`), offered through
 `ToolBridge`. Plugin MCP servers reach the agent through the same `mcp` tool
 Pi uses, run in a model-less session in the daemon, so plugin settings,
@@ -339,8 +398,12 @@ an `ohmygame_` prefix to avoid reserved names such as `mcp`; dispatch and the
 conversation timeline retain the original tool names. Skills (plugin Skills and
 OhMyGame's own) are copied into a private folder for the session and handed to
 the CLI: a session plugin for Claude Code, `skills/extraRoots/set` for Codex,
-the `skills` array for OpenCode v2. Staging copies regular files and omits symbolic
-links, so it cannot copy an external credential through a Skill's link. Each
+the `skills` array for OpenCode v2. Skills a message names as `$name`, any
+number of them, reach each agent its own way: as Codex `skill` input items, and
+as a first line asking Claude Code (by their `ohmygame:` names) or OpenCode to
+load them; see [agent runtimes](agent-runtimes.md#tools-plugins-and-skills).
+Staging copies regular files and omits symbolic links, so it cannot copy an
+external credential through a Skill's link. Each
 agent reads the staged Skills without asking: Claude Code also gets the folder
 with `--add-dir`, OpenCode's session allows it as an external directory, and
 Codex's profiles read it already. Running a staged script follows the agent's

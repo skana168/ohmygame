@@ -9,7 +9,7 @@ import { TripoProvider } from "./tripo-provider.js";
 import { MeshyProvider } from "./meshy-provider.js";
 import { Hyper3DProvider } from "./hyper3d-provider.js";
 import { Model3DGenerationError, type Model3DGenerator, type Model3DGenerationInput, type Model3DAnimationInput } from "./model3d.js";
-import type { CloudModelsClient } from "./cloud-models.js";
+import type { CloudModelsClient } from "./host-business-contract.js";
 
 const PROVIDERS = { tripo: TripoProvider, meshy: MeshyProvider, hyper3d: Hyper3DProvider };
 type Connection = MeshyProvider | TripoProvider | Hyper3DProvider;

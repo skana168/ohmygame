@@ -27,7 +27,7 @@ afterEach(async () => {
   );
 });
 
-async function fixture() {
+async function fixture(accountServices = true) {
   const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-onboarding-"));
   directories.push(directory);
   const auth = { configured: false };
@@ -51,6 +51,7 @@ async function fixture() {
   } as unknown as ModelRuntime;
   const create = (accessToken?: string) => {
     const app = createApp({
+      accountServices,
       dataDirectory: directory,
       piAgentDirectory: directory,
       createModelRuntime: async () => runtime,
@@ -95,13 +96,12 @@ describe("onboarding persistence", () => {
     expect(store.get().status).toBe("pending");
   });
 
-  it("restores the optional media step without changing existing version-1 records", async () => {
+  it("resumes a saved media step, setup's old last step, at the start step", async () => {
     const { directory } = await fixture();
-    const store = new OnboardingStore(directory);
-    await store.update({ status: "pending", step: "media" });
+    await writeFile(path.join(directory, "onboarding.json"), JSON.stringify({ version: 1, status: "pending", step: "media" }));
     const restored = new OnboardingStore(directory);
     await restored.load();
-    expect(restored.get()).toEqual({ version: 1, status: "pending", step: "media" });
+    expect(restored.get()).toEqual({ version: 1, status: "pending", step: "start" });
   });
 
   it("keeps state unchanged after a failed write and permits a later retry", async () => {
@@ -121,8 +121,8 @@ describe("onboarding persistence", () => {
 });
 
 describe("onboarding API", () => {
-  it("starts a new install at welcome, remembers skip after restart, and supports reopening", async () => {
-    const { create } = await fixture();
+  it.each([true, false])("starts a new install at welcome, remembers skip after restart, and supports reopening (account services: %s)", async (accountServices) => {
+    const { create } = await fixture(accountServices);
     const app = create();
     expect((await app.inject("/settings/onboarding")).json()).toEqual(
       INITIAL_ONBOARDING_STATE,
@@ -178,8 +178,8 @@ describe("onboarding API", () => {
     );
   });
 
-  it("requires an available, enabled and visible language model to complete", async () => {
-    const { directory, auth, model, create } = await fixture();
+  it.each([true, false])("requires an available, enabled and visible language model to complete (account services: %s)", async (accountServices) => {
+    const { directory, auth, model, create } = await fixture(accountServices);
     const complete = (app: ReturnType<typeof createApp>) =>
       app.inject({
         method: "PUT",

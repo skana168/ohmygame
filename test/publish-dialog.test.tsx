@@ -18,6 +18,10 @@ const project: ProjectState = {
 };
 
 describe("publication feedback", () => {
+  it("does not expose a publish dialog when the application disables publishing", () => {
+    expect(renderToStaticMarkup(<PublishDialog available={false} project={project} publishing={false} onClose={() => undefined} onPublish={async () => false} />)).toBe("");
+  });
+
   it("shows success with the returned title, game link, and next actions", () => {
     const html = renderToStaticMarkup(<PublicationDetails publication={publication} name={project.name} justPublished onClose={() => undefined} onUpdate={() => undefined} />);
     expect(html).toContain("Published successfully");
@@ -55,7 +59,7 @@ describe("publication feedback", () => {
     const html = renderToStaticMarkup(<PublishDialog project={project} publishing onClose={() => undefined} onPublish={async () => false} />);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('role="status">Publishing...');
-    expect(html).toContain('type="submit" aria-label="Publishing..." disabled=""');
-    expect(html).toContain('disabled="" aria-label="Close"');
+    expect(html).toMatch(/<button type="submit"[^>]* aria-label="Publishing\.\.\." disabled="">/);
+    expect(html).toMatch(/<button [^>]*aria-label="Close"[^>]* disabled="">/);
   });
 });

@@ -1,25 +1,22 @@
+import { workspaceHasModule } from "../shared/workspace-policy.js";
+import { composeToolContributions, type ToolContribution } from "./tool-contributions.js";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { defineTool, type ToolDefinition as PiToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type Model3DAnimationAction, type PlanMode, type PlanState, type ProjectState, type QuestionnaireResult, type RunToolRequest, type RunVideoToolRequest, type ToolId } from "../shared/contracts.js";
 import { DEFAULT_ANIMATION_ACTION_IDS, DEFAULT_CHARACTER_HEIGHT_METERS, MAX_ANIMATION_ACTIONS } from "../shared/generation-config.js";
-import { supportsWebPreview } from "../shared/project-runtime.js";
-import type { PluginDetail } from "../shared/plugins.js";
+import { isAppWidePlugin } from "../shared/plugin-manifest.js";
 import type { ProjectManager } from "./projects.js";
 import type { ToolRunner } from "./tools.js";
 import { getWorkspaceMedia } from "./workspace.js";
-import type { GameRuntimeAdapter, GameUseOpenTarget } from "../shared/playtest.js";
 import type { WebSearchExecution, WebSearchInput } from "../shared/web-search.js";
-import { createGameUseTool } from "./playtest-tools.js";
-import { addPlayableNode } from "./playable-add-node.js";
-import { validatePlayableProject } from "./playable-project.js";
-import { PLAYABLE_PRESET_IDS, PLAYABLE_PRESETS } from "./playable-presets.js";
 import { checkCanvasWorkspace } from "./canvas-check.js";
 import type { CanvasStore } from "./canvas-workspace.js";
 import { readCanvasAssets } from "./canvas-assets.js";
 import { AUDIO_VOICE_ID_MAX_LENGTH, AUDIO_VOICE_ID_PATTERN, audioExtension, audioSettings } from "../shared/audio.js";
 import { inspectPluginDraft } from "./plugin-draft.js";
+import { localizePluginString, type PluginIndexEntry } from "./plugin-index.js";
 
 const PI_TOOL_NAMES: Record<ToolId, string> = {
   "generate-image": "generate_image",
@@ -67,7 +64,7 @@ export type AskQuestionnaire = (
   signal?: AbortSignal,
 ) => Promise<QuestionnaireResult>;
 
-export type InstallPlugin = (sourcePath: string) => Promise<PluginDetail>;
+export type InstallPlugin = (sourcePath: string) => Promise<PluginIndexEntry>;
 export type SearchWeb = (input: WebSearchInput, signal?: AbortSignal) => Promise<WebSearchExecution>;
 
 const mediaModelParameter = () => Type.Object({
@@ -93,15 +90,22 @@ const audioToolSettings = {
   output: Type.Optional(Type.Object({ format: Type.Optional(Type.Union([Type.Literal("mp3"), Type.Literal("wav"), Type.Literal("ogg_opus")])), sampleRate: Type.Optional(Type.Union([8000, 16000, 22050, 24000, 32000, 40000, 44100, 48000].map((value) => Type.Literal(value)))), bitRate: Type.Optional(Type.Integer()) })),
 };
 
+/** Contributions are bound by the application assembler, never imported by core. */
+export interface AgentToolProviders {
+  beforeCanvas?: readonly ToolContribution[];
+  afterCanvas?: readonly ToolContribution[];
+}
+
 export function createAgentTools(
   project: ProjectState,
   tools: ToolRunner,
   projects: ProjectManager,
   askQuestionnaire?: AskQuestionnaire,
   installPlugin?: InstallPlugin,
-  playtest?: { driver: GameRuntimeAdapter; resolveOpenTarget: () => Promise<GameUseOpenTarget> },
   searchWeb?: SearchWeb,
   canvasStore?: CanvasStore,
+  contributions: readonly ToolContribution[] = [],
+  providers: AgentToolProviders = {},
 ): PiToolDefinition[] {
   const saveGeneratedAudio = async (
     toolId: "generate-speech" | "generate-sound-effect" | "generate-music" | "generate-audio",
@@ -134,7 +138,7 @@ export function createAgentTools(
       };
     } finally { await tools.removeRun(run.id); }
   };
-  return [defineTool({
+  const coreTools: PiToolDefinition[] = [defineTool({
     name: "questionnaire",
     label: "Ask Questions",
     description: "Ask the user up to three high-impact clarifying questions when their answer is necessary to produce a correct plan. Do not ask for information you can discover from the project.",
@@ -202,14 +206,18 @@ export function createAgentTools(
       const draft = await inspectPluginDraft(sourcePath);
       if (draft.errors.length) throw new Error(draft.errors.join("\n"));
       const plugin = await installPlugin(sourcePath);
+      const servers = plugin.manifest.contributes?.mcpServers?.length ?? 0;
       const counts = [
         plugin.skills.length ? `${plugin.skills.length} Skill${plugin.skills.length === 1 ? "" : "s"}` : undefined,
-        plugin.mcpServers?.length ? `${plugin.mcpServers.length} MCP service${plugin.mcpServers.length === 1 ? "" : "s"}` : undefined,
-        plugin.connections.length ? `${plugin.connections.length} Connection${plugin.connections.length === 1 ? "" : "s"}` : undefined,
+        servers ? `${servers} MCP service${servers === 1 ? "" : "s"}` : undefined,
       ].filter(Boolean).join(" · ") || "No components";
+      const displayName = localizePluginString(plugin, plugin.manifest.displayName, "en");
+      const next = isAppWidePlugin(plugin.manifest)
+        ? "It applies by itself to every project it suits."
+        : "The person turns it on in a project's Plugins sheet, which also asks them to approve what it asks for.";
       return {
-        content: [{ type: "text", text: `Created and installed ${plugin.displayName}.\n${counts}\nSource: ${sourcePath}` }],
-        details: { plugin: { id: plugin.id, displayName: plugin.displayName, sourcePath } },
+        content: [{ type: "text", text: `Created and installed ${displayName} (${plugin.id} ${plugin.version}).\n${counts}\n${next}\nSource: ${sourcePath}` }],
+        details: { plugin: { id: plugin.id, displayName, sourcePath } },
       };
     },
   }), defineTool({
@@ -513,66 +521,11 @@ export function createAgentTools(
     }, input.prompt, "music", signal),
   }), defineTool({
     name: PI_TOOL_NAMES["generate-audio"], label: "Generate Audio",
-    description: "Create game scene audio combining dialogue, sound effects, ambience and music. Use Seed Audio with a text prompt or a Speaker ID. Duration is a target, not an exact cut. Save audio and metadata companions to the project.",
+    description: "Create scene audio combining dialogue, sound effects, ambience and music. Use Seed Audio with a text prompt or a Speaker ID. Duration is a target, not an exact cut. Save audio and metadata companions to the project.",
     parameters: Type.Object({ ...audioToolSettings, prompt: Type.String({ minLength: 1, maxLength: 2744 }), model: Type.Optional(mediaModelParameter()), durationSeconds: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 120 })) }),
     execute: async (_toolCallId, input, signal) => saveGeneratedAudio("generate-audio", { ...audioSettings(input), prompt: input.prompt, model: input.model, durationSeconds: input.durationSeconds }, input.prompt, "audio", signal),
-  }), ...(project.type === "interactive-story" ? [defineTool({
-    name: "playable_add_node",
-    label: "Add Node",
-    description: [
-      "Create a Playable Node from a Preset. Presets are starting points, not Node types: the starter source uses the Project Style and is yours to rewrite.",
-      `Presets: ${PLAYABLE_PRESETS.map((preset) => `${preset.id} (${preset.label})`).join(", ")}.`,
-      "The Node is added to graph.json with its starter Signals and placed on the canvas. Connect it with an edge afterwards, then edit the written files.",
-    ].join("\n"),
-    parameters: Type.Object({
-      preset: Type.Union(
-        PLAYABLE_PRESET_IDS.map((id) => Type.Literal(id)),
-        { description: "Preset to start from" },
-      ),
-      id: Type.String({ minLength: 1, maxLength: 60, description: "Node ID, used as the directory name under nodes/" }),
-      title: Type.Optional(Type.String({ minLength: 1, maxLength: 120, description: "Node title; defaults to the next Node N" })),
-    }),
-    execute: async (_toolCallId, input, signal) => {
-      signal?.throwIfAborted();
-      const result = await addPlayableNode(project.workspacePath, input);
-      const signals = result.signals.length ? result.signals.join(", ") : "none";
-      return {
-        content: [{
-          type: "text",
-          text: [
-            `Added Node "${result.id}" (${result.title}) from the ${result.preset} Preset.`,
-            `Files: ${result.files.join(", ")}`,
-            `Starter Signals: ${signals}`,
-            result.brief,
-          ].join("\n"),
-        }],
-        details: { playableNode: { id: result.id, preset: result.preset, files: result.files, signals: result.signals } },
-      };
-    },
-  }), defineTool({
-    name: "playable_check",
-    label: "Check Project",
-    description: [
-      "Validate the Playable Nodes project: graph.json against its schema and references, then check every Node's files and what they import the way the story's page loads them.",
-      "Run it after changing the project and fix every issue it reports. Use mode \"publish\" before the user publishes; it also requires every Signal other than navigation ones to be connected and every source file to exist.",
-    ].join("\n"),
-    parameters: Type.Object({
-      mode: Type.Optional(Type.Union([Type.Literal("draft"), Type.Literal("publish")], { description: "Validation strictness; defaults to draft" })),
-    }),
-    execute: async (_toolCallId, input, signal) => {
-      signal?.throwIfAborted();
-      const mode = input.mode ?? "draft";
-      const result = await validatePlayableProject(project.workspacePath, mode);
-      const issues = result.issues.map(({ phase, code, path: issuePath, message, surfaceId }) => ({ phase, code, path: issuePath, message, ...(surfaceId ? { surfaceId } : {}) }));
-      const text = result.ok
-        ? `The project passes ${mode} validation.`
-        : [
-          `The project has ${issues.length} ${mode} validation ${issues.length === 1 ? "issue" : "issues"}:`,
-          ...issues.map((issue) => `- [${issue.phase}] ${issue.surfaceId ? `${issue.surfaceId} ` : ""}${issue.path}: ${issue.message} (${issue.code})`),
-        ].join("\n");
-      return { content: [{ type: "text", text }], details: { playableCheck: { mode, ok: result.ok, issues } } };
-    },
-  })] : []), defineTool({
+  })];
+  const canvasTools: PiToolDefinition[] = [defineTool({
     name: "canvas_check",
     label: "Check Canvas",
     description: "Validate the canvas workspace files, node/document/table references and local media paths. Run after editing canvas files and fix every reported issue. This tool only reads files.",
@@ -598,7 +551,7 @@ export function createAgentTools(
   }), defineTool({
     name: "generate_canvas_media",
     label: "Generate Canvas Media",
-    description: "Generate a saved media node using its current prompt, configured model and references. Use it only for a node whose generation model is available. A game-creation request includes its needed media unless the user narrows the scope; editing a prompt or reference alone does not request generation. Saves output into the project, updates the node and shares the canvas generation history. Edit ordinary canvas files before calling this tool. If the node is already generating, this waits for that run; if its current output came from the same settings, this returns it without generating again unless regenerate is true.",
+    description: "Generate a saved media node using its current prompt, configured model and references. Use it only for a node whose generation model is available. Editing a prompt or reference alone does not request generation. Saves output into the project, updates the node and shares the canvas generation history. Edit ordinary canvas files before calling this tool. If the node is already generating, this waits for that run; if its current output came from the same settings, this returns it without generating again unless regenerate is true.",
     parameters: Type.Object({
       boardId: Type.String({ minLength: 1, maxLength: 100 }),
       nodeId: Type.String({ minLength: 1, maxLength: 120 }),
@@ -633,9 +586,15 @@ export function createAgentTools(
         return { content: [{ type: "text", text: `${summary} Inspect or play the relevant output to evaluate the actual result.` }], details: { canvasGeneration: current } };
       } finally { signal?.removeEventListener("abort", cancel); }
     },
-  })] : []), ...(playtest?.driver.available && playtest.driver.capabilities.projectTypes.includes(project.type) && (project.type !== "general" || supportsWebPreview(project))
-    ? [createGameUseTool(playtest.driver, playtest.resolveOpenTarget, { bridge: project.type === "interactive-story" ? "reset" : "full" })]
-    : [])];
+  })] : [])];
+  // Keep the existing catalog order; core contributes on either side of story tools.
+  return composeToolContributions([
+    { id: "core", tools: coreTools },
+    ...(providers.beforeCanvas ?? []),
+    { id: "core", tools: canvasTools },
+    ...(providers.afterCanvas ?? []),
+    ...contributions.filter((contribution) => contribution.id === "core" || workspaceHasModule(project, contribution.id) || !project.workspaceManifest && !project.workspaceDiagnostics?.length),
+  ]);
 }
 
 /** Matches an agent-supplied action name to the library, case-insensitively, and suggests close names when it misses. */
