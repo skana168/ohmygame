@@ -4,7 +4,7 @@
 
 **Blocked by:** 10 — Compose complete applications and retire legacy business assembly; 11 — Configure independent application identity and data storage.
 
-Status: ready-for-agent
+Status: claimed
 
 - [ ] Produce a clean standalone template directory with the selected core, compiled non-game example, dependency/build configuration, and required licensed resources/notices.
 - [ ] Exclude game-only modules and resource preparation, local credentials, application data, generated caches, source-repository metadata, and environment-specific state.

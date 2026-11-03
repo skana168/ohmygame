@@ -252,10 +252,7 @@
       "remaining_validation": "Independent export/install/source-watch provider wiring and standalone browser/generated-app checks required in 12/13 before full template delivery. Original native fractional resize remains nonpassing (549x309 expected, 667x375 observed), unchanged; later playback/fullscreen, actual engines/encoders, paid providers, private cloud/OAuth, other OSes and signing remain unverified."
     },
     "12": {
-      "status": "ready-for-agent",
-      "started": false,
-      "blocked_by": [],
-      "note": "Unblocked by resolved 10 and 11; not claimed or started. Export/independent install and source-watch/browser/generated-application validation remain required."
+      "status": "launching"
     }
   },
   "notes": [
