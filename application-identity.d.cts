@@ -6,6 +6,7 @@ interface ApplicationIdentity {
 }
 declare const identity: {
   loadIdentity(root?: string): ApplicationIdentity;
+  validateIdentity(value: unknown): ApplicationIdentity;
   dataDirectory(
     identity: ApplicationIdentity,
     root: string,
