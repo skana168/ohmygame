@@ -148,6 +148,22 @@ for (const source of [...sources].sort()) {
   await mkdir(path.dirname(output), { recursive: true });
   await writeFile(output, declarations.get(source));
 }
+const lintConfig = await readFile(
+  path.join(destination, ".oxlintrc.json"),
+  "utf8",
+);
+await writeFile(
+  path.join(destination, ".oxlintrc.json"),
+  lintConfig.replace(
+    '"overrides": [',
+    `"overrides": [
+    {
+      // Compiler-emitted declarations describe private shape, not executable unused members.
+      "files": ["src/**/*.d.ts", "src/**/*.d.cts"],
+      "rules": { "no-unused-private-class-members": "off" }
+    },`,
+  ),
+);
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 pkg.name = "ohmytemplate";
