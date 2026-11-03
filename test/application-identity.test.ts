@@ -163,6 +163,14 @@ it("exports an independent selected workbench without overwriting an existing de
       await readFile(path.join(destination, "CHANGELOG.md"), "utf8"),
     )[0].version,
   ).toBe("0.0.0-beta.5.0");
+  for (const file of [
+    "src/renderer/assets/home/OFL.txt",
+    "src/renderer/assets/sidebar/OFL.txt",
+  ]) {
+    expect(await readFile(path.join(destination, file), "utf8")).toContain(
+      "SIL OPEN FONT LICENSE",
+    );
+  }
   expect(run().status).not.toBe(0);
   expect(identity.loadIdentity().name).toBe("OhMyGame");
 });

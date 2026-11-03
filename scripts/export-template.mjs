@@ -1,4 +1,11 @@
-import { cp, lstat, mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  cp,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -48,6 +55,7 @@ const graph = await build({
     "src/desktop/preload.cts",
     "src/desktop/external-mcp-main.ts",
     "src/renderer/main.tsx",
+    "vite.config.ts",
     "scripts/prepare-preinstalled-plugins.ts",
     ...tests
       .filter((file) => /\.tsx?$/.test(file))
@@ -104,6 +112,15 @@ const sources = new Set(
 );
 sources.add("src/vite-env.d.ts");
 sources.add("src/desktop/tsconfig.core.json");
+// License files are resource siblings rather than executable imports.
+for (const directory of new Set(
+  [...sources].map((file) => path.dirname(file)),
+)) {
+  for (const file of await readdir(path.join(root, directory))) {
+    if (/^(?:LICENSE|NOTICE|COPYING|OFL)(?:[.-]|$)/i.test(file))
+      sources.add(path.join(directory, file));
+  }
+}
 for (const name of [
   ...[...sources]
     .filter((file) => inputs.includes(file) || !declarations.has(file))
