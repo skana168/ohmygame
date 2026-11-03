@@ -6,6 +6,8 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const root = path.resolve(__dirname, "..");
 const directory = process.argv[2];
+const nonGame = process.argv.includes("--non-game");
+const coreDesktop = nonGame || process.argv.includes("--core-desktop");
 process.env.OHMYGAME_DATA_DIR = path.join(directory, "data");
 process.env.PI_CODING_AGENT_DIR = path.join(directory, "pi");
 app.setPath("userData", path.join(directory, "profile"));
@@ -24,8 +26,21 @@ const deadline = setTimeout(() => {
   app.exit(2);
 }, 120000);
 (async () => {
+  if (nonGame) {
+    const { applicationCompositionId } = require(
+      path.join(root, "dist/shared/application-selection.js"),
+    );
+    assert.equal(
+      applicationCompositionId,
+      "non-game",
+      "Non-game smoke requires the selected non-game build",
+    );
+  }
+  // Sentry bootstrap must run synchronously before Electron's ready event.
+  if (coreDesktop && !nonGame)
+    await import(pathToFileURL(path.join(root, "dist/desktop/main.js")).href);
+  else require(path.join(root, "dist/desktop/bootstrap.cjs"));
   await mkdir(directory, { recursive: true });
-  await import(pathToFileURL(path.join(root, "dist/desktop/main.js")).href);
   let editor;
   await eventually(() => {
     editor = BrowserWindow.getAllWindows().find((w) =>
@@ -59,14 +74,19 @@ const deadline = setTimeout(() => {
   const notes = await api("/projects", "POST", {
     name: "Desktop capability notes",
     type: "general",
-    workspaceManifest: { version: 1, modules: [] },
+    ...(nonGame ? {} : { workspaceManifest: { version: 1, modules: [] } }),
   });
-  const game = await api("/projects", "POST", {
-    name: "Desktop enabled game",
-    type: "general",
-    workspaceManifest: { version: 1, modules: [{ id: "game", config: {} }] },
-  });
-  for (const project of [notes, game]) {
+  const game = coreDesktop
+    ? undefined
+    : await api("/projects", "POST", {
+        name: "Desktop enabled game",
+        type: "general",
+        workspaceManifest: {
+          version: 1,
+          modules: [{ id: "game", config: {} }],
+        },
+      });
+  for (const project of [notes, game].filter(Boolean)) {
     await writeFile(
       path.join(project.workspacePath, "index.html"),
       "<!doctype html><h1>Reusable desktop preview</h1><script>window.smokeReady = true</script>",
@@ -164,116 +184,146 @@ const deadline = setTimeout(() => {
     `${runtime.daemonUrl}/projects/${notes.id}/tuning`,
     { headers: { authorization: `Bearer ${runtime.token}` } },
   );
-  assert.equal(tuning.status, 409);
+  assert.equal(tuning.status, nonGame ? 404 : 409);
   console.log("Non-game iframe, controls, direct IPC denial passed");
-  // External MCP crosses the daemon-to-desktop driver transport as real agents do.
-  await api("/settings/external-agents", "PUT", { enabled: true });
-  const endpoint = JSON.parse(
-    await readFile(
-      path.join(process.env.OHMYGAME_DATA_DIR, "external-mcp/endpoint.json"),
-      "utf8",
-    ),
-  );
-  let session,
-    sequence = 0;
-  async function rpc(method, params) {
-    const response = await fetch(endpoint.url, {
-      method: "POST",
+  if (!coreDesktop) {
+    // External MCP crosses the daemon-to-desktop driver transport as real agents do.
+    await api("/settings/external-agents", "PUT", { enabled: true });
+    const endpoint = JSON.parse(
+      await readFile(
+        path.join(process.env.OHMYGAME_DATA_DIR, "external-mcp/endpoint.json"),
+        "utf8",
+      ),
+    );
+    let session,
+      sequence = 0;
+    async function rpc(method, params) {
+      const response = await fetch(endpoint.url, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${endpoint.token}`,
+          "content-type": "application/json",
+          ...(session ? { "mcp-session-id": session } : {}),
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: ++sequence,
+          method,
+          params,
+        }),
+      });
+      session ??= response.headers.get("mcp-session-id");
+      assert.ok(response.ok, await response.clone().text());
+      const answer = await response.json();
+      assert.equal(answer.error, undefined, JSON.stringify(answer));
+      return answer.result;
+    }
+    await rpc("initialize", { protocolVersion: "2025-06-18" });
+    const call = (name, args) => rpc("tools/call", { name, arguments: args });
+    await call("open_project", { project: notes.id });
+    assert.ok(
+      !(await rpc("tools/list")).tools.some((t) => t.name === "game_use"),
+    );
+    const rejected = await call("game_use", { operation: "open" });
+    assert.equal(rejected.isError, true, JSON.stringify(rejected));
+    assert.equal(
+      (await js("window.ohMyGameDesktop.agentPlaytests.state()"))
+        .activeSessions,
+      0,
+    );
+    assert.equal(BaseWindow.getAllWindows().length, count);
+    await call("open_project", { project: game.id });
+    assert.ok(
+      (await rpc("tools/list")).tools.some((t) => t.name === "game_use"),
+    );
+    const opened = await call("game_use", {
+      operation: "open",
+      viewport: { width: 640, height: 480 },
+    });
+    assert.ok(!opened.isError, JSON.stringify(opened));
+    assert.equal(
+      (await js("window.ohMyGameDesktop.agentPlaytests.state()"))
+        .activeSessions,
+      1,
+    );
+    // Switching the bound workspace releases the old workspace's owned session.
+    await call("open_project", { project: notes.id });
+    await eventually(
+      async () =>
+        (await js("window.ohMyGameDesktop.agentPlaytests.state()"))
+          .activeSessions === 0,
+      "external owner cleanup",
+    );
+    assert.equal(
+      BaseWindow.getAllWindows().length,
+      count,
+      "Workspace switch destroys owned driver window",
+    );
+    await fetch(endpoint.url, {
+      method: "DELETE",
       headers: {
         authorization: `Bearer ${endpoint.token}`,
-        "content-type": "application/json",
-        ...(session ? { "mcp-session-id": session } : {}),
+        "mcp-session-id": session,
       },
-      body: JSON.stringify({ jsonrpc: "2.0", id: ++sequence, method, params }),
     });
-    session ??= response.headers.get("mcp-session-id");
-    assert.ok(response.ok, await response.clone().text());
-    const answer = await response.json();
-    assert.equal(answer.error, undefined, JSON.stringify(answer));
-    return answer.result;
-  }
-  await rpc("initialize", { protocolVersion: "2025-06-18" });
-  const call = (name, args) => rpc("tools/call", { name, arguments: args });
-  await call("open_project", { project: notes.id });
-  assert.ok(
-    !(await rpc("tools/list")).tools.some((t) => t.name === "game_use"),
-  );
-  const rejected = await call("game_use", { operation: "open" });
-  assert.equal(rejected.isError, true, JSON.stringify(rejected));
-  assert.equal(
-    (await js("window.ohMyGameDesktop.agentPlaytests.state()")).activeSessions,
-    0,
-  );
-  assert.equal(BaseWindow.getAllWindows().length, count);
-  await call("open_project", { project: game.id });
-  assert.ok((await rpc("tools/list")).tools.some((t) => t.name === "game_use"));
-  const opened = await call("game_use", {
-    operation: "open",
-    viewport: { width: 640, height: 480 },
-  });
-  assert.ok(!opened.isError, JSON.stringify(opened));
-  assert.equal(
-    (await js("window.ohMyGameDesktop.agentPlaytests.state()")).activeSessions,
-    1,
-  );
-  // Switching the bound workspace releases the old workspace's owned session.
-  await call("open_project", { project: notes.id });
-  await eventually(
-    async () =>
-      (await js("window.ohMyGameDesktop.agentPlaytests.state()"))
-        .activeSessions === 0,
-    "external owner cleanup",
-  );
-  assert.equal(
-    BaseWindow.getAllWindows().length,
-    count,
-    "Workspace switch destroys owned driver window",
-  );
-  await fetch(endpoint.url, {
-    method: "DELETE",
-    headers: {
-      authorization: `Bearer ${endpoint.token}`,
-      "mcp-session-id": session,
-    },
-  });
-  console.log(
-    "Agent tool selection, real desktop driver and workspace owner cleanup passed",
-  );
+    console.log(
+      "Agent tool selection, real desktop driver and workspace owner cleanup passed",
+    );
 
-  await js(
-    `window.ohMyGameDesktop.webGamePlayer.open(${JSON.stringify(game.id)},{path:'/',viewport:${viewport}})`,
-  );
-  assert.equal(
-    (
-      await js(
-        `window.ohMyGameDesktop.webGamePlayer.state(${JSON.stringify(game.id)})`,
-      )
-    ).open,
-    true,
-  );
-  const native = webContents
-    .getAllWebContents()
-    .find((c) => c.getURL().endsWith("/web-game-host.html"));
-  assert.ok(native, "Enabled game creates native player");
-  await eventually(
-    () => native.mainFrame.frames.length > 0,
-    "enabled game frame",
-  );
-  assert.equal(
-    await native.mainFrame.frames[0].executeJavaScript("window.smokeReady"),
-    true,
-  );
-  await js(
-    `window.ohMyGameDesktop.webGamePlayer.close(${JSON.stringify(game.id)})`,
-  );
-  await eventually(() => native.isDestroyed(), "owned player cleanup");
-  await api(`/projects/${notes.id}/preview`, "DELETE");
-  await assert.rejects(
-    fetch(started.url, { signal: AbortSignal.timeout(1000) }),
-  );
-  console.log(
-    "Enabled game IPC and owned native player/preview cleanup passed",
-  );
+    await js(
+      `window.ohMyGameDesktop.webGamePlayer.open(${JSON.stringify(game.id)},{path:'/',viewport:${viewport}})`,
+    );
+    assert.equal(
+      (
+        await js(
+          `window.ohMyGameDesktop.webGamePlayer.state(${JSON.stringify(game.id)})`,
+        )
+      ).open,
+      true,
+    );
+    const native = webContents
+      .getAllWebContents()
+      .find((c) => c.getURL().endsWith("/web-game-host.html"));
+    assert.ok(native, "Enabled game creates native player");
+    await eventually(
+      () => native.mainFrame.frames.length > 0,
+      "enabled game frame",
+    );
+    assert.equal(
+      await native.mainFrame.frames[0].executeJavaScript("window.smokeReady"),
+      true,
+    );
+    await js(
+      `window.ohMyGameDesktop.webGamePlayer.close(${JSON.stringify(game.id)})`,
+    );
+    await eventually(() => native.isDestroyed(), "owned player cleanup");
+    await api(`/projects/${notes.id}/preview`, "DELETE");
+    await assert.rejects(
+      fetch(started.url, { signal: AbortSignal.timeout(1000) }),
+    );
+    console.log(
+      "Enabled game IPC and owned native player/preview cleanup passed",
+    );
+  } else {
+    const denied = await js(
+      `window.ohMyGameDesktop.agentPlaytests.state().then(() => null, e => e.message)`,
+    );
+    assert.match(denied, /game capability is unavailable in this application/);
+    const accountDenied = await js(
+      `window.ohMyGameDesktop.auth.callbackUrl().then(() => null, e => e.message)`,
+    );
+    assert.match(
+      accountDenied,
+      /account capability is unavailable in this application/,
+    );
+    await api(`/projects/${notes.id}/preview`, "DELETE");
+    await assert.rejects(
+      fetch(started.url, { signal: AbortSignal.timeout(1000) }),
+    );
+    console.log(
+      "Absent native game/account contributions reject direct IPC; reusable preview cleanup passed",
+    );
+  }
   // Supplemental ticket04 persistence flow in the actual desktop renderer.
   const canvas = `/projects/${notes.id}/canvas`;
   await api(`${canvas}/workspace`);
@@ -298,6 +348,24 @@ const deadline = setTimeout(() => {
     width: 500,
     height: 350,
   };
+  if (nonGame) {
+    board.board.nodes.push({
+      id: "example-note",
+      type: "custom",
+      position: { x: 600, y: 70 },
+      data: {
+        module: "example",
+        kind: "note",
+        value: { text: "Desktop custom note", done: false },
+      },
+    });
+    board.board.editorLayout.nodes["example-note"] = {
+      x: 600,
+      y: 70,
+      width: 320,
+      height: 220,
+    };
+  }
   await api(boardRoute, "PUT", board);
   await js(
     `localStorage.setItem('canvas-active:${notes.id}', '${boardId}'); location.hash = '#/projects/${notes.id}/design'`,
@@ -337,6 +405,34 @@ const deadline = setTimeout(() => {
       ),
     "desktop reopen",
   );
+  if (nonGame) {
+    await eventually(
+      () => js(`!!document.querySelector('.react-flow__node-custom textarea')`),
+      "custom example node",
+    );
+    await js(`(() => {
+      const area = document.querySelector('.react-flow__node-custom textarea');
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(area, 'Desktop persisted custom note');
+      area.dispatchEvent(new Event('input', {bubbles:true})); area.dispatchEvent(new Event('change', {bubbles:true})); area.blur();
+    })()`);
+    await eventually(
+      async () =>
+        (await api(boardRoute)).board.nodes.find((n) => n.id === "example-note")
+          ?.data.value.text === "Desktop persisted custom note",
+      "custom node autosave",
+    );
+    editor.webContents.reload();
+    await eventually(
+      () =>
+        js(
+          `document.querySelector('.react-flow__node-custom textarea')?.value === 'Desktop persisted custom note'`,
+        ),
+      "custom node reopen",
+    );
+    console.log(
+      "Selected non-game custom example node editing, autosave and reload passed",
+    );
+  }
   assert.equal((await api(`${canvas}/workspace`)).mainDocumentId, undefined);
   assert.equal((await api(`${canvas}/workspace`)).boards.length, 2);
   await writeFile(
@@ -350,7 +446,7 @@ const deadline = setTimeout(() => {
     path.join(directory, "shutdown-targets.json"),
     JSON.stringify([
       runtime.daemonUrl,
-      (await api(`/projects/${game.id}`)).preview.url,
+      ...(game ? [(await api(`/projects/${game.id}`)).preview.url] : []),
     ]),
   );
   console.log(

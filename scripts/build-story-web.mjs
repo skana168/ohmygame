@@ -1,32 +1,7 @@
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
-import {
-  STORY_WEB_ENTRY,
-  storyWebEditorBridge,
-  storyWebRuntimeModules,
-} from "../src/daemon/story-web-bundle.ts";
+import { applicationComposition } from "../src/shared/application-composition.ts";
 
-// Build from source before packaging, where esbuild can still read the module
-// graph. Keep runtime modules readable; only the editor bridge is bundled.
-const directory = new URL("../dist/story-web/", import.meta.url);
-const destination = new URL("resources.json", directory);
-await mkdir(directory, { recursive: true });
-await rm(destination, { force: true });
-const [modules, bridge] = await Promise.all([
-  storyWebRuntimeModules(),
-  storyWebEditorBridge(),
-]);
-if (!modules[STORY_WEB_ENTRY] || !bridge.trim()) {
-  throw new Error("The web story build produced incomplete resources.");
+if (applicationComposition.story) {
+  await import("./build-story-resources.mjs");
+} else {
+  console.log("Skipped story resources for the non-game application.");
 }
-await writeFile(destination, JSON.stringify({ modules, bridge }));
-// Presets read their files and illustrations in both source development and the built daemon.
-for (const folder of ["story-templates", "scene-templates"]) {
-  await cp(
-    new URL(`../src/daemon/assets/${folder}/`, import.meta.url),
-    new URL(`../dist/daemon/assets/${folder}/`, import.meta.url),
-    { recursive: true },
-  );
-}
-console.log(
-  `Prepared ${Object.keys(modules).length} story runtime modules and the editor bridge.`,
-);

@@ -1,3 +1,4 @@
+import { applicationComposition } from "../shared/application-composition.js";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type {
   AgentModelCatalog,
@@ -418,7 +419,7 @@ export function Onboarding({
             <h1 ref={heading} tabIndex={-1}>
               {t("onboarding.welcome")}
             </h1>
-            <p className="onboarding-lede">{t("onboarding.welcomeHint")}</p>
+            <p className="onboarding-lede">{t(applicationComposition.game ? "onboarding.welcomeHint" : "onboarding.workspaceWelcomeHint")}</p>
           </>
         ) : step === "start" ? (
           <>
@@ -549,9 +550,9 @@ function StartChoices({ busy, onChoose }: {
 }) {
   const canImport = Boolean(window.ohMyGameDesktop?.selectProjectDirectory);
   const choices: { id: OnboardingStart; icon: IconComponent; title: string; hint: string }[] = [
-    { id: "prompt", icon: Sparkles, title: t("onboarding.startPrompt"), hint: t("onboarding.startPromptHint") },
+    { id: "prompt", icon: Sparkles, title: t(applicationComposition.game ? "onboarding.startPrompt" : "onboarding.workspaceStartPrompt"), hint: t("onboarding.startPromptHint") },
     { id: "blank", icon: FilePlus, title: t("home.startBlank"), hint: t("onboarding.startBlankHint") },
-    ...(canImport ? [{ id: "import" as const, icon: Import, title: t("home.importFolder"), hint: t("onboarding.startImportHint") }] : []),
+    ...(canImport ? [{ id: "import" as const, icon: Import, title: t("home.importFolder"), hint: t(applicationComposition.game ? "onboarding.startImportHint" : "onboarding.workspaceStartImportHint") }] : []),
   ];
   return (
     <div className="onboarding-start-choices">

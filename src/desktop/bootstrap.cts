@@ -10,7 +10,12 @@ initSentry({
   sendDefaultPii: false,
 });
 
-void import("./main.js").catch((error) => {
+void (async () => {
+  const { applicationCompositionId } = await import("../shared/application-selection.js");
+  // Select the application entry before loading any optional native services.
+  const entry = applicationCompositionId === "ohmygame" ? "./ohmygame-main.js" : "./main.js";
+  await import(entry);
+})().catch((error) => {
   console.error(error);
   app.exit(1);
 });

@@ -15,6 +15,7 @@ import { createPackage, extractFile } from "@electron/asar";
 import type { Configuration } from "app-builder-lib";
 import { describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
+import { build } from "esbuild";
 
 const { isolateDesktopArchive } = await import(
   pathToFileURL(path.resolve("scripts/isolated-desktop-archive.mjs")).href
@@ -27,6 +28,40 @@ const {
 } = require("app-builder-lib/out/fileMatcher.js");
 
 describe("desktop runtime packaging", () => {
+  it("builds the reusable desktop host and preload with business implementations unavailable", async () => {
+    const result = await build({
+      entryPoints: ["src/desktop/main.ts", "src/desktop/preload.cts"],
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      packages: "external",
+      write: false,
+      outdir: "/unused-desktop-exclusion-output",
+      metafile: true,
+      plugins: [{
+        name: "unavailable-desktop-business",
+        setup(builder) {
+          builder.onResolve({ filter: /.*/ }, async (args) => {
+            if (args.pluginData?.checked) return;
+            const resolved = await builder.resolve(args.path, {
+              kind: args.kind, importer: args.importer, resolveDir: args.resolveDir,
+              pluginData: { checked: true },
+            });
+            if (resolved.errors.length) return { errors: resolved.errors };
+            const file = path.relative(process.cwd(), resolved.path).replaceAll(path.sep, "/");
+            if (!resolved.external && (
+              /^src\/desktop\/(?:game-|playtest-driver|web-game-player|ohmygame-main|account-contribution|oauth)/.test(file)
+              || /^src\/(?:daemon|renderer)\/(?:game-|playable-|story-|playtest|publish\/|cloud-models)/.test(file)
+              || file.startsWith("src/story-web/")
+            )) throw new Error(`Excluded implementation unavailable: ${file}`);
+            return { ...resolved, pluginData: undefined };
+          });
+        },
+      }],
+    });
+    expect(result.outputFiles.every((file) => file.contents.length > 0)).toBe(true);
+  });
+
   it("does not resolve missing packaged dependencies from the build checkout", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-isolated-archive-"));
     try {
