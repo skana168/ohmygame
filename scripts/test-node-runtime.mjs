@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import identity from "../application-identity.cjs";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
@@ -78,6 +79,8 @@ try {
   assert.equal(result.toolCount, 1);
   await checkExtensionHosts(path.join(directory, "native-plugin"));
   await checkApplicationIdentity(path.join(directory, "independent-app"));
+  const peerIndex = process.argv.indexOf("--identity-peer");
+  if (peerIndex !== -1) await checkInitializedApplications(process.argv[peerIndex + 1]);
 } finally {
   await daemon?.stop();
   await rm(directory, { recursive: true, force: true });
@@ -286,8 +289,72 @@ async function checkConversation(request, projectId) {
     assert.equal(detail.turns.at(-1).status, "completed", JSON.stringify(detail));
     assert(JSON.stringify((await request(route)).turns).includes("Independent workbench conversation verified."));
     console.log("Configured local provider: actual Pi conversation and persisted history passed");
+    return route;
   } finally {
     provider.closeAllConnections();
     await new Promise(resolve => provider.close(resolve));
   }
+}
+
+
+// Optional acceptance seam: two real initialized applications, each using its
+// configured storage and independently installed dependencies, without copies.
+async function checkInitializedApplications(peer) {
+  assert(peer, "--identity-peer requires another initialized application path");
+  const roots = [root, path.resolve(peer)];
+  const identities = roots.map(folder => identity.loadIdentity(folder));
+  for (const field of ["name", "packageName", "desktopId"]) {
+    assert.notEqual(identities[0][field], identities[1][field]);
+  }
+  assert(identities.every(value => value.packageName !== "ohmygame" && value.desktopId !== "ai.ohmygame.desktop"));
+  const storage = identities.map((value, index) => identity.dataDirectory(value, roots[index], {}));
+  assert.notEqual(storage[0], storage[1]);
+  for (const [index, folder] of roots.entries()) {
+    const pkg = JSON.parse(await readFile(path.join(folder, "package.json"), "utf8"));
+    assert.equal(pkg.name, identities[index].packageName);
+    assert((await readFile(path.join(folder, "bun.lock"), "utf8")).includes(`"name": "${pkg.name}"`));
+  }
+  const launch = async folder => {
+    const env = { ...process.env, DAEMON_PORT: "0", DAEMON_HOST: "127.0.0.1", OHMYGAME_DAEMON_TOKEN: "initialized-identity-fixture" };
+    for (const key of ["OHMYGAME_DATA_DIR", "PI_CODING_AGENT_DIR", "OHMYGAME_DAEMON_TOKEN_STDIN"]) delete env[key];
+    const child = spawn(process.execPath, ["dist/daemon/server.js"], { cwd: folder, env, stdio: ["ignore", "pipe", "pipe"] });
+    const url = await new Promise((resolve, reject) => {
+      let output = "";
+      const timeout = setTimeout(() => { child.kill(); reject(new Error(`Initialized startup timed out: ${output}`)); }, 30000);
+      const fail = error => { clearTimeout(timeout); reject(error); };
+      child.once("error", fail);
+      child.once("exit", code => fail(new Error(`Initialized daemon exited ${code}: ${output}`)));
+      child.stderr.on("data", chunk => { output += chunk; });
+      child.stdout.on("data", chunk => {
+        output += chunk;
+        const address = output.match(/Server listening at (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
+        if (address) { clearTimeout(timeout); resolve(address); }
+      });
+    });
+    return { request: async (route, method = "GET", payload) => {
+      const response = await fetch(url + route, { method, headers: { authorization: "Bearer initialized-identity-fixture", "content-type": "application/json" }, ...(payload ? { body: JSON.stringify(payload) } : {}), signal: AbortSignal.timeout(10000) });
+      assert(response.ok, `${method} ${route}: ${await response.clone().text()}`);
+      return response.json();
+    }, stop: async () => { if (child.exitCode === null) { const exited = once(child, "exit"); child.kill(); await exited; } } };
+  };
+  let first;
+  let second;
+  try {
+    first = await launch(roots[0]);
+    second = await launch(roots[1]);
+    const before = await second.request("/projects");
+    const project = await first.request("/projects", "POST", { name: "Initialized isolation fixture" });
+    assert(project.workspacePath.startsWith(await realpath(storage[0])));
+    const route = await checkConversation(first.request, project.id);
+    await first.request("/settings/models/providers/meshy", "PUT", { apiKey: "initialized-fixture-only" });
+    assert.equal((await second.request("/settings/models/providers/meshy")).configured, false);
+    assert.deepEqual(await second.request("/projects"), before);
+    await first.stop();
+    first = await launch(roots[0]);
+    assert((await first.request("/projects")).some(value => value.id === project.id));
+    assert(JSON.stringify(await first.request(route)).includes("Independent workbench conversation verified."));
+    assert.equal((await first.request("/settings/models/providers/meshy")).configured, true);
+    assert.deepEqual(await second.request("/projects"), before);
+    console.log(`Initialized identities/storage isolated from OhMyGame and each other: ${identities.map(value => value.desktopId).join(", ")}; actual Pi history/provider reload passed`);
+  } finally { await first?.stop(); await second?.stop(); }
 }
