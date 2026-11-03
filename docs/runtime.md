@@ -1030,6 +1030,12 @@ and resources for the non-game selection. Renderer entry pages for the native
 game host and recorder are included only for the game composition. Core plugin
 preparation remains required for either selection.
 
+The daemon's optional implementation references are registered in
+`daemon/ohmygame-host.ts`. The non-game host assembly has no business provider;
+it retains the complete reusable daemon and example module. Story routes are
+registered by the business provider, and workspace/archive/example operations
+request story adapters only when processing an enabled story workspace.
+Document context and reusable previews remain core capabilities.
 The renderer keeps the same `main.tsx`, application routes, project shell, code,
 canvas, media, provider and plugin views in both compositions. Vite selects
 `renderer/business-contributions.ts` for OhMyGame and
@@ -1051,29 +1057,35 @@ suite. Any external renderer graph audit must apply the same Vite provider
 selection; directly bundling `main.tsx` without it uses the default OhMyGame
 assembly. This renderer check complements the host and desktop acceptance checks.
 
-The current composition boundary is not yet a standalone non-game source build:
-core consumers still import optional game implementations, and the host TypeScript
-build includes those sources. Do not remove game sources or describe this as the
-independent template export. Complete source extraction and deleted-source
-build/start verification are prerequisites for that export.
+Full application source exclusion still requires the combined host, renderer and
+desktop acceptance checks. A passing surface check alone does not establish the
+independent template export.
 
-The core agent tool factory (`daemon/agent-tools.ts`) accepts bound contributions;
-`daemon/ohmygame-agent-tools.ts` owns the shipped game/story catalog and its
-implementation imports. Reusable previews accept the optional story editor
-bridge from application assembly. Preview workspace inspection lives separately
-from project creation so serving a generic page does not load story templates.
+`build:host` preserves the default TypeScript build and story preparation for
+OhMyGame. For non-game it compiles the selected daemon dependency graph without
+loading game, story, publishing or account implementations or story resources.
+Modules remain separate so worker and resource paths using `import.meta.url`
+keep working. `node --import tsx scripts/build-host.mjs --non-game` explicitly
+selects this host target without changing the renderer or desktop selection.
+This command checks the selected TypeScript program, rejecting excluded type
+inputs, before emitting JavaScript with esbuild. Run the repository's separate
+`typecheck` command as well to verify the default application. Use a fresh output directory when auditing
+shipped contents after switching composition; builds do not delete old output.
 
-Run `node scripts/check-application-sources.mjs --core` to check these two extracted
-entry points with business implementation resolution rejected. Run the command
-without `--core` to audit the complete daemon, desktop and renderer entry points.
-It currently fails and prints the remaining required business edges. This is a
-source graph diagnostic, not host TypeScript, renderer build or authenticated
-startup acceptance; all three are still required with excluded sources absent.
-In particular, a selected non-game host build can succeed yet fail at startup
-because eager story preset imports require omitted template resources.
+Run `node scripts/check-application-sources.mjs --core` to audit the core tools
+and reusable preview graph with business implementations rejected. Use
+`--non-game --target=host` for the full non-game daemon. `--target=renderer` and
+`--target=desktop` select the other surfaces; omitting `--target` keeps the strict
+all-target audit. Selection changes the assembly binding, never the rejection
+list. Renderer and desktop source extraction require their own verification;
+a passing host audit does not establish an independent template export.
 
-After selecting and building non-game, `node scripts/test-node-runtime.mjs --non-game`
-checks the same authenticated standalone daemon, workspace defaults, custom-node
-persistence, project archives, native MCP, extension hosts and independent-identity
-restart. It rejects a game build. This mode currently fails before readiness in a
-clean non-game build because the required story template import is still present.
+`node scripts/test-non-game-host.mjs` copies an unavailable-source fixture,
+records every omitted implementation/resource path, builds the full non-game
+host, then runs `test-node-runtime.mjs --non-game`. Core plugin preparation is
+required first. The runtime check uses the authenticated compiled Node daemon:
+workspace creation, custom-node persistence, real example tool invocation via
+external MCP, rejected game tools, archive import/export, native MCP, extension
+hosts, and independent-identity process restart. It rejects a game build.
+Direct source development still uses the default host provider; selected source
+development and complete Electron packaging remain integration work.

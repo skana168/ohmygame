@@ -1,42 +1,28 @@
+import { hostAssemblyPlugin } from "./application-host-build.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-// Shared persisted data/protocol contracts remain available. Implementations and
-// shipped business resources do not. Resolve first so aliases and transitive
-// imports cannot evade this check by changing the import spelling.
-function excluded(file) {
-  const relative = path.relative(root, file).replaceAll(path.sep, "/");
-  if (
-    relative.startsWith("src/story-web/") ||
-    relative.startsWith("src/daemon/assets/story-templates/")
-  )
-    return true;
-  if (relative.startsWith("src/daemon/publish/")) return true;
-  if (
-    /^src\/(?:daemon|desktop|renderer)\/(?:playable-|story-|game-|web-game-|playtest(?:[.-])|owned-playtest|ohmygame-agent-tools)/.test(
-      relative,
-    )
-  )
-    return true;
-  return (
-    [
-      "src/daemon/cloud-models.ts",
-      "src/renderer/auth.tsx",
-      "src/renderer/cloud-quota.tsx",
-      "src/renderer/pending-publish.ts",
-    ].includes(relative) ||
-    /^src\/renderer\/(?:community[.-]|publish-dialog|games\.tsx|desktop-game-preview|use-web-game-player)/.test(
-      relative,
-    )
-  );
-}
+import { excluded as excludedSource } from "./application-source-boundary.mjs";
+const excluded = (file) => excludedSource(root, file);
 
-const surfaces = process.argv.includes("--core")
-  ? ["src/daemon/agent-tools.ts", "src/daemon/preview.ts"]
-  : ["src/daemon/server.ts", "src/desktop/main.ts", "src/renderer/main.tsx"];
+const target = process.argv
+  .find((arg) => arg.startsWith("--target="))
+  ?.split("=")[1];
+const targets = {
+  host: "src/daemon/server.ts",
+  desktop: "src/desktop/main.ts",
+  renderer: "src/renderer/main.tsx",
+};
+if (target && !Object.hasOwn(targets, target))
+  throw new Error(`Unknown application target: ${target}`);
+const surfaces = target
+  ? [targets[target]]
+  : process.argv.includes("--core")
+    ? ["src/daemon/agent-tools.ts", "src/daemon/preview.ts"]
+    : ["src/daemon/server.ts", "src/desktop/main.ts", "src/renderer/main.tsx"];
 const results = await Promise.allSettled(
   surfaces.map(async (entry) => {
     const result = await build({
@@ -58,6 +44,19 @@ const results = await Promise.allSettled(
       },
       logLevel: "silent",
       plugins: [
+        hostAssemblyPlugin(root, process.argv.includes("--non-game")),
+        {
+          name: "application-renderer-assembly",
+          setup(builder) {
+            if (!process.argv.includes("--non-game")) return;
+            builder.onResolve(
+              { filter: /(?:^|\/)business-contributions\.js$/ },
+              () => ({
+                path: path.join(root, "src/renderer/core-contributions.ts"),
+              }),
+            );
+          },
+        },
         {
           name: "excluded-business-sources-unavailable",
           setup(builder) {

@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { PUBLISH_GAME_TITLE_MAX_LENGTH } from "../../shared/publish-v1.js";
 import type { ProjectManager } from "../projects.js";
-import { RemotePublisher, RemotePublishError } from "./client.js";
-import type { LocalPublisher } from "./local.js";
+import { RemotePublishError } from "./client.js";
+import type { LocalPublisher, RemotePublisher as Publisher } from "../host-business-contract.js";
 
 export function registerCommunityRoutes(
   app: FastifyInstance,
-  publisher: RemotePublisher | LocalPublisher,
+  publisher: Publisher | LocalPublisher,
   projects: ProjectManager,
 ) {
   const authenticatedBody = {

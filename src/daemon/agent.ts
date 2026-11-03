@@ -14,7 +14,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import path from "node:path";
 import { promptContextLabels, splitPromptContext, withProjectDesignContext } from "./prompt-context.js";
-import { gameDesignMetadata } from "./game-design-context.js";
+import { gameDesignMetadata } from "./document-context.js";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { createTrackedWriteTool, fileChangeMetadata } from "./file-line-changes.js";

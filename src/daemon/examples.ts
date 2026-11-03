@@ -3,7 +3,7 @@ import path from "node:path";
 import type { ProjectState, ProjectType, ToolJob } from "../shared/contracts.js";
 import { isPreparedExampleCatalog, type ExampleSummary, type PreparedExample } from "../shared/examples.js";
 import { LoopbackFileServer } from "./loopback-file-server.js";
-import { ensureNodeCodebaseContract } from "./playable-codebase.js";
+import { requireHostBusiness } from "./host-business.js";
 import { ProjectWorkspaceError, type ProjectManager } from "./projects.js";
 import { readCanvasFile, writeCanvasJson } from "./canvas-files.js";
 
@@ -120,7 +120,7 @@ export class ExampleStore {
         })));
       }
       // Agent instructions and schemas follow this app version, not the example.
-      if (example.type === "interactive-story") await ensureNodeCodebaseContract(project.workspacePath);
+      if (example.type === "interactive-story") await requireHostBusiness().ensureNodeCodebaseContract(project.workspacePath);
       await projects.setCover(project.id, await readFile(path.join(this.#directory!, example.cover)), "auto");
       return await projects.refreshPreviewReadiness(project.id);
     } catch (error) {

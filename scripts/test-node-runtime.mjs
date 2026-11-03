@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { cp, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,7 +36,7 @@ try {
     const body = await response.json();
     if (route === "/projects") assert.deepEqual(body, []);
   }
-  if (nonGame) await checkNonGame(daemon.runtime);
+  if (nonGame) await checkNonGame(daemon.runtime, path.join(directory, "data"));
   else await checkStoryWeb(daemon.runtime);
   const headers = { authorization: `Bearer ${daemon.runtime.token}`, "content-type": "application/json" };
   const projects = await fetch(`${daemon.runtime.url}/projects`, { headers }).then(response => response.json());
@@ -56,6 +56,11 @@ try {
   assert.notEqual(copy.id, story.id);
   assert.equal(copy.type, story.type);
   assert.equal(copy.name, story.name);
+  if (nonGame) {
+    const workspace = await fetch(`${daemon.runtime.url}/projects/${copy.id}/canvas/workspace`, { headers }).then(response => response.json());
+    const board = await fetch(`${daemon.runtime.url}/projects/${copy.id}/canvas/boards/${workspace.boards[0].id}`, { headers }).then(response => response.json());
+    assert(board.board.nodes.some(node => node.id === "runtime-note" && node.data.value.text === "Persisted non-game note"), "Archive import must retain custom module data");
+  }
   const createdResponse = await fetch(`${daemon.runtime.url}/connections`, {
     method: "POST", headers, body: JSON.stringify({ displayName: "Node runtime fixture", definition: {
       command: process.execPath, args: [path.join(root, "test", "fixtures", "plugin-mcp-server.mjs")],
@@ -82,7 +87,7 @@ console.log(
 );
 
 // Same authenticated built daemon and persisted canvas API as application consumers.
-async function checkNonGame(runtime) {
+async function checkNonGame(runtime, dataDirectory) {
   const headers = { authorization: `Bearer ${runtime.token}`, "content-type": "application/json" };
   const request = async (route, method = "GET", body) => {
     const response = await fetch(runtime.url + route, { method, headers,
@@ -96,9 +101,16 @@ async function checkNonGame(runtime) {
   assert.equal(project.storyCapability, false);
   assert.deepEqual(project.workspaceManifest.modules, [{ id: "example", config: {} }]);
   assert.deepEqual((await request("/project-types")).map(type => type.id), ["general"]);
-  for (const route of ["/cloud/session", "/community/games"]) {
+  for (const route of ["/cloud/session", "/community/games", "/playable/presets"]) {
     assert.equal((await fetch(runtime.url + route, { headers })).status, 404);
   }
+  const instructions = await request(`/projects/${project.id}/files/content?path=AGENTS.md`);
+  assert(instructions.content.includes("workspace.json"), "Core workspace file reads must survive business exclusion");
+  assert.equal((await fetch(`${runtime.url}/projects/${project.id}/files/content?path=../project.json`, { headers })).status, 400);
+  const unavailableManifest = await fetch(runtime.url + "/projects", { method: "POST", headers,
+    body: JSON.stringify({ name: "Unavailable module", workspaceManifest: { version: 1, modules: [{ id: "interactive-story", config: {} }] } }) });
+  assert.equal(unavailableManifest.status, 400);
+  assert.match((await unavailableManifest.json()).error, /unavailable/);
   const base = `/projects/${project.id}/canvas`;
   const workspace = await request(`${base}/workspace`);
   const boardRoute = `${base}/boards/${workspace.boards[0].id}`;
@@ -109,6 +121,38 @@ async function checkNonGame(runtime) {
   await request(boardRoute, "PUT", detail);
   assert((await request(boardRoute)).board.nodes.some(node => node.id === "runtime-note" && node.data.value.text === "Persisted non-game note"));
   assert.equal((await request(`${base}/workspace`)).mainDocumentId, undefined);
+  await request("/settings/external-agents", "PUT", { enabled: true });
+  const endpoint = JSON.parse(await readFile(path.join(dataDirectory, "external-mcp/endpoint.json"), "utf8"));
+  let session;
+  let id = 0;
+  const rpc = async (method, params = {}) => {
+    const response = await fetch(endpoint.url, { method: "POST", headers: {
+      "content-type": "application/json", authorization: `Bearer ${endpoint.token}`,
+      ...(session ? { "mcp-session-id": session } : {}),
+    }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }), signal: AbortSignal.timeout(10_000) });
+    assert.equal(response.status, 200);
+    session ??= response.headers.get("mcp-session-id");
+    return response.json();
+  };
+  await rpc("initialize", { protocolVersion: "2025-06-18" });
+  const listed = await rpc("tools/list");
+  const names = listed.result.tools.map(tool => tool.name);
+  for (const name of ["example_echo", "example_note", "canvas_check", "generate_image"]) assert(names.includes(name), `${name} must remain available`);
+  for (const name of ["game_use", "playable_check", "playable_add_node"]) assert(!names.includes(name), `${name} must be absent`);
+  await rpc("tools/call", { name: "open_project", arguments: { project: project.id } });
+  const echo = await rpc("tools/call", { name: "example_echo", arguments: { message: "Source-independent host" } });
+  assert.deepEqual(echo.result.content, [{ type: "text", text: "Source-independent host" }]);
+  const saved = await request(boardRoute);
+  const note = await rpc("tools/call", { name: "example_note", arguments: { boardId: saved.board.id, nodeId: "runtime-tool-note", revision: saved.revision, text: "Saved by an actual module tool", done: false } });
+  assert(!note.result.isError, JSON.stringify(note));
+  assert((await request(boardRoute)).board.nodes.some(node => node.id === "runtime-tool-note" && node.data.value.text === "Saved by an actual module tool"));
+  const beforeInvalid = await request(boardRoute);
+  const invalid = await rpc("tools/call", { name: "example_note", arguments: { boardId: saved.board.id, nodeId: "runtime-tool-note", revision: beforeInvalid.revision, text: "Must not overwrite", done: "invalid" } });
+  assert(invalid.error || invalid.result?.isError, "Custom module schema must reject invalid input");
+  assert.deepEqual(await request(boardRoute), beforeInvalid, "Rejected custom-node input must preserve persisted data and revision");
+  const rejected = await rpc("tools/call", { name: "game_use", arguments: {} });
+  assert.equal(rejected.result.isError, true);
+
 }
 
 // The built host runs plugins' native code, and its heap limit holds on Node.
@@ -167,12 +211,26 @@ async function checkApplicationIdentity(folder) {
   };
   let running = await launch();
   try {
-    await request(running, "/projects", "POST", { name: "Independent notes", type: "general" });
+    const project = await request(running, "/projects", "POST", { name: "Independent notes", type: "general" });
+    let boardRoute;
+    if (nonGame) {
+      const workspace = await request(running, `/projects/${project.id}/canvas/workspace`);
+      boardRoute = `/projects/${project.id}/canvas/boards/${workspace.boards[0].id}`;
+      const detail = await request(running, boardRoute);
+      detail.board.nodes.push({ id: "restart-note", type: "custom", position: { x: 20, y: 30 }, data: { module: "example", kind: "note", value: { text: "Survives process restart", done: false } } });
+      detail.board.editorLayout.nodes["restart-note"] = { x: 20, y: 30 };
+      await request(running, boardRoute, "PUT", detail);
+    }
     await request(running, "/settings/models/providers/meshy", "PUT", { apiKey: "identity-fixture-key" });
     await running.stop();
     running = await launch();
     const projects = await request(running, "/projects");
     assert.equal(projects[0]?.name, "Independent notes");
+    if (boardRoute) {
+      const detail = await request(running, boardRoute);
+      assert(detail.board.nodes.some(node => node.id === "restart-note" && node.data.value.text === "Survives process restart"));
+      assert.deepEqual(projects[0].workspaceManifest.modules, [{ id: "example", config: {} }]);
+    }
     assert(projects[0].workspacePath.startsWith(path.join(await realpath(folder), "notes-state")), "Standalone startup must honor configured storage");
     assert.equal((await request(running, "/settings/models/providers/meshy")).configured, true);
   } finally { await running.stop(); }

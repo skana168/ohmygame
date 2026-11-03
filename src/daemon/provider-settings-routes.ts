@@ -8,7 +8,7 @@ import { isNative3DProvider, model3DPreset, normalizeNativeModel3D, MODEL_3D_CAT
 import { supportedReasoningLevels } from "../shared/reasoning.js";
 import type { AgentManager } from "./agent.js";
 import { AudioGenerationError } from "./audio-generation.js";
-import type { CloudModelsClient } from "./cloud-models.js";
+import type { CloudModelsClient } from "./host-business-contract.js";
 import { customModelCatalog } from "./custom-model-capabilities.js";
 import type { MediaProviderKeyStore } from "./media-provider-settings.js";
 import { isMinimaxProviderId } from "./minimax-models.js";

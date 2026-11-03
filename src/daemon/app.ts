@@ -1,4 +1,7 @@
-import { storyWebEditorBridge } from "./story-web-bundle.js";
+import { createAgentTools as createCoreAgentTools } from "./agent-tools.js";
+import { hostBusiness, requireHostBusiness, type HostBusiness } from "./host-business.js";
+import { gameDesignReference } from "./document-context.js";
+import { projectPiToolNames } from "./agent-tools.js";
 import { applicationComposition, applicationCompositions, type ApplicationCompositionId } from "../shared/application-composition.js";
 import { createExampleToolContribution } from "./example-tools.js";
 import { accountServicesEnabled, publishingEnabled, communityEnabled } from "../shared/application-services.js";
@@ -9,11 +12,9 @@ import { composeToolContributions, type ToolContribution } from "./tool-contribu
 import { CodexImageProvider } from "./agent-runtimes/codex-image-provider.js";
 import { inspectPreviewConfiguration } from "./preview-configuration.js";
 import { CheckpointConflictError, CheckpointStore } from "./checkpoints.js";
-import { GameTuning, GameTuningError } from "./game-tuning.js";
 import type { GameTuningScalar } from "../shared/game-tuning.js";
 import { ProjectWriteError, ProjectWrites } from "./project-writes.js";
 import { registerCheckpointRoutes } from "./checkpoint-routes.js";
-import { registerStoryWebRoutes } from "./story-web-routes.js";
 import { readWorkspaceNotice, readWorkspaceVersion } from "./workspace-notice.js";
 import { withCanvasLock } from "./canvas-workspace.js";
 import { validatePreviewSettings } from "../shared/preview-settings.js";
@@ -28,7 +29,6 @@ import { readdir } from "node:fs/promises";
 import { OnboardingStore } from "./onboarding.js";
 import type { UpdateOnboardingRequest } from "../shared/onboarding.js";
 import path from "node:path";
-import { isWebStory } from "./story-web-project.js";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { ModelRuntime, SettingsManager, type SessionEntry } from "@earendil-works/pi-coding-agent";
@@ -48,15 +48,12 @@ import { clampReasoningLevel, parseReasoningLevel, supportedReasoningLevels } fr
 import { matchesBearerToken } from "./access.js";
 import { AgentManager, conversationItems, createPiSession, loadPiSkillCatalog, loadPiSkills, type RuntimeModel, type SessionFactory } from "./agent.js";
 import { CHECKPOINT_UNDONE_ENTRY, TURN_END_ENTRY, referencedSnapshots } from "./checkpoint-extension.js";
-import { createAgentTools, projectPiToolNames } from "./ohmygame-agent-tools.js";
 import { AgentRuntimeService } from "./agent-runtimes/service.js";
 import { skillFolders } from "./agent-runtimes/skills.js";
 import { appendSystemPromptForProject } from "./agent-prompts.js";
 import { ACCOUNT_RUNTIME_IDS, isAccountRuntimeId, isAccountProfileIds, isAgentRuntimeId, nativeEffort, type AgentRuntimeId, type AnswerApprovalRequest } from "../shared/agent-runtimes.js";
 import { ConversationManager, sessionDirectory, type StoredConversation } from "./conversations.js";
 import { ConversationImageStore } from "./conversation-images.js";
-import { OwnedPlaytestDriver } from "./owned-playtest.js";
-import { createGameUseTool } from "./playtest-tools.js";
 import { ExternalMcpService } from "./external-mcp.js";
 import { generateCreativeText, generateDesignDocumentMarkdown, generateDesignTable, generateProjectName } from "./text-generation.js";
 import { ProjectNaming, type ProjectNameGenerator } from "./project-naming.js";
@@ -68,12 +65,7 @@ import { registerAgentRuntimeRoutes } from "./agent-runtime-routes.js";
 import { ASSET_NAME_BODY_SCHEMA, registerLibraryRoutes } from "./library-routes.js";
 import { registerProviderSettingsRoutes } from "./provider-settings-routes.js";
 import { CanvasError, canvasLibraryAssetUsage } from "./canvas-workspace.js";
-import { gameDesignReference } from "./game-design-context.js";
-import { ArtifactBuilder, PublishError } from "./publish/archive.js";
 import { promptContextBlock } from "./prompt-context.js";
-import { RemotePublisher, RemotePublishError } from "./publish/client.js";
-import { registerCommunityRoutes } from "./publish/community-routes.js";
-import { LocalPublisher } from "./publish/local.js";
 import { LOCAL_DEBUG_ACCESS_TOKEN } from "../shared/local-debug.js";
 import { PreviewManager, PreviewCancelledError } from "./preview.js";
 import { ProjectAssetError, ProjectManager, ProjectWorkspaceError } from "./projects.js";
@@ -90,7 +82,6 @@ import { ProviderModelSettingsStore } from "./provider-model-settings.js";
 import { customModelCatalog } from "./custom-model-capabilities.js";
 import { CUSTOM_IMAGE_MODEL_APIS } from "../shared/contracts.js";
 import { Model3DGenerationError, type Model3DGenerator } from "./model3d.js";
-import { CloudModelsClient } from "./cloud-models.js";
 import { MAX_ANIMATION_ACTIONS, MODEL_3D_MAX_POLYCOUNT } from "../shared/generation-config.js";
 import { MeshyProvider } from "./meshy-provider.js";
 import { MediaProviderKeyStore } from "./media-provider-settings.js";
@@ -149,26 +140,6 @@ import { EXTERNAL_MCP_PATH, EXTERNAL_MCP_ROOTS_HEADER, type ExternalAgentSetting
 import type { UpdateWebSearchSettings } from "../shared/web-search.js";
 import { WebSearchSettingsStore } from "./web-search-settings.js";
 import { WebSearchService } from "./web-search.js";
-import { buildPlayableProject, validatePlayableProject } from "./playable-project.js";
-import {
-  createNodeCodebase,
-  createPlayableStarterCodebase,
-  NodeCodebaseConflictError,
-  NodeCodebaseError,
-  openNodeCodebaseDetail,
-  writeNodeCodebase,
-} from "./playable-codebase.js";
-import type { NodeCodebaseUpdate } from "../shared/playable-codebase.js";
-import { addPlayableNode, type AddPlayableNodeRequest } from "./playable-add-node.js";
-import { PLAYABLE_PRESETS } from "./playable-presets.js";
-import {
-  listPlayableThumbnails,
-  PlayableThumbnailError,
-  readGraphNodeIds,
-  readPlayableCover,
-  readPlayableThumbnail,
-  writePlayableThumbnail,
-} from "./playable-thumbnails.js";
 
 export interface AppOptions {
   composition?: ApplicationCompositionId;
@@ -610,6 +581,12 @@ const NEEDS_UPGRADE = "This story was made before stories played as their own we
 const CHECKPOINT_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export function createApp(options: AppOptions = {}) {
+  const business = requireHostBusiness;
+  const createApplicationAgentTools: HostBusiness["createAgentTools"] = (...args) => {
+    if (hostBusiness) return hostBusiness.createAgentTools(...args);
+    const [project, tools, projects, ask, install, , search, canvas, contributions] = args;
+    return createCoreAgentTools(project, tools, projects, ask, install, search, canvas, contributions);
+  };
   const composition = options.composition ? applicationCompositions[options.composition] : applicationComposition;
   options = {
     workspaceModules: composition.modules,
@@ -621,9 +598,9 @@ export function createApp(options: AppOptions = {}) {
       ? (project) => [createExampleToolContribution(project)] : undefined,
     ...options,
   };
-  const gameHostEnabled = options.businessTools?.game !== false &&
+  const gameHostEnabled = Boolean(hostBusiness) && options.businessTools?.game !== false &&
     (options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES).some((module) => module.id === "game");
-  const storyHostEnabled = options.businessTools?.story !== false &&
+  const storyHostEnabled = Boolean(hostBusiness) && options.businessTools?.story !== false &&
     (options.workspaceModules ?? OHMYGAME_WORKSPACE_MODULES).some((module) => module.id === "interactive-story");
   const storyEnabled = (project: ProjectState) => storyCapabilityEnabled(project, storyHostEnabled);
   const gameEnabled = (project: ProjectState) => gameCapabilityEnabled(project, gameHostEnabled) &&
@@ -644,32 +621,32 @@ export function createApp(options: AppOptions = {}) {
   events.subscribeAll((event) => notices.event(event));
   const attachments = new AgentAttachmentStore();
   const conversations = new ConversationManager(conversationImages, (runtime, id) => agentRuntimes.settings.resolveProfileId(runtime, id));
-  const agentPlaytests = new Map<string, OwnedPlaytestDriver>();
+  const agentPlaytests = new Map<string, InstanceType<HostBusiness["OwnedPlaytestDriver"]>>();
   const publishing = new Set<string>();
   // Projects whose web build is being exported; a build and a publish share the build output.
   const building = new Set<string>();
-  const artifacts = new ArtifactBuilder();
+  const artifacts = hostBusiness ? new (business().ArtifactBuilder)() : undefined;
   const examples = new ExampleStore(options.examplesDirectory);
-  const allowPublishing = options.publishing ?? publishingEnabled;
-  const allowCommunity = options.community ?? communityEnabled;
-  const localPublisher = (allowPublishing || allowCommunity) && options.localDebug ? new LocalPublisher() : undefined;
-  const cloudModels = (options.accountServices ?? accountServicesEnabled) === false ? undefined : new CloudModelsClient(options.cloudApiUrl ?? options.publishApiUrl ?? process.env.CLOUD_API_URL ?? process.env.PUBLISH_API_URL ?? "http://127.0.0.1:43130", options.cloudFetch);
-  const publisher = (allowPublishing || allowCommunity) ? localPublisher ?? new RemotePublisher({
+  const allowPublishing = Boolean(hostBusiness) && (options.publishing ?? publishingEnabled);
+  const allowCommunity = Boolean(hostBusiness) && (options.community ?? communityEnabled);
+  const localPublisher = (allowPublishing || allowCommunity) && options.localDebug ? new (business().LocalPublisher)() : undefined;
+  const cloudModels = !hostBusiness || (options.accountServices ?? accountServicesEnabled) === false ? undefined : new (business().CloudModelsClient)(options.cloudApiUrl ?? options.publishApiUrl ?? process.env.CLOUD_API_URL ?? process.env.PUBLISH_API_URL ?? "http://127.0.0.1:43130", options.cloudFetch);
+  const publisher = (allowPublishing || allowCommunity) ? localPublisher ?? new (business().RemotePublisher)({
     apiUrl: options.publishApiUrl ?? process.env.CLOUD_API_URL ?? process.env.PUBLISH_API_URL ?? "http://127.0.0.1:43130",
     fetch: options.publishFetch,
     visitorTokenFile: path.join(dataDirectory, "community-visitor.json"),
   }) : undefined;
   // The plugin services are made below; a build only runs once the app is up.
-  const gameTuning = new GameTuning({
+  const gameTuning = gameHostEnabled && hostBusiness ? new (business().GameTuning)({
     push: (project, values) => previews.setTuning(project, values),
     publish: (project, state) => events.publish(project.id, "preview.tuning", state),
-  });
+  }) : undefined;
   const previews = new PreviewManager(events, {
     storyEnabled,
-    storyBridge: (project) => storyEnabled(project) && project.type === "interactive-story" ? storyWebEditorBridge : undefined,
+    storyBridge: (project) => storyEnabled(project) && project.type === "interactive-story" ? business().storyWebEditorBridge : undefined,
     tuning: {
-      refresh: async (project) => { if (gameEnabled(project)) await gameTuning.refresh(project); },
-      setConnected: (project, connected) => { if (gameEnabled(project)) gameTuning.setConnected(project, connected); },
+      refresh: async (project) => { if (gameEnabled(project)) await gameTuning?.refresh(project); },
+      setConnected: (project, connected) => { if (gameEnabled(project)) gameTuning?.setConnected(project, connected); },
     },
     webBuild: (project, signal, log) => buildWebPreview({ folder: project.workspacePath, services: pluginServices, signal, onProgress: log }),
   });
@@ -922,10 +899,10 @@ export function createApp(options: AppOptions = {}) {
     const playtestKey = `${project.id}:${conversation.summary.id}`;
     let playtest = agentPlaytests.get(playtestKey);
     if (!playtest && gameEnabled(project) && options.playtestDriver && gameRuntimeAvailable(project, options.playtestDriver)) {
-      playtest = new OwnedPlaytestDriver(options.playtestDriver, project.id);
+      playtest = new (business().OwnedPlaytestDriver)(options.playtestDriver, project.id);
       agentPlaytests.set(playtestKey, playtest);
     }
-    return [...createAgentTools(
+    return [...createApplicationAgentTools(
       project,
       tools,
       projects,
@@ -951,7 +928,7 @@ export function createApp(options: AppOptions = {}) {
     if (project.type === "interactive-story" && !storyEnabled(project)) throw new Error(storyUnavailable);
     if (!gameEnabled(project)) throw new Error("The game capability is disabled for this workspace.");
     // A story plays its own page, which one made before web stories has once the editor upgrades it.
-    if (project.type === "interactive-story" && !await isWebStory(project.workspacePath))
+    if (project.type === "interactive-story" && !await business().isWebStory(project.workspacePath))
       throw new Error(NEEDS_UPGRADE);
     return { runtime: "web", url: previewPageUrl(await previews.ensureStarted(project, manual), "playtest") };
   };
@@ -963,10 +940,10 @@ export function createApp(options: AppOptions = {}) {
       const playtestKey = `${project.id}:external:${sessionId}`;
       let playtest = agentPlaytests.get(playtestKey);
       if (!playtest && gameEnabled(project) && options.playtestDriver && gameRuntimeAvailable(project, options.playtestDriver)) {
-        playtest = new OwnedPlaytestDriver(options.playtestDriver, project.id);
+        playtest = new (business().OwnedPlaytestDriver)(options.playtestDriver, project.id);
         agentPlaytests.set(playtestKey, playtest);
       }
-      return createAgentTools(
+      return createApplicationAgentTools(
         project, tools, projects, undefined, undefined,
         playtest ? { driver: playtest, resolveOpenTarget: () => playtestTarget(project) } : undefined,
         undefined, canvasStore, options.toolContributions?.(project), { ...options.businessTools, game: gameHostEnabled, story: storyHostEnabled },
@@ -986,8 +963,8 @@ export function createApp(options: AppOptions = {}) {
       // full game_use input is listed; a story's own game_use accepts a subset.
       const placeholder: ProjectState = { id: "", name: "", type: "interactive-story", updatedAt: "", workspacePath: "", preview: { status: "stopped" } };
       return [
-        ...createAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore, options.toolContributions?.(placeholder), { ...options.businessTools, game: gameHostEnabled, story: storyHostEnabled }),
-        ...(!gameHostEnabled ? [] : [createGameUseTool(options.playtestDriver ?? UNAVAILABLE_GAME_RUNTIME, () => playtestTarget(placeholder))]),
+        ...createApplicationAgentTools(placeholder, tools, projects, undefined, undefined, undefined, undefined, canvasStore, options.toolContributions?.(placeholder), { ...options.businessTools, game: gameHostEnabled, story: storyHostEnabled }),
+        ...(!gameHostEnabled ? [] : [business().createGameUseTool(options.playtestDriver ?? UNAVAILABLE_GAME_RUNTIME, () => playtestTarget(placeholder))]),
       ];
     },
     release: async (projectId, sessionId) => {
@@ -1645,7 +1622,7 @@ export function createApp(options: AppOptions = {}) {
     snapshot: snapshotWorkspace, writes: projectWrites, projects, conversations, agents, previews, events,
     busy: (id) => publishing.has(id) || canvasStore.isProjectBusy(id) || tools.jobs().some((job) => job.context?.projectId === id && job.status === "running"),
   });
-  registerStoryWebRoutes(app, {
+  if (hostBusiness) business().registerStoryWebRoutes(app, {
     projects, agents, writes: projectWrites, checkpoints, snapshot: snapshotWorkspace, library, events,
     enabled: storyEnabled,
     busy: (id) => publishing.has(id) || canvasStore.isProjectBusy(id) || tools.jobs().some((job) => job.context?.projectId === id && job.status === "running"),
@@ -1891,9 +1868,9 @@ export function createApp(options: AppOptions = {}) {
       const project = await projects.create(request.body?.name, type, request.body?.workspacePath, undefined, request.body?.workspaceManifest);
       if (project.type === "interactive-story") {
         try {
-          await createNodeCodebase(
+          await business().createNodeCodebase(
             project.workspacePath,
-            createPlayableStarterCodebase(project.name, request.body?.viewport ?? { width: 1280, height: 720 }),
+            business().createPlayableStarterCodebase(project.name, request.body?.viewport ?? { width: 1280, height: 720 }),
           );
         } catch (cause) {
           await projects.delete(project.id);
@@ -1902,7 +1879,7 @@ export function createApp(options: AppOptions = {}) {
       }
       return reply.code(201).send(projectResponse(project));
     } catch (cause) {
-      if (cause instanceof ProjectWorkspaceError || cause instanceof NodeCodebaseError) {
+      if (cause instanceof ProjectWorkspaceError || (hostBusiness && cause instanceof hostBusiness.NodeCodebaseError)) {
         return reply.code(400).send({ error: cause.message });
       }
       if (cause instanceof ExampleError) return reply.code(cause.statusCode).send({ error: cause.message });
@@ -2007,171 +1984,7 @@ export function createApp(options: AppOptions = {}) {
       return reply.code(409).send({ error: storyUnavailable });
   });
 
-  app.get<{ Params: { projectId: string } }>("/projects/:projectId/playable", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Node Runtime requires an Interactive Story project" });
-    try {
-      const definition = await buildPlayableProject(project.workspacePath);
-      if (!definition) return { available: false };
-      // A web story carries its own runtime and plays as a page.
-      const web = await isWebStory(project.workspacePath);
-      return { available: true, definition, ...(web ? { web: true } : {}) };
-    } catch (cause) {
-      return reply.code(400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-  });
-
-  app.get<{ Params: { projectId: string }; Querystring: { mode?: "draft" | "publish" } }>(
-    "/projects/:projectId/playable/validation",
-    {
-      schema: {
-        querystring: {
-          type: "object",
-          additionalProperties: false,
-          properties: { mode: { enum: ["draft", "publish"] } },
-        },
-      },
-    },
-    async (request, reply) => {
-      const project = projects.get(request.params.projectId);
-      if (!project) return reply.code(404).send({ error: "Project not found" });
-      if (project.type !== "interactive-story") return reply.code(409).send({ error: "Playable validation requires an Interactive Story project" });
-      return validatePlayableProject(project.workspacePath, request.query.mode ?? "draft");
-    },
-  );
-
-  app.get<{ Params: { projectId: string } }>("/projects/:projectId/playable/codebase", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Playable codebases require an Interactive Story project" });
-    try {
-      return await openNodeCodebaseDetail(project.workspacePath);
-    } catch (cause) {
-      return reply.code(400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-  });
-
-  app.put<{ Params: { projectId: string }; Body: NodeCodebaseUpdate }>("/projects/:projectId/playable/codebase", {
-    schema: { body: { type: "object" } },
-    bodyLimit: 1_000_000,
-  }, async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Playable codebases require an Interactive Story project" });
-    if (typeof request.body.revision !== "string") return reply.code(400).send({ error: "Playable codebase updates require the revision they were made from" });
-    let revision: string;
-    try {
-      revision = await writeNodeCodebase(project.workspacePath, request.body);
-    } catch (cause) {
-      return reply.code(cause instanceof NodeCodebaseConflictError ? 409 : 400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-    try {
-      await projects.touch(project.id);
-    } catch {
-      return reply.code(500).send({ error: "Playable codebase was saved, but project metadata could not be updated" });
-    }
-    return { revision };
-  });
-
-  app.get<{ Params: { projectId: string } }>("/projects/:projectId/playable/thumbnails", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!storyEnabled(project)) return reply.code(409).send({ error: storyUnavailable });
-    try {
-      return { thumbnails: await listPlayableThumbnails(project.workspacePath) };
-    } catch (cause) {
-      return reply.code(400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-  });
-
-  app.get<{ Params: { projectId: string; nodeId: string } }>("/projects/:projectId/playable/thumbnails/:nodeId", async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!storyEnabled(project)) return reply.code(409).send({ error: storyUnavailable });
-    try {
-      const image = await readPlayableThumbnail(project.workspacePath, request.params.nodeId);
-      if (!image) return reply.code(404).send({ error: "Thumbnail not found" });
-      reply.header("content-type", "image/webp");
-      reply.header("cache-control", "no-store");
-      reply.header("x-content-type-options", "nosniff");
-      return reply.send(image);
-    } catch (cause) {
-      if (cause instanceof PlayableThumbnailError) return reply.code(400).send({ error: cause.message });
-      throw cause;
-    }
-  });
-
-  app.put<{ Params: { projectId: string; nodeId: string }; Querystring: { hash: string }; Body: Buffer }>("/projects/:projectId/playable/thumbnails/:nodeId", {
-    schema: {
-      querystring: {
-        type: "object",
-        additionalProperties: false,
-        required: ["hash"],
-        properties: { hash: { type: "string", maxLength: 64 } },
-      },
-    },
-  }, async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Node thumbnails require an Interactive Story project" });
-    if (!isWebp(request.body)) return reply.code(400).send({ error: "A Node thumbnail must be a WebP image" });
-    try {
-      const nodeIds = await readGraphNodeIds(project.workspacePath);
-      return await writePlayableThumbnail(project.workspacePath, request.params.nodeId, request.query.hash, request.body, nodeIds);
-    } catch (cause) {
-      if (cause instanceof PlayableThumbnailError) return reply.code(400).send({ error: cause.message });
-      throw cause;
-    }
-  });
-
-  app.get("/playable/presets", async (_request, reply) => {
-    if (!storyHostEnabled) return reply.code(409).send({ error: storyUnavailable });
-    return {
-      presets: PLAYABLE_PRESETS.map((preset) => ({
-        id: preset.id,
-        label: preset.label,
-        summary: preset.summary,
-      })),
-    };
-  });
-
-  app.post<{ Params: { projectId: string }; Body: AddPlayableNodeRequest }>("/projects/:projectId/playable/nodes", {
-    schema: {
-      body: {
-        type: "object",
-        additionalProperties: false,
-        required: ["preset", "id"],
-        properties: {
-          preset: { type: "string", maxLength: 60 },
-          id: { type: "string", minLength: 1, maxLength: 60 },
-          title: { type: "string", maxLength: 120 },
-          position: {
-            type: "object",
-            additionalProperties: false,
-            required: ["x", "y"],
-            properties: { x: { type: "number" }, y: { type: "number" } },
-          },
-        },
-      },
-    },
-  }, async (request, reply) => {
-    const project = projects.get(request.params.projectId);
-    if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (project.type !== "interactive-story") return reply.code(409).send({ error: "Playable Nodes require an Interactive Story project" });
-    let result;
-    try {
-      result = await addPlayableNode(project.workspacePath, request.body);
-    } catch (cause) {
-      return reply.code(cause instanceof NodeCodebaseConflictError ? 409 : 400).send({ error: cause instanceof Error ? cause.message : String(cause) });
-    }
-    try {
-      await projects.touch(project.id);
-    } catch {
-      return reply.code(500).send({ error: "The Node was created, but project metadata could not be updated" });
-    }
-    return result;
-  });
+  hostBusiness?.registerStoryProjectRoutes(app, { projects, storyEnabled, storyHostEnabled, storyUnavailable });
 
   const textGenerationOptions = {
     schema: {
@@ -2385,7 +2198,7 @@ export function createApp(options: AppOptions = {}) {
     if (agents.isProjectBusy(project.id)) return reply.code(409).send({ error: "Wait for the agent to finish before deleting this project" });
     return projectWrites.exclusive(project.id, async () => {
     await previews.forget(project);
-    gameTuning.forget(project);
+    gameTuning?.forget(project);
     agents.forgetProject(project.id);
     conversations.forget(project);
     for (const [key, driver] of agentPlaytests) {
@@ -2405,7 +2218,7 @@ export function createApp(options: AppOptions = {}) {
     });
   });
 
-  if (allowCommunity && publisher) registerCommunityRoutes(app, publisher, projects);
+  if (allowCommunity && publisher) business().registerCommunityRoutes(app, publisher, projects);
 
   registerLibraryRoutes(app, { projects, library, referenceRemovalError: (project) => project.type === "interactive-story" && !storyEnabled(project) ? storyUnavailable : undefined });
 
@@ -2420,7 +2233,7 @@ export function createApp(options: AppOptions = {}) {
     const project = projects.get(projectId);
     if (cover || project?.type !== "interactive-story") return cover;
     if ((await projects.coverState(projectId)).mode === "custom") return undefined;
-    return readPlayableCover(project.workspacePath);
+    return business().readPlayableCover(project.workspacePath);
   };
 
   app.get<{ Params: { projectId: string } }>("/projects/:projectId/cover", async (request, reply) => {
@@ -2445,7 +2258,7 @@ export function createApp(options: AppOptions = {}) {
     const mode = request.body?.mode;
     if (mode !== "auto" && mode !== "custom") return reply.code(400).send({ error: "Invalid cover mode" });
     const fallback = mode === "custom" && project.type === "interactive-story"
-      ? await readPlayableCover(project.workspacePath) : undefined;
+      ? await business().readPlayableCover(project.workspacePath) : undefined;
     await projects.setCoverMode(project.id, mode, fallback);
     return reply.code(204).send();
   });
@@ -3379,7 +3192,7 @@ export function createApp(options: AppOptions = {}) {
   app.get<{ Params: { projectId: string } }>("/projects/:projectId/tuning", async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
+    if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
     return gameTuning.state(project);
   });
   // Changes reach the game at once and stay drafts until saved; null goes back to what is saved. A value of
@@ -3390,20 +3203,20 @@ export function createApp(options: AppOptions = {}) {
     async (request, reply) => {
       const project = projects.get(request.params.projectId);
       if (!project) return reply.code(404).send({ error: "Project not found" });
-      if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
+      if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
       return gameTuning.setDraft(project, request.body.values);
     },
   );
   app.post<{ Params: { projectId: string } }>("/projects/:projectId/tuning/save", async (request, reply) => {
     const project = projects.get(request.params.projectId);
     if (!project) return reply.code(404).send({ error: "Project not found" });
-    if (!gameEnabled(project)) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
+    if (!gameEnabled(project) || !gameTuning) return reply.code(409).send({ error: "The game capability is disabled for this workspace." });
     try {
       // Its own undoable change, kept with the changes plugins make outside a turn.
       const { change } = await gameTuning.save(project, (operation) => pluginWrites.run(project, { plugin: "ohmygame/tuning", action: "tuning:save", title: "Save tuning values", inPlace: true }, operation));
       return { state: await gameTuning.state(project), ...(change ? { changeId: change.id } : {}) };
     } catch (cause) {
-      if (cause instanceof GameTuningError) return reply.code(409).send({ error: cause.message });
+      if ((hostBusiness && cause instanceof hostBusiness.GameTuningError)) return reply.code(409).send({ error: cause.message });
       return pluginChangeReply(reply, cause);
     }
   });
@@ -3832,7 +3645,7 @@ export function createApp(options: AppOptions = {}) {
     "/projects/:projectId/publish",
     { schema: publishProjectSchema },
     async (request, reply) => {
-      if (!allowPublishing || !publisher) return reply.code(404).send({ error: "Game publishing is unavailable" });
+      if (!allowPublishing || !publisher || !artifacts) return reply.code(404).send({ error: "Game publishing is unavailable" });
       const project = projects.get(request.params.projectId);
       if (!project) return reply.code(404).send({ error: "Project not found" });
       if (project.pluginType?.preview === "native") return reply.code(409).send({ error: "This project runs outside OhMyGame. Follow its plugin's publishing workflow." });
@@ -3866,7 +3679,7 @@ export function createApp(options: AppOptions = {}) {
       } catch (cause) {
         const error = cause instanceof Error ? cause.message : String(cause);
         events.publish(project.id, "publish.error", { error });
-        const statusCode = cause instanceof PublishError || cause instanceof RemotePublishError ? cause.statusCode : 502;
+        const statusCode = (hostBusiness && cause instanceof hostBusiness.PublishError) || (hostBusiness && cause instanceof hostBusiness.RemotePublishError) ? cause.statusCode : 502;
         return reply.code(statusCode).send({ error });
       } finally {
         publishing.delete(project.id);
@@ -3880,6 +3693,7 @@ export function createApp(options: AppOptions = {}) {
     if (agents.isProjectBusy(project.id)) return reply.code(409).send({ error: "Wait for the agent to finish before building" });
     if (publishing.has(project.id)) return reply.code(409).send({ error: "Project is already being published" });
     if (building.has(project.id)) return reply.code(409).send({ error: "The web build is already being exported" });
+    if (!hostBusiness || !artifacts) return reply.code(404).send({ error: "Game builds are unavailable" });
     building.add(project.id);
     try {
       const artifact = await artifacts.build(project);
@@ -3888,7 +3702,7 @@ export function createApp(options: AppOptions = {}) {
         .header("content-disposition", `attachment; filename="${encodeURIComponent(project.name)}.zip"`)
         .send(artifact);
     } catch (cause) {
-      const statusCode = cause instanceof PublishError ? cause.statusCode : 500;
+      const statusCode = (hostBusiness && cause instanceof hostBusiness.PublishError) ? cause.statusCode : 500;
       return reply.code(statusCode).send({ error: cause instanceof Error ? cause.message : String(cause) });
     } finally {
       building.delete(project.id);
@@ -3973,7 +3787,7 @@ export function createApp(options: AppOptions = {}) {
     options.playtestDriver?.close();
     await conversationImages.flush();
     await previews.stopAll();
-    await artifacts.close();
+    await artifacts?.close();
     await examples.close();
     await localPublisher?.close();
   });

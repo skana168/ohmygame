@@ -36,7 +36,7 @@ import {
   type PackedLibraryAsset,
 } from "./library-asset-packing.js";
 import { sniffImageType } from "./image-format.js";
-import { ensureNodeCodebaseContract } from "./playable-codebase.js";
+import { requireHostBusiness } from "./host-business.js";
 import { MAX_PROJECT_COVER_BYTES, MAX_PROJECT_LOGO_BYTES } from "./project-covers.js";
 import type { ProjectManager } from "./projects.js";
 
@@ -422,7 +422,7 @@ export async function importProjectArchive(
   try {
     // Agent instructions and schemas follow this app version, not the archive.
     if ((options.storyEnabled ?? storyCapabilityEnabled)(project)) {
-      await ensureNodeCodebaseContract(project.workspacePath);
+      await requireHostBusiness().ensureNodeCodebaseContract(project.workspacePath);
     }
     if (cover) await projects.setCover(project.id, cover.contents, cover.mode);
     // A logo the archive names but does not hold falls back to the default icon.

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { AgentManager, compatibleRuntimeModel, conversationItems, lastAssistantError, loadPiSkills, skillBlocksPrompt, type CodingSession, type RuntimeModel } from "../src/daemon/agent.js";
-import * as gameDesignContext from "../src/daemon/game-design-context.js";
+import * as gameDesignContext from "../src/daemon/document-context.js";
 import { promptContextBlock } from "../src/daemon/prompt-context.js";
 import type { StoredConversation } from "../src/daemon/conversations.js";
 import type { AgentReasoningLevel, ProjectState } from "../src/shared/contracts.js";
