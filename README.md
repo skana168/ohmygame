@@ -30,6 +30,24 @@ https://github.com/user-attachments/assets/4d5805fe-92a2-40b4-a232-c7452f9a796a
 > [!NOTE]
 > 🚧 OhMyGame is in beta. Expect rough edges. Join us and let's build it together!
 
+## Initialize another application
+
+After the frozen install, create a separately named, standalone workbench:
+
+```sh
+bun run init:application /absolute/new-directory "OhMyApp" ohmyapp org.example.ohmyapp .app-data
+```
+
+The destination must not exist, even as an empty directory, and must be outside
+this checkout (including symlink aliases). Arguments are destination, display name,
+package name, reverse DNS desktop ID, and data directory. Identity is validated
+before output is created. Source identity, dependencies and lock remain unchanged.
+The output retains core conversations, files, canvas, providers/media, Skills/MCP,
+and the source-registered example tool/node; game and account services are excluded.
+Follow its aligned [English](templates/standalone/README.md) or
+[Chinese](templates/standalone/README.zh-CN.md) guide. This is a local command,
+not a published npm CLI. An exported template also includes the same initializer.
+
 ## News
 
 <!-- Keep at most three entries, newest first, and only major releases.

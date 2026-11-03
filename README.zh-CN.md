@@ -30,6 +30,22 @@ https://github.com/user-attachments/assets/4d5805fe-92a2-40b4-a232-c7452f9a796a
 > [!NOTE]
 > 🚧 OhMyGame 目前处于 Beta 阶段，难免还有粗糙的地方。欢迎加入我们，一起把它做好！
 
+## 初始化其他应用
+
+完成冻结依赖安装后，创建独立命名的工作台：
+
+```sh
+bun run init:application /absolute/new-directory "OhMyApp" ohmyapp org.example.ohmyapp .app-data
+```
+
+目标目录必须不存在（空目录也会拒绝），且位于当前源码目录之外，包括符号链接别名。
+参数依次为目标目录、显示名称、包名、反向 DNS 桌面 ID 和数据目录。生成前验证身份；
+不会改变源码身份、依赖或锁文件。产物保留核心对话、文件、画布、模型/媒体提供商、
+Skills/MCP 及源码注册的示例工具/节点，不包含游戏与账号服务。
+请按产物的[英文](templates/standalone/README.md)或
+[中文](templates/standalone/README.zh-CN.md)指南操作。这是本地命令，
+不是发布到 npm 的 CLI。导出的模板也包含同一个初始化命令。
+
 ## 新动态
 
 <!-- 最多保留三条，最新的在前，只写大版本。发版准备时更新，见 docs/maintaining.md。 -->

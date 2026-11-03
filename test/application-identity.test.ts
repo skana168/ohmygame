@@ -213,3 +213,131 @@ it("refuses empty destinations and source paths through a symlinked parent", asy
     await rm(parent, { recursive: true, force: true });
   }
 });
+
+it("initializes a named application before installing and rejects invalid inputs without output", async () => {
+  const parent = await mkdtemp(path.join(tmpdir(), "application-init-"));
+  const destination = path.join(parent, "app");
+  const invoke = (name = "OhMyApp") =>
+    spawnSync(
+      "node",
+      [
+        "scripts/initialize-application.mjs",
+        destination,
+        name,
+        "ohmyapp",
+        "org.example.ohmyapp",
+        ".app-data",
+      ],
+      { encoding: "utf8" },
+    );
+  const invalid = invoke("../invalid");
+  expect(invalid.status).not.toBe(0);
+  expect(invalid.stderr).toContain("Invalid application.json name");
+  await expect(lstat(destination)).rejects.toMatchObject({ code: "ENOENT" });
+  const result = invoke();
+  expect(result.stderr, result.stdout).toBe("");
+  expect(result.status).toBe(0);
+  expect(identity.loadIdentity(destination)).toEqual({
+    name: "OhMyApp",
+    packageName: "ohmyapp",
+    desktopId: "org.example.ohmyapp",
+    dataDirectory: ".app-data",
+  });
+  expect(
+    JSON.parse(await readFile(path.join(destination, "package.json"), "utf8"))
+      .name,
+  ).toBe("ohmyapp");
+  expect(await readFile(path.join(destination, "bun.lock"), "utf8")).toContain(
+    '"name": "ohmyapp"',
+  );
+  expect(invoke().status).not.toBe(0);
+  // The exported initializer runs without dependencies or the original checkout.
+  await writeFile(
+    path.join(destination, ".env.local"),
+    "DO_NOT_COPY=secret-fixture",
+  );
+  await mkdir(path.join(destination, ".data"));
+  await writeFile(path.join(destination, ".data/state.json"), "local-fixture");
+  const second = path.join(parent, "second");
+  const generated = spawnSync(
+    "node",
+    [
+      "scripts/initialize-application.mjs",
+      second,
+      "Research Desk",
+      "research-desk",
+      "org.example.research",
+      ".research-data",
+    ],
+    { cwd: destination, encoding: "utf8" },
+  );
+  expect(generated.stderr, generated.stdout).toBe("");
+  expect(generated.status).toBe(0);
+  expect(identity.loadIdentity(second).name).toBe("Research Desk");
+  expect(
+    identity.dataDirectory(identity.loadIdentity(second), second, {}),
+  ).not.toBe(
+    identity.dataDirectory(identity.loadIdentity(destination), destination, {}),
+  );
+  for (const omitted of [
+    "node_modules",
+    ".env.local",
+    ".data",
+    ".runtime",
+    "dist",
+    ".git",
+    "src/story-web",
+    "src/daemon/ohmygame-host.ts",
+  ]) {
+    await expect(lstat(path.join(second, omitted))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  }
+});
+
+it("refuses invalid initialization settings and unsafe destinations before writing", async () => {
+  const parent = await mkdtemp(path.join(tmpdir(), "init-boundaries-"));
+  const destination = path.join(parent, "new");
+  const args = ["Notes", "notes", "org.example.notes", ".notes"];
+  const invoke = (target: string, values = args) =>
+    spawnSync(
+      "node",
+      ["scripts/initialize-application.mjs", target, ...values],
+      { encoding: "utf8" },
+    );
+  for (const [index, value, field] of [
+    [0, "../bad", "name"],
+    [1, "@scope/bad", "packageName"],
+    [2, "bad", "desktopId"],
+    [3, "", "dataDirectory"],
+  ] as const) {
+    const values = [...args];
+    values[index] = value;
+    const result = invoke(destination, values);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`Invalid application.json ${field}`);
+    await expect(lstat(destination)).rejects.toMatchObject({ code: "ENOENT" });
+  }
+  await mkdir(destination);
+  expect(invoke(destination).status).not.toBe(0);
+  expect(await readdir(destination)).toEqual([]);
+  await writeFile(path.join(destination, "keep.txt"), "unchanged");
+  expect(invoke(destination).status).not.toBe(0);
+  expect(await readFile(path.join(destination, "keep.txt"), "utf8")).toBe(
+    "unchanged",
+  );
+  const alias = path.join(parent, "alias");
+  await symlink(process.cwd(), alias, "junction");
+  for (const target of [
+    process.cwd(),
+    path.join(process.cwd(), "init-boundary-output"),
+    path.join(alias, "init-boundary-output"),
+  ]) {
+    const result = invoke(target);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Export outside the source checkout");
+  }
+  await expect(
+    lstat(path.join(alias, "init-boundary-output")),
+  ).rejects.toMatchObject({ code: "ENOENT" });
+});
