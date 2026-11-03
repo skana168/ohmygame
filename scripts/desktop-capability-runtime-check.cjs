@@ -180,11 +180,6 @@ const deadline = setTimeout(() => {
   assert.deepEqual(await api(`/projects/${notes.id}/game-capability`), {
     enabled: false,
   });
-  const tuning = await fetch(
-    `${runtime.daemonUrl}/projects/${notes.id}/tuning`,
-    { headers: { authorization: `Bearer ${runtime.token}` } },
-  );
-  assert.equal(tuning.status, nonGame ? 404 : 409);
   console.log("Non-game iframe, controls, direct IPC denial passed");
   if (!coreDesktop) {
     // External MCP crosses the daemon-to-desktop driver transport as real agents do.
@@ -362,8 +357,6 @@ const deadline = setTimeout(() => {
     board.board.editorLayout.nodes["example-note"] = {
       x: 600,
       y: 70,
-      width: 320,
-      height: 220,
     };
   }
   await api(boardRoute, "PUT", board);
@@ -442,6 +435,12 @@ const deadline = setTimeout(() => {
   console.log(
     "Desktop two-board canvas, renderer title/Markdown edit, autosave and reload passed (API-created fixtures)",
   );
+  // Finish desktop persistence checks before reporting cross-target route failures.
+  const tuning = await fetch(
+    `${runtime.daemonUrl}/projects/${notes.id}/tuning`,
+    { headers: { authorization: `Bearer ${runtime.token}` } },
+  );
+  assert.equal(tuning.status, nonGame ? 404 : 409);
   await writeFile(
     path.join(directory, "shutdown-targets.json"),
     JSON.stringify([
