@@ -2,7 +2,7 @@
   "integration_branch": "refactor/ohmytemplate-integration",
   "base_commit": "4be52d00c14858b96fc0d4846461a26f910d5292",
   "spec": ".scratch/ohmytemplate/spec.md",
-  "phase": "final-review-pending",
+  "phase": "complete",
   "tasks": {
     "01": {
       "status": "resolved",
@@ -12,10 +12,7 @@
       "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-24fee26d",
       "merge_sha": "9f6dc3c732ba4b305f2b7a92133c3b2b3f675367",
       "merge_result": "conflict-free; affected tests 173 passed, 1 skipped; typecheck passed",
-      "unblocked_tickets": [
-        "02",
-        "03"
-      ]
+      "unblocked_tickets": ["02", "03"]
     },
     "11": {
       "status": "resolved",
@@ -60,12 +57,7 @@
       "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-8f350c20",
       "merge_sha": "2fce6668d411b69066d80063aa44273c254b8a35",
       "merge_result": "conflict-free; no integration edits; identical implementation tracked tree; 365 tests in 14 affected suites passed; typecheck and diff checks passed",
-      "unblocked_tickets": [
-        "04",
-        "06",
-        "08",
-        "09"
-      ],
+      "unblocked_tickets": ["04", "06", "08", "09"],
       "remaining_validation": "Implementer full public checks retained without repetition; prior 41 full-suite skips, manual browser/Electron, live providers and private cloud remain unverified. Workspace tool gating belongs to ticket04."
     },
     "04": {
@@ -83,10 +75,7 @@
       "merge_sha": "366f0dab6b62e8684bf47b98e168d0d10f143606",
       "merge_result": "Adjacent import conflict resolved retaining accountServices and workspace policy; 15 suites / 392 tests and typecheck passed",
       "remaining_validation": "Electron creation/multi-board/edit/reopen mandatory overall; browser title editing unverified; inherited browser flow retained.",
-      "unblocked_tickets": [
-        "05",
-        "07"
-      ]
+      "unblocked_tickets": ["05", "07"]
     },
     "06": {
       "status": "resolved",
@@ -165,9 +154,7 @@
       "regression_sha": "02d5ad63102bf6fc695079ba0a202dd13ae515b4",
       "merge_result": "Conflict-free; no production corrections; 52 suites/678 tests, typecheck and Node runtime passed; supplemental legacy daemon-reopen case passed in final 123-test app suite; final typecheck passed.",
       "remaining_validation": "Inherited browser editor/runtime iframe start and Scene reload only; visual/audio playback and detailed UI editing walkthrough, Electron stories, other platforms, live providers and private cloud remain unverified. Full resource/build exclusion belongs to ticket10.",
-      "unblocked_tickets": [
-        "10"
-      ]
+      "unblocked_tickets": ["10"]
     },
     "10": {
       "status": "resolved",
@@ -175,11 +162,7 @@
       "progress_sha": "ba371b5d2a12ba83fe464bb5f64c6927f2e9f5be",
       "progress_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-d9b8f7ee",
       "unmet_acceptance": null,
-      "internal_subslices": [
-        "host",
-        "renderer",
-        "desktop"
-      ],
+      "internal_subslices": ["host", "renderer", "desktop"],
       "subtasks": {
         "host": {
           "status": "merged",
@@ -246,9 +229,7 @@
       "combined_fixture": "/var/folders/cd/4754c7cd73g1twx1yj5hgql40000gn/T/ohmytemplate-host-unavailable-YuIB1V",
       "combined_log": "/tmp/ohmytemplate-10-combined-acceptance-final.log",
       "report": "reports/10-compose-independent-applications.md",
-      "unblocked_tickets": [
-        "12"
-      ],
+      "unblocked_tickets": ["12"],
       "remaining_validation": "Independent export/install/source-watch provider wiring and standalone browser/generated-app checks required in 12/13 before full template delivery. Original native fractional resize remains nonpassing (549x309 expected, 667x375 observed), unchanged; later playback/fullscreen, actual engines/encoders, paid providers, private cloud/OAuth, other OSes and signing remain unverified."
     },
     "12": {
@@ -264,9 +245,7 @@
       "inherited_ui_artifact": "/tmp/ohmytemplate-12-verified",
       "merge_result": "Conflict-free; 6 exporter/identity and 2 renderer regressions, root typecheck/lint/selected boundary passed. Fresh frozen install, plugin prep, core typecheck/lint/56 tests/build and compiled Node/Pi smoke passed.",
       "remaining_validation": "Browser/source-watch/Electron and full source suite inherited, not rerun by merger. Paid/private/platform/engine/installer/signing limits remain; original fractional resize NONPASSING unchanged. Full template awaits 13 plus review.",
-      "unblocked_tickets": [
-        "13"
-      ]
+      "unblocked_tickets": ["13"]
     },
     "13": {
       "status": "resolved",
@@ -293,8 +272,29 @@
     "Planning stash retained as backup; .codegraph stays untracked."
   ],
   "next_ready_queue": [],
-  "next_steps": [
-    "Two-axis final review against repository standards and parent spec",
-    "Worktree cleanup after root review/authorization"
-  ]
+  "next_steps": [],
+  "final_review": {
+    "base": "4be52d00c14858b96fc0d4846461a26f910d5292",
+    "reviewed_implementation_head": "ffcd034abf82454ecd46e40ab4e905f33ff3eb9f",
+    "standards_findings": 0,
+    "spec_findings": 0,
+    "reports": ["reviews/standards.md", "reviews/spec.md"],
+    "production_changes_after_review": false
+  },
+  "cleanup": {
+    "removed_implementation_worktrees": 28,
+    "interrupted_worktrees_backed_up": 10,
+    "binary_patches_verified_against_recorded_trees": true,
+    "durable_backup_root": "/Users/yoyun/.t3/backups/ohmytemplate-interrupted-rbg0ynyi",
+    "branches_and_commits_preserved": true,
+    "planning_stash_preserved": true,
+    "user_codegraph_preserved": true
+  },
+  "delivery": {
+    "guide": "DELIVERY.md",
+    "generated_application": "/tmp/ohmytemplate-13-resumed-ohmyapp",
+    "initializer": "bun run init:application ../OhMyApp \"OhMyApp\" ohmyapp org.example.ohmyapp .app-data",
+    "pushed": false,
+    "pull_request_created": false
+  }
 }
