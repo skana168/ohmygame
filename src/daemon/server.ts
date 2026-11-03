@@ -8,7 +8,7 @@ import { activateNetworkProxy } from "./proxy.js";
 import { loadEnvironmentFiles } from "./environment.js";
 import { NetworkSettingsService } from "./network-settings.js";
 import { requestSystemProxy } from "./system-proxy-resolver.js";
-import { ProcessPlaytestDriver } from "./playtest-driver.js";
+import { hostBusiness } from "./host-business.js";
 import { isLocalDebugEnabled, isLoopbackHostname } from "../shared/local-debug.js";
 import type { ExternalMcpLauncher } from "../shared/external-mcp.js";
 
@@ -26,7 +26,7 @@ process.env.PI_CODING_AGENT_DIR = piAgentDirectory;
 let app: ReturnType<typeof createApp> | undefined;
 let shuttingDown = false;
 const playtestDriver = process.env.OHMYGAME_PLAYTEST_IPC === "1" && process.connected
-  ? new ProcessPlaytestDriver()
+  ? hostBusiness ? new hostBusiness.ProcessPlaytestDriver() : undefined
   : undefined;
 const shutdown = async () => {
   if (shuttingDown) return;

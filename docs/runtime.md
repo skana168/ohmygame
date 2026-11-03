@@ -1013,3 +1013,55 @@ unsigned local macOS directory without notarization or hosted release credential
 shipping signed installers and setting up update feeds remain release tasks.
 Identity configuration does not replace product-specific artwork, domain tools,
 plugin identifiers or hosted-service configuration.
+
+## Source application composition
+
+`src/shared/application-selection.ts` selects `ohmygame` (the default) or
+`non-game` before building. Rebuild the host and renderer together after changing
+it. The definitions in `src/shared/application-composition.ts` select workspace
+module metadata, project creation defaults, business tool availability, and
+account, publishing and community service defaults. The non-game composition
+registers the example note module and its tools, uses general workspaces, and
+retains user-configured model/media providers, canvas, files and plugins.
+Existing embedded daemon options can further configure individual services.
+
+`prepare:examples` and the story-resource build skip their game implementations
+and resources for the non-game selection. Renderer entry pages for the native
+game host and recorder are included only for the game composition. Core plugin
+preparation remains required for either selection.
+
+The daemon's optional implementation references are registered in
+`daemon/ohmygame-host.ts`. The non-game host assembly has no business provider;
+it retains the complete reusable daemon and example module. Story routes are
+registered by the business provider, and workspace/archive/example operations
+request story adapters only when processing an enabled story workspace.
+Document context and reusable previews remain core capabilities.
+
+`build:host` preserves the default TypeScript build and story preparation for
+OhMyGame. For non-game it compiles the selected daemon dependency graph without
+loading game, story, publishing or account implementations or story resources.
+Modules remain separate so worker and resource paths using `import.meta.url`
+keep working. `node --import tsx scripts/build-host.mjs --non-game` explicitly
+selects this host target without changing the renderer or desktop selection.
+This command emits JavaScript with esbuild; run the repository's separate
+`typecheck` command as well. It does not establish a TypeScript check with
+business type declarations absent. Use a fresh output directory when auditing
+shipped contents after switching composition; builds do not delete old output.
+
+Run `node scripts/check-application-sources.mjs --core` to audit the core tools
+and reusable preview graph with business implementations rejected. Use
+`--non-game --target=host` for the full non-game daemon. `--target=renderer` and
+`--target=desktop` select the other surfaces; omitting `--target` keeps the strict
+all-target audit. Selection changes the assembly binding, never the rejection
+list. Renderer and desktop source extraction require their own verification;
+a passing host audit does not establish an independent template export.
+
+`node scripts/test-non-game-host.mjs` copies an unavailable-source fixture,
+records every omitted implementation/resource path, builds the full non-game
+host, then runs `test-node-runtime.mjs --non-game`. Core plugin preparation is
+required first. The runtime check uses the authenticated compiled Node daemon:
+workspace creation, custom-node persistence, real example tool invocation via
+external MCP, rejected game tools, archive import/export, native MCP, extension
+hosts, and independent-identity process restart. It rejects a game build.
+Direct source development still uses the default host provider; selected source
+development and complete Electron packaging remain integration work.

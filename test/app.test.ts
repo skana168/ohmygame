@@ -25,6 +25,25 @@ async function saveProjectAsset(app: Awaited<ReturnType<typeof createApp>>, proj
 }
 
 describe("daemon", () => {
+  it("assembles a non-game application with example workspace defaults and no account services", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "application-composition-"));
+    const app = createApp({ dataDirectory: directory, composition: "non-game" });
+    apps.push(app);
+    const created = await app.inject({ method: "POST", url: "/projects", payload: { name: "Notes" } });
+    expect(created.statusCode, created.body).toBe(201);
+    const project = created.json();
+    expect(project).toMatchObject({ type: "general", gameCapability: false, storyCapability: false,
+      workspaceManifest: { version: 1, modules: [{ id: "example", config: {} }] } });
+    expect((await app.inject("/project-types")).json().map((type: { id: string }) => type.id)).toEqual(["general"]);
+    expect((await app.inject("/community/games")).statusCode).toBe(404);
+    expect((await app.inject("/cloud/session")).statusCode).toBe(404);
+    const instructions = await readFile(path.join(project.workspacePath, "AGENTS.md"), "utf8");
+    expect(instructions).toContain("example_note");
+    expect(instructions).not.toContain("playable_check");
+    const reopened = (await app.inject(`/projects/${project.id}`)).json();
+    expect(reopened.workspaceManifest).toEqual(project.workspaceManifest);
+  });
+
   it("rejects disabled publishing and community while local project routes remain available", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "optional-publishing-"));
     const app = createApp({ dataDirectory: directory, accountServices: false, publishing: false, community: false });
