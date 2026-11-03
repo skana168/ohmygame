@@ -205,12 +205,29 @@
           "remaining_validation": "Renderer subslice only. Ticket10 remains claimed with all parent acceptance pending combined host/renderer/desktop source/resource exclusion and build/startup proof. No daemon/desktop exclusion claimed; live browser/Electron, providers/private cloud/platform/packaging checks remain unverified."
         },
         "desktop": {
-          "status": "retry_pending",
+          "status": "merged",
           "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-b289df81",
           "previous_branch": "t3/desktop-business-extraction",
           "previous_sha": "810e0d66a311d28903ac1567da4f981e4a0fac14",
           "recovery_patch": "/tmp/ohmytemplate-recovery-10-desktop/working.patch",
-          "previous_failure": "provider quota; user requested retry"
+          "previous_failure": "provider quota; user requested retry",
+          "merged": true,
+          "implementation_branch": "t3/desktop-optional-game-boundary",
+          "implementation_sha": "37faa6dcfc3a43f0951c0fad91e263185f577cce",
+          "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-f2f9c7e2",
+          "merge_sha": "d1153eed0255f21c9f87175e7367ee0534bfc975",
+          "merge_result": "Conflict-free onto Renderer merge 2cfedfd3/tracker ad0d38f4; shared ba371b5d and Renderer/Vite retained without integration edits. Fresh 13 suites / 96 tests passed, one existing Windows-only skip; actual absent-native-source core TypeScript emit and renderer absent-business Vite fixture passed; typecheck, lint, default host/renderer builds, script syntax and diff checks passed. Default and core-only Electron capability smokes passed including save/quit cleanup.",
+          "checks_logs": [
+            "/tmp/desktop-merge-focused.log",
+            "/tmp/desktop-merge-scripts.log",
+            "/tmp/desktop-merge-typecheck.log",
+            "/tmp/desktop-merge-lint.log",
+            "/tmp/desktop-merge-build-host.log",
+            "/tmp/desktop-merge-build-renderer.log",
+            "/tmp/desktop-merge-default-smoke.log",
+            "/tmp/desktop-merge-core-smoke.log"
+          ],
+          "remaining_validation": "Desktop internal subslice only; ticket10 remains claimed and all parent acceptance pending. Selected full smoke remains nonpassing: daemon tuning returns 409 vs expected 404 while Host absent-business assembly is pending; selected save/quit and combined all-target absent-source/resource build/startup require Host integration and fresh validation. Prior selected custom-node edit/autosave/reload evidence retained, not rerun here. Original native fractional resize assertion unchanged; baseline nonpassing (expected 549x309, observed 667x375), later playback/fullscreen unverified. Full public sequence inherited, not rerun; other platforms, packaging/signing, real engines/encoders/providers/private cloud remain unverified."
         }
       }
     }

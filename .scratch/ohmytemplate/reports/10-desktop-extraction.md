@@ -130,3 +130,60 @@ unchanged and were not rerun. The required baseline remains **nonpassing**
 attempt does not resolve that baseline or establish later playback/fullscreen
 checks. Other OSes, release installers/signing, actual engine integrations,
 recording encoders, live providers and private hosted services remain unverified.
+
+
+## Root integration evidence (2026-11-03)
+
+- Merged implementation `37faa6dcfc3a43f0951c0fad91e263185f577cce` from
+  `t3/desktop-optional-game-boundary`, preserved worktree
+  `/Users/yoyun/.t3/worktrees/ohmygame/t3-f2f9c7e2`, into
+  `refactor/ohmytemplate-integration` at
+  `d1153eed0255f21c9f87175e7367ee0534bfc975`.
+- Conflict-free two-parent merge onto Renderer tracker `ad0d38f4` (Renderer
+  merge `2cfedfd3`). Shared foundation `ba371b5d` remains an ancestor. No
+  production integration fixes were needed; shared, Renderer and Vite files
+  are byte-identical to the premerge root. The original native resize script
+  `scripts/web-game-runtime-check.cjs` is also unchanged.
+- The real core Electron bootstrap/main/preload/external-MCP emit fixture passed
+  with native business sources physically absent. Its copied sources retain
+  the managed daemon, lifecycle/save/quit, core IPC authorization and provider
+  HTTPS authorization. Default registration retains the real native player,
+  recorder, drivers and OAuth contribution; no fake/no-op implementation was
+  introduced. Runtime custom-node persistence evidence above remains inherited.
+- Fresh Bun **1.4.2**, using
+  `PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH`: eight desktop suites
+  passed **74 tests**, with one existing Windows-only skip
+  (`/tmp/desktop-merge-focused.log`). The command also named nonexistent
+  `test/application-composition.test.ts`; Vitest selected the eight actual
+  suites, so no such suite is claimed.
+- Five supplementary suites passed **22 tests**: renderer-composition,
+  examples, desktop-typebox, desktop-stdio and desktop-updater-close
+  (`/tmp/desktop-merge-scripts.log`). This includes the Renderer absent-business
+  source graph and actual Vite fixture. Total fresh focused evidence:
+  **13 suites, 96 passed, 1 skipped**.
+- Typecheck, lint, default host and renderer builds passed:
+  `/tmp/desktop-merge-typecheck.log`, `/tmp/desktop-merge-lint.log`,
+  `/tmp/desktop-merge-build-host.log`, `/tmp/desktop-merge-build-renderer.log`.
+  Renderer build retains its chunk-size warning. Syntax checks passed for
+  both changed smoke scripts; staged `git diff --check` passed.
+- Fresh `node scripts/test-web-game-runtime.mjs --capabilities` and
+  `--core-desktop` passed on Electron 43.3.0, with real preview, direct IPC
+  checks, two-board title/Markdown edits/autosave/reload, and successful owned
+  daemon save/quit cleanup. Logs: `/tmp/desktop-merge-default-smoke.log` and
+  `/tmp/desktop-merge-core-smoke.log`. Core-only uses the default daemon and
+  renderer and therefore remains mixed-target evidence.
+- Inspected retained `/tmp/desktop-retry-selected-smoke.log`: actual selected
+  custom-node editing/autosave/reload passed before **409 != 404** on tuning.
+  That selected command was not rerun or represented as passing. Host
+  absent-business assembly is still pending. No host-owned production code or
+  expected status was changed to bypass it; combined absent-source/resource
+  build/startup and selected shutdown must be checked after Host integration.
+- Fractional resize baseline remains **nonpassing** (expected 549x309,
+  observed 667x375); assertion preserved and not rerun. Later playback/fullscreen
+  assertions remain unverified. Full public checks above are inherited, not
+  repeated by this integration run. Platform/private-service limitations remain.
+- Only this report and `tasks.10.subtasks.desktop` receive integration metadata.
+  Whole ticket 10 remains **claimed**, parent acceptance remains pending, and
+  tickets 12/13 are unchanged. Root after merge had no tracked changes and only
+  preserved untracked `.codegraph/`. No subagents, new worktrees, push, PR,
+  watch, removal or destructive cleanup was performed.
