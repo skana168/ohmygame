@@ -166,6 +166,8 @@ describe("renderer composition", () => {
         "--bun",
         path.join(root, "node_modules/vitest/vitest.mjs"),
         "run",
+        "--fsModuleCachePath",
+        path.join(fixture, ".vitest-cache"),
         "test/asset-canvas-serialize.test.ts",
         "test/canvas-table-node.test.tsx",
         "test/canvas-markdown.test.tsx",

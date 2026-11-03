@@ -1043,7 +1043,11 @@ absent. Saved game previews retain the reusable iframe without game controls.
 
 `bun run test -- test/renderer-composition.test.ts` bundles the full renderer with
 non-game provider selection and rejects resolution of business implementation
-files. Any external renderer graph audit must apply the same Vite provider
+files. It also copies a source fixture without those implementations, selects
+non-game in that fixture, and runs the production Vite build plus unchanged core
+canvas interaction suites (including example-node edit and reopen). The fixture
+uses its own Vitest module cache so nested checks do not invalidate the parent
+suite. Any external renderer graph audit must apply the same Vite provider
 selection; directly bundling `main.tsx` without it uses the default OhMyGame
 assembly. This renderer check complements the host and desktop acceptance checks.
 
