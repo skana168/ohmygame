@@ -294,9 +294,7 @@ export interface HostBusiness {
   AGENT_INSTRUCTIONS: string;
   changeNodeCodebase: (
     workspacePath: string,
-    change: (
-      codebase: NodeCodebaseDetail,
-    ) =>
+    change: (codebase: NodeCodebaseDetail) =>
       | (NodeCodebaseUpdate & {
           files?: Record<string, string>;
           missingFiles?: Record<string, string>;

@@ -8,12 +8,21 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 import { excluded as excludedSource } from "./application-source-boundary.mjs";
 const excluded = (file) => excludedSource(root, file);
 
-const target = process.argv.find((arg) => arg.startsWith("--target="))?.split("=")[1];
-const targets = { host: "src/daemon/server.ts", desktop: "src/desktop/main.ts", renderer: "src/renderer/main.tsx" };
-if (target && !Object.hasOwn(targets, target)) throw new Error(`Unknown application target: ${target}`);
-const surfaces = target ? [targets[target]] : process.argv.includes("--core")
-  ? ["src/daemon/agent-tools.ts", "src/daemon/preview.ts"]
-  : ["src/daemon/server.ts", "src/desktop/main.ts", "src/renderer/main.tsx"];
+const target = process.argv
+  .find((arg) => arg.startsWith("--target="))
+  ?.split("=")[1];
+const targets = {
+  host: "src/daemon/server.ts",
+  desktop: "src/desktop/main.ts",
+  renderer: "src/renderer/main.tsx",
+};
+if (target && !Object.hasOwn(targets, target))
+  throw new Error(`Unknown application target: ${target}`);
+const surfaces = target
+  ? [targets[target]]
+  : process.argv.includes("--core")
+    ? ["src/daemon/agent-tools.ts", "src/daemon/preview.ts"]
+    : ["src/daemon/server.ts", "src/desktop/main.ts", "src/renderer/main.tsx"];
 const results = await Promise.allSettled(
   surfaces.map(async (entry) => {
     const result = await build({
@@ -36,6 +45,18 @@ const results = await Promise.allSettled(
       logLevel: "silent",
       plugins: [
         hostAssemblyPlugin(root, process.argv.includes("--non-game")),
+        {
+          name: "application-renderer-assembly",
+          setup(builder) {
+            if (!process.argv.includes("--non-game")) return;
+            builder.onResolve(
+              { filter: /(?:^|\/)business-contributions\.js$/ },
+              () => ({
+                path: path.join(root, "src/renderer/core-contributions.ts"),
+              }),
+            );
+          },
+        },
         {
           name: "excluded-business-sources-unavailable",
           setup(builder) {

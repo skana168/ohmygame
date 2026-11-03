@@ -23,6 +23,11 @@ export function excluded(root, file) {
       "src/daemon/cloud-models.ts",
       "src/daemon/ohmygame-host.ts",
       "src/renderer/auth.tsx",
+      "src/renderer/account-provider-details.tsx",
+      "src/renderer/account-settings.tsx",
+      "src/renderer/sign-in-dialog.tsx",
+      "src/renderer/business-contributions.ts",
+      "src/renderer/node-thumbnail-page.tsx",
       "src/renderer/cloud-quota.tsx",
       "src/renderer/pending-publish.ts",
     ].includes(relative) ||
