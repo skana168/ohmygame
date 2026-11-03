@@ -309,6 +309,13 @@ using [CONTRIBUTING.md](CONTRIBUTING.md#fork-and-create-a-branch).
 Local development can start without cloud configuration; see
 [CONTRIBUTING.md](CONTRIBUTING.md#configuration) for optional integrations.
 
+## Reuse the workbench
+
+To build a non-game application, run `bun run export:template /absolute/new-directory`
+after installing dependencies. The independent directory includes the existing core,
+an example tool/node module, its own identity, lockfile and development commands.
+Follow its English/Chinese README or the [export guide](docs/runtime.md#standalone-template-export).
+
 ## Privacy
 
 Your projects and keys stay on your machine. Prompts and generation requests go

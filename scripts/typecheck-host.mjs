@@ -4,7 +4,12 @@ import { excluded } from "./application-source-boundary.mjs";
 
 /** Check the selected source program with the same source-owned host seam as
  * compilation. Required imports retain ordinary TypeScript resolution. */
-export function typecheckHost(root, inputs, target = "host") {
+export function typecheckHost(
+  root,
+  inputs,
+  target = "host",
+  declarationWriter,
+) {
   const configPath = path.join(root, "tsconfig.json");
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
   if (config.error)
@@ -12,7 +17,13 @@ export function typecheckHost(root, inputs, target = "host") {
       ts.flattenDiagnosticMessageText(config.error.messageText, "\n"),
     );
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
-  const options = { ...parsed.options, noEmit: true };
+  const options = {
+    ...parsed.options,
+    noEmit: !declarationWriter,
+    ...(declarationWriter
+      ? { declaration: true, emitDeclarationOnly: true }
+      : {}),
+  };
   const host = ts.createCompilerHost(options);
   host.resolveModuleNameLiterals = (
     literals,
@@ -52,7 +63,7 @@ export function typecheckHost(root, inputs, target = "host") {
   const readFile = host.readFile.bind(host);
   host.readFile = (file) =>
     file === path.join(root, "src/shared/application-selection.ts")
-      ? 'export const applicationCompositionId = "non-game" as const;'
+      ? 'export const applicationCompositionId: "ohmygame" | "non-game" = "non-game";'
       : readFile(file);
   const program = ts.createProgram(
     inputs.map((file) => path.join(root, file)),
@@ -82,4 +93,10 @@ export function typecheckHost(root, inputs, target = "host") {
   console.log(
     `Selected ${target} typecheck passed: ${program.getSourceFiles().filter((file) => file.fileName.startsWith(path.join(root, "src/"))).length} source files.`,
   );
+  if (declarationWriter) {
+    const emitted = program.emit(undefined, declarationWriter, undefined, true);
+    if (emitted.emitSkipped || emitted.diagnostics.length)
+      throw new Error("Template contract emission failed");
+  }
+  return program.getSourceFiles().map((file) => file.fileName);
 }

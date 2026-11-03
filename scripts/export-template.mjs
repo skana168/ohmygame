@@ -1,6 +1,9 @@
 import { cp, lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
+import { hostAssemblyPlugin } from "./application-host-build.mjs";
+import { typecheckHost } from "./typecheck-host.mjs";
 import { excluded } from "./application-source-boundary.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -32,8 +35,79 @@ const tests = [
   "canvas-markdown.test.tsx",
   "editor-canvas-viewport.test.tsx",
 ];
+// Compile-time imports and their TypeScript contract closure define shipped source.
+// The existing assembly and exclusion policy remain authoritative.
+const graph = await build({
+  absWorkingDir: root,
+  entryPoints: [
+    "src/daemon/server.ts",
+    "src/daemon/extension-host-process.ts",
+    "src/desktop/daemon-process.ts",
+    "src/desktop/main.ts",
+    "src/desktop/bootstrap.cts",
+    "src/desktop/preload.cts",
+    "src/desktop/external-mcp-main.ts",
+    "src/renderer/main.tsx",
+    "scripts/prepare-preinstalled-plugins.ts",
+    ...tests
+      .filter((file) => /\.tsx?$/.test(file))
+      .map((file) => `test/${file}`),
+  ],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  packages: "external",
+  write: false,
+  metafile: true,
+  outdir: "/unused-template-graph",
+  logLevel: "silent",
+  loader: {
+    ".svg": "file",
+    ".png": "file",
+    ".webp": "file",
+    ".woff2": "file",
+    ".mp3": "file",
+  },
+  plugins: [
+    hostAssemblyPlugin(root, true),
+    {
+      name: "selected-renderer",
+      setup(builder) {
+        builder.onResolve(
+          { filter: /(?:^|\/)business-contributions\.js$/ },
+          () => ({
+            path: path.join(root, "src/renderer/core-contributions.ts"),
+          }),
+        );
+      },
+    },
+  ],
+});
+const inputs = Object.keys(graph.metafile.inputs);
+const declarations = new Map();
+const contracts = typecheckHost(
+  root,
+  [
+    ...inputs.filter((file) => /\.(?:ts|tsx|cts)$/.test(file)),
+    "src/vite-env.d.ts",
+  ],
+  "template",
+  (_file, text, _bom, _error, sources) => {
+    if (sources?.[0])
+      declarations.set(path.relative(root, sources[0].fileName), text);
+  },
+);
+const sources = new Set(
+  [...inputs, ...contracts.map((file) => path.relative(root, file))].filter(
+    (file) => file.startsWith("src/"),
+  ),
+);
+sources.add("src/vite-env.d.ts");
+sources.add("src/desktop/tsconfig.core.json");
 for (const name of [
-  "src",
+  ...[...sources]
+    .filter((file) => inputs.includes(file) || !declarations.has(file))
+    .sort(),
   "patches",
   "packages/plugin-ui",
   "config/preinstalled-plugins.json",
@@ -60,6 +134,19 @@ for (const name of [
       return !excluded(root, source);
     },
   });
+}
+// Type-only dependencies retain compiler-generated contracts, never dormant
+// game implementations. No declarations are invented and every diagnostic fails export.
+for (const source of [...sources].sort()) {
+  if (inputs.includes(source) || !declarations.has(source)) continue;
+  const output = path.join(
+    destination,
+    source.replace(/\.(ts|tsx|cts)$/, (_match, ext) =>
+      ext === "cts" ? ".d.cts" : ".d.ts",
+    ),
+  );
+  await mkdir(path.dirname(output), { recursive: true });
+  await writeFile(output, declarations.get(source));
 }
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
@@ -114,9 +201,16 @@ await writeFile(
   path.join(destination, "src/daemon/host-business.ts"),
   'export { hostBusiness, requireHostBusiness } from "./non-game-host.js";\nexport type { HostBusiness } from "./host-business-contract.js";\n',
 );
-for (const name of ["README.md", "README.zh-CN.md", "CHANGELOG.md", "NOTICE"])
+for (const name of [
+  "README.md",
+  "README.zh-CN.md",
+  "CHANGELOG.md",
+  "NOTICE",
+  "integrations",
+])
   await cp(
     path.join(root, "templates/standalone", name),
     path.join(destination, name),
+    { recursive: true },
   );
 console.log(`Standalone template: ${destination}`);

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
 import identity from "../application-identity.cjs";
+import { parseChangelog } from "../src/shared/changelog.js";
 
 it("loads independent application identity and resolves storage relative to its checkout", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "identity-"));
@@ -146,6 +147,7 @@ it("exports an independent selected workbench without overwriting an existing de
     ".runtime",
     "src/daemon/ohmygame-host.ts",
     "src/story-web",
+    "src/shared/playable-runtime.ts",
     "src/renderer/auth.tsx",
     "scripts/prepare-game-examples.ts",
   ]) {
@@ -156,6 +158,11 @@ it("exports an independent selected workbench without overwriting an existing de
   expect(await readFile(path.join(destination, "LICENSE"), "utf8")).toContain(
     "Apache License",
   );
+  expect(
+    parseChangelog(
+      await readFile(path.join(destination, "CHANGELOG.md"), "utf8"),
+    )[0].version,
+  ).toBe("0.0.0-beta.5.0");
   expect(run().status).not.toBe(0);
   expect(identity.loadIdentity().name).toBe("OhMyGame");
 });
