@@ -74,6 +74,14 @@ describe("renderer composition", () => {
       "models-settings.tsx",
       "plugins.tsx",
       "onboarding.tsx",
+      "library.tsx",
+      "project-create-dialog.tsx",
+      "provider-models.tsx",
+      "connections-settings.tsx",
+      "agent-timeline.tsx",
+      "coding-agents-settings.tsx",
+      "custom-canvas-node.tsx",
+      "asset-canvas-workspace.tsx",
     ]) {
       expect(inputs).toContain(`src/renderer/${source}`);
     }

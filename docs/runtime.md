@@ -1030,6 +1030,23 @@ and resources for the non-game selection. Renderer entry pages for the native
 game host and recorder are included only for the game composition. Core plugin
 preparation remains required for either selection.
 
+The renderer keeps the same `main.tsx`, application routes, project shell, code,
+canvas, media, provider and plugin views in both compositions. Vite selects
+`renderer/business-contributions.ts` for OhMyGame and
+`renderer/core-contributions.ts` for non-game. The latter supplies no business
+contributions; it does not replace the workbench or emulate game services.
+Account/quota, community, publishing, game playback/recording and story editor
+implementations are imported only by the business assembly. Local contribution
+contracts and the optional account context can be used without those sources.
+Saved story files remain accessible through shared panels when the editor is
+absent. Saved game previews retain the reusable iframe without game controls.
+
+`bun run test -- test/renderer-composition.test.ts` bundles the full renderer with
+non-game provider selection and rejects resolution of business implementation
+files. Any external renderer graph audit must apply the same Vite provider
+selection; directly bundling `main.tsx` without it uses the default OhMyGame
+assembly. This renderer check complements the host and desktop acceptance checks.
+
 The current composition boundary is not yet a standalone non-game source build:
 core consumers still import optional game implementations, and the host TypeScript
 build includes those sources. Do not remove game sources or describe this as the
