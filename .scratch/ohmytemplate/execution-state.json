@@ -2,7 +2,7 @@
   "integration_branch": "refactor/ohmytemplate-integration",
   "base_commit": "4be52d00c14858b96fc0d4846461a26f910d5292",
   "spec": ".scratch/ohmytemplate/spec.md",
-  "phase": "implementing",
+  "phase": "final-review-pending",
   "tasks": {
     "01": {
       "status": "resolved",
@@ -269,12 +269,22 @@
       ]
     },
     "13": {
-      "status": "retry_pending",
+      "status": "resolved",
       "previous_failure": "provider quota; user reset and requested retry",
       "previous_branch": "t3/initialize-verify-apps",
       "previous_sha": "d981668d7b260a68f9a0b6c48fb14b6a63574b03",
       "previous_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-1031fd5e",
-      "recovery_patch": "/tmp/ohmytemplate-recovery-13/working.patch"
+      "recovery_patch": "/tmp/ohmytemplate-recovery-13/working.patch",
+      "merged": true,
+      "implementation_branch": "t3/initialize-verify-apps-1",
+      "implementation_sha": "25fcadb308ab89dc4b4dea50a7b2a8a322343c97",
+      "implementation_worktree": "/Users/yoyun/.t3/worktrees/ohmygame/t3-5d789b22",
+      "merge_sha": "c995495eaece13f32001e5607f0946c670e171ba",
+      "regression_sha": "ca118c8c3ed4494d0ac4639164e8910fcfa06ce0",
+      "artifact": "/tmp/ohmytemplate-13-resumed-ohmyapp",
+      "report": "reports/13-initialize-and-verify-new-applications.md",
+      "merge_result": "Conflict-free; 8 initializer/export/identity tests, typecheck/lint/strict selected graph+types passed. Persisted-artifact Node/Pi/two-app isolation/restart passed twice after fixture-name repeatability correction.",
+      "remaining_validation": "Full source/generated install/build/browser/source-watch/Electron evidence inherited, not rerun by merger. Native fractional resize remains NONPASSING unchanged; provider/private/platform/signing limits retained. Two-axis whole-spec review and worktree cleanup remain root next steps; parent spec unchanged."
     }
   },
   "notes": [
@@ -282,7 +292,9 @@
     "Upstream dev is newer than the originally assessed main; inspect current implementations before editing.",
     "Planning stash retained as backup; .codegraph stays untracked."
   ],
-  "next_ready_queue": [
-    "13"
+  "next_ready_queue": [],
+  "next_steps": [
+    "Two-axis final review against repository standards and parent spec",
+    "Worktree cleanup after root review/authorization"
   ]
 }

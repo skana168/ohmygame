@@ -206,3 +206,72 @@ No execution-state/other-ticket edits, subagents, additional checkout/worktree,
 push, PR, watch, destructive cleanup or removal. Ticket 13 stays claimed for root
 merger. Whole-spec final review remains the root's next step and is not claimed
 complete by these ticket-level checks.
+
+## Integration acceptance (2026-11-03)
+
+Ticket 13 is **resolved**; all 13 tickets are resolved, phase
+**final-review-pending**. Earlier claimed/pending statements describe preserved
+implementation checkpoints. The parent spec and whole-objective status are unchanged.
+Two-axis review and worktree cleanup remain the root's next steps.
+
+Integration checkout is `/Users/yoyun/ohmygame`, branch
+`refactor/ohmytemplate-integration` (the supplied sharedroot combined these names).
+Implementation `25fcadb308ab89dc4b4dea50a7b2a8a322343c97` merged conflict-free at
+`c995495eaece13f32001e5607f0946c670e171ba`. No application integration defect found.
+
+### Fresh merger evidence
+
+Requested PATH, Bun 1.4.2, Node 24.20.0. Public identity/export/initializer suite:
+8 tests passed (`/tmp/finalticket13-focused.log`). Root typecheck and lint passed
+(`/tmp/finalticket13-typecheck.log`, `/tmp/finalticket13-lint-final.log`).
+`node scripts/check-application-sources.mjs --non-game --typecheck` passed all
+three targets: desktop 30 graph inputs/52 type files, daemon 239/248, renderer
+287/284 (`/tmp/finalticket13-boundary.log`). Syntax and `git diff --check` passed.
+An exploratory `--help` call actually ran the checker without non-game selection
+and reported expected default-business exclusions; this is not an acceptance pass.
+
+Actual retained artifact `/tmp/ohmytemplate-13-resumed-ohmyapp` was exercised with:
+
+```sh
+PATH=/tmp/ohmytemplate-tools/node_modules/.bin:$PATH node scripts/test-node-runtime.mjs --non-game --identity-peer /tmp/ohmytemplate-13-resumed-peer-final
+```
+
+First rerun passed its temporary compiled Node/Pi acceptance but failed the
+persisted two-app phase because the prior run's custom provider display name
+already existed (`/tmp/finalticket13-artifact.log`). Narrow test-helper correction
+`ca118c8c3ed4494d0ac4639164e8910fcfa06ce0` appends the unique project ID to that
+fixture name. Applied the same one-line helper change to the retained artifact,
+without deleting data or rebuilding unchanged application code. Two consecutive
+real runs then passed compiled daemon authentication/files/canvas/MCP/extensions,
+real deterministic HTTP-provider Pi conversation, both configured identities and
+storage isolation, provider/project isolation, full daemon restart/history and
+graceful shutdown (`/tmp/finalticket13-artifact-repeat1.log`,
+`/tmp/finalticket13-artifact-repeat2.log`). This repeated run is the regression
+proof for the fixture collision; application/provider duplicate-name validation
+was not relaxed. The original failed attempt is retained.
+
+Fresh artifact audit checked all 586 inventory files exist without symlinks,
+excluded game implementations and source secrets/local state are absent, package
+and frozen-lock workspace identity are ohmyapp, and both shipped README files
+match the integrated templates byte-for-byte. Root application.json, bun.lock and
+application-selection.ts have no diff against `8661916f`. Initializer inspection
+confirmed validation before output, atomic existing-directory refusal, canonical
+source/alias protection and inventory-based independent reinitialization; the
+8 public tests exercise these paths. Bilingual quickstart/extension sections align.
+
+### Inherited evidence and retained limits
+
+The implementation report above and actual retained logs supply full source
+public checks (4358 passed/41 skipped), generated frozen install/preparation,
+56 core tests/typecheck/lint/build, browser DOM create/edit/reload/source-watch
+and full Electron/daemon restart. These were **not rerun** by the merger.
+The merger inspected full-suite summary and final Electron restart/shutdown log;
+no new browser or screenshot QA is claimed. Prior red/green, failed peer/plugin
+startup and early Electron build-race evidence remain exactly as recorded above.
+Native fractional resize remains **NONPASSING**, expected 549x309 vs observed
+667x375, unchanged and not rerun. Live/paid providers, private cloud/OAuth, actual
+engines/encoders, other platforms, installers/signing/notarization remain unverified.
+
+No subagents, new worktrees, push, PR/watch, removal or destructive cleanup. All
+worktrees and untracked `.codegraph/` preserved. Tracked root changes are limited
+to the helper regression and ticket/report/map/execution-state updates.

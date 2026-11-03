@@ -58,7 +58,16 @@ Execution details are recorded in [execution-state.json](execution-state.json).
   records artifact and inherited browser/source-watch/Electron limits. Ticket13
   is ready and unclaimed, not started; full template awaits13 plus review.
 
+- [Ticket 13](issues/13-initialize-and-verify-new-applications.md) resolved at
+  `c995495eaece13f32001e5607f0946c670e171ba`; repeatable acceptance fixture
+  `ca118c8c3ed4494d0ac4639164e8910fcfa06ce0`. Fresh 8 public tests, types/lint/strict
+  source audit and actual artifact Node/Pi/two-app restart isolation passed twice.
+  [Report](reports/13-initialize-and-verify-new-applications.md#integration-acceptance-2026-11-03)
+  separates inherited full checks/browser/source-watch/Electron from fresh evidence.
+  All 13 tickets resolved; phase final-review-pending.
+
 ## Fog
 
-Remaining tickets retain their existing scope and status. Full template extraction
-is not yet complete.
+Two-axis final review and worktree cleanup remain the root’s next steps. Whole
+objective is not marked complete; parent spec unchanged. Native fractional resize
+remains NONPASSING unchanged; provider/private/platform/signing limits retained.
