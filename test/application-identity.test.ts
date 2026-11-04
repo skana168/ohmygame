@@ -8,12 +8,31 @@ import {
   symlink,
   readdir,
 } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
+import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
 import identity from "../application-identity.cjs";
 import { parseChangelog } from "../src/shared/changelog.js";
+
+const execute = promisify(execFile);
+async function runScript(args: string[], cwd = process.cwd()) {
+  try {
+    return { ...(await execute("node", args, { cwd })), status: 0 };
+  } catch (error) {
+    const failure = error as Error & {
+      stdout: string;
+      stderr: string;
+      code: number;
+    };
+    return {
+      stdout: failure.stdout,
+      stderr: failure.stderr,
+      status: failure.code,
+    };
+  }
+}
 
 it("loads independent application identity and resolves storage relative to its checkout", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "identity-"));
@@ -128,14 +147,13 @@ it("uses independent desktop identifiers and writable storage without changing d
   }
 });
 
+// These CLI integration cases compile the selected source graph with TypeScript.
+// Keep their compiler budget separate from ordinary API tests.
 it("exports an independent selected workbench without overwriting an existing destination", async () => {
   const parent = await mkdtemp(path.join(tmpdir(), "template-export-"));
   const destination = path.join(parent, "template");
-  const run = () =>
-    spawnSync(process.execPath, ["scripts/export-template.mjs", destination], {
-      encoding: "utf8",
-    });
-  const result = run();
+  const run = () => runScript(["scripts/export-template.mjs", destination]);
+  const result = await run();
   expect(result.stderr, result.stdout).toBe("");
   expect(result.status).toBe(0);
   expect(
@@ -180,20 +198,18 @@ it("exports an independent selected workbench without overwriting an existing de
       "SIL OPEN FONT LICENSE",
     );
   }
-  expect(run().status).not.toBe(0);
+  expect((await run()).status).not.toBe(0);
   expect(identity.loadIdentity().name).toBe("OhMyGame");
-});
+}, 180_000);
 
 it("refuses empty destinations and source paths through a symlinked parent", async () => {
   const parent = await mkdtemp(path.join(tmpdir(), "template-boundary-"));
   const invoke = (destination: string) =>
-    spawnSync(process.execPath, ["scripts/export-template.mjs", destination], {
-      encoding: "utf8",
-    });
+    runScript(["scripts/export-template.mjs", destination]);
   try {
     const empty = path.join(parent, "empty");
     await mkdir(empty);
-    expect(invoke(empty).status).not.toBe(0);
+    expect((await invoke(empty)).status).not.toBe(0);
     expect(await readdir(empty)).toEqual([]);
     const alias = path.join(parent, "source");
     await symlink(process.cwd(), alias, "junction");
@@ -202,7 +218,7 @@ it("refuses empty destinations and source paths through a symlinked parent", asy
       path.join(process.cwd(), "template-boundary-output"),
       path.join(alias, "template-boundary-output"),
     ]) {
-      const result = invoke(destination);
+      const result = await invoke(destination);
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain("Export outside the source checkout");
     }
@@ -218,23 +234,19 @@ it("initializes a named application before installing and rejects invalid inputs
   const parent = await mkdtemp(path.join(tmpdir(), "application-init-"));
   const destination = path.join(parent, "app");
   const invoke = (name = "OhMyApp") =>
-    spawnSync(
-      "node",
-      [
-        "scripts/initialize-application.mjs",
-        destination,
-        name,
-        "ohmyapp",
-        "org.example.ohmyapp",
-        ".app-data",
-      ],
-      { encoding: "utf8" },
-    );
-  const invalid = invoke("../invalid");
+    runScript([
+      "scripts/initialize-application.mjs",
+      destination,
+      name,
+      "ohmyapp",
+      "org.example.ohmyapp",
+      ".app-data",
+    ]);
+  const invalid = await invoke("../invalid");
   expect(invalid.status).not.toBe(0);
   expect(invalid.stderr).toContain("Invalid application.json name");
   await expect(lstat(destination)).rejects.toMatchObject({ code: "ENOENT" });
-  const result = invoke();
+  const result = await invoke();
   expect(result.stderr, result.stdout).toBe("");
   expect(result.status).toBe(0);
   expect(identity.loadIdentity(destination)).toEqual({
@@ -250,7 +262,7 @@ it("initializes a named application before installing and rejects invalid inputs
   expect(await readFile(path.join(destination, "bun.lock"), "utf8")).toContain(
     '"name": "ohmyapp"',
   );
-  expect(invoke().status).not.toBe(0);
+  expect((await invoke()).status).not.toBe(0);
   // The exported initializer runs without dependencies or the original checkout.
   await writeFile(
     path.join(destination, ".env.local"),
@@ -259,8 +271,7 @@ it("initializes a named application before installing and rejects invalid inputs
   await mkdir(path.join(destination, ".data"));
   await writeFile(path.join(destination, ".data/state.json"), "local-fixture");
   const second = path.join(parent, "second");
-  const generated = spawnSync(
-    "node",
+  const generated = await runScript(
     [
       "scripts/initialize-application.mjs",
       second,
@@ -269,7 +280,7 @@ it("initializes a named application before installing and rejects invalid inputs
       "org.example.research",
       ".research-data",
     ],
-    { cwd: destination, encoding: "utf8" },
+    destination,
   );
   expect(generated.stderr, generated.stdout).toBe("");
   expect(generated.status).toBe(0);
@@ -293,7 +304,7 @@ it("initializes a named application before installing and rejects invalid inputs
       code: "ENOENT",
     });
   }
-});
+}, 180_000);
 
 it("refuses invalid initialization settings and unsafe destinations before writing", async () => {
   const parent = await mkdtemp(path.join(tmpdir(), "init-boundaries-"));

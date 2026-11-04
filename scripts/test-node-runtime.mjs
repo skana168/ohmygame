@@ -245,7 +245,10 @@ async function checkApplicationIdentity(folder) {
       assert(detail.board.nodes.some(node => node.id === "restart-note" && node.data.value.text === "Survives process restart"));
       assert.deepEqual(projects[0].workspaceManifest.modules, [{ id: "example", config: {} }]);
     }
-    assert(projects[0].workspacePath.startsWith(path.join(await realpath(folder), "notes-state")), "Standalone startup must honor configured storage");
+    const storedWorkspace = await realpath(projects[0].workspacePath);
+    const storageRoot = await realpath(path.join(folder, "notes-state"));
+    const relativeWorkspace = path.relative(storageRoot, storedWorkspace);
+    assert(relativeWorkspace && !relativeWorkspace.startsWith("..") && !path.isAbsolute(relativeWorkspace), "Standalone startup must honor configured storage");
     assert.equal((await request(running, "/settings/models/providers/meshy")).configured, true);
   } finally { await running.stop(); }
 }

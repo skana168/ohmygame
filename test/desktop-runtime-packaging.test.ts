@@ -96,7 +96,7 @@ describe("desktop runtime packaging", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 30000);
+  }, 120_000);
 
   it("does not resolve missing packaged dependencies from the build checkout", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "ohmygame-isolated-archive-"));

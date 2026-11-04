@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 // The QQ group is a community entry for Chinese readers only.
@@ -28,9 +28,9 @@ function links(markdown: string): string[] {
     ...[...text.matchAll(/(?:href|src)="([^"]+)"/g)].map((match) => match[1]!),
     ...(text.match(/^https:\/\/github\.com\/user-attachments\/\S+$/gm) ?? []),
   ];
-  return targets.filter(
-    (target) => !target.startsWith("#") && !LANGUAGE_LINKS.has(target),
-  );
+  return targets
+    .map((target) => target.replace(/README\.zh-CN\.md$/, "README.md"))
+    .filter((target) => !target.startsWith("#") && !LANGUAGE_LINKS.has(target));
 }
 
 /** GitHub's heading anchors: lowercase, punctuation removed, spaces become hyphens. */
@@ -68,8 +68,22 @@ describe("README translations", () => {
       readme("README.md"),
       readme("README.zh-CN.md"),
     ]);
-    expect(english).toContain('<a href="README.zh-CN.md">简体中文</a>');
-    expect(chinese).toContain('<a href="README.md">English</a>');
+    expect(english).toContain("[简体中文](README.zh-CN.md)");
+    expect(chinese).toContain("[English](README.md)");
+  });
+
+  it("keeps localized documentation links pointed at existing files", async () => {
+    for (const name of ["README.md", "README.zh-CN.md"]) {
+      const markdown = await readme(name);
+      const targets = [...markdown.matchAll(/\]\(([^)\s]+)\)/g)].map(
+        (match) => match[1]!,
+      );
+      for (const target of targets.filter(
+        (target) => !/^(?:https?:|#)/.test(target),
+      )) {
+        await access(new URL(`../${target}`, import.meta.url));
+      }
+    }
   });
 
   it("points in-page links at existing headings", async () => {
